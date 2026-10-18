@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Native build scripts we do not need (image optimisation runs in the Docker image instead).
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

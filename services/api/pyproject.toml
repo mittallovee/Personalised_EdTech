@@ -1,0 +1,61 @@
+[project]
+name = "qbank"
+version = "0.1.0"
+description = "Question bank platform backend (API + worker)"
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "fastapi>=0.144,<0.145",
+    "uvicorn[standard]>=0.54,<0.55",
+    "pydantic>=2.14,<3",
+    "pydantic-settings>=2.16,<3",
+]
+
+[project.scripts]
+qbank = "qbank.cli:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17,<0.18",
+    "mypy>=2.4,<3",
+    "pytest>=9.1,<10",
+    "httpx2>=2.13,<3",
+    "import-linter>=2.15,<3",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F/W: pycodestyle + pyflakes, I: imports, B: bugbear, UP: pyupgrade, S: bandit (security),
+# N: naming, SIM: simplifications, RUF: ruff-specific, DTZ: timezone-aware datetimes.
+select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "RUF", "DTZ"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest works
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+mypy_path = "src"
+packages = ["qbank"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.importlinter]
+root_package = "qbank"
+
+[[tool.importlinter.contracts]]
+name = "core must not depend on feature modules"
+type = "forbidden"
+source_modules = ["qbank.core"]
+forbidden_modules = ["qbank.modules"]
