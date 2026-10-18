@@ -53,10 +53,14 @@ infra/docker/          api.Dockerfile · web.Dockerfile
 .github/workflows/ci.yml
 ```
 
-## 5. Database (migration `0001_foundation`)
+## 5. Database (migrations `0001_foundation` and `0002_identity`)
 
 Two DB roles: `qbank_owner` (owns tables, runs migrations) and `qbank_app` (runtime: no ownership, no
-superuser, no `BYPASSRLS`).
+superuser, no `BYPASSRLS`). `qbank_app` is created outside migrations (locally by
+`infra/db/init/01-create-app-role.sh`; in the cloud by infrastructure code), so no password lives in a migration.
+
+Split (decided during PR 2 to keep PRs small): **0001** = organizations, users, memberships, audit_events
+(PR 2). **0002** = password_credentials, platform_roles, sessions (PR 3). The `jobs` table comes with PR 4.
 
 | Table | Key columns | RLS |
 |---|---|---|
@@ -148,14 +152,14 @@ uploads (M6); cloud deployment (M7).
 
 ## 14. Work plan (pull requests)
 
-| PR | Content |
-|---|---|
-| 1 | Repo skeleton, tooling configs, compose, Dockerfiles, CI with lint/format only |
-| 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 |
-| 3 | Identity: password hashing, sessions, login/logout/me, CLI, tests T5–T7 |
-| 4 | Jobs core + worker + T9; ID/code generator + T11 |
-| 5 | Web: app shell, login, home, generated client, OpenAPI check T12 |
-| 6 | README run instructions, restart check T10, M1 demo notes |
+| PR | Content | Status |
+|---|---|---|
+| 1 | Repo skeleton, tooling configs, compose, Dockerfiles, CI with lint/format only | Merged (#2) |
+| 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | In review |
+| 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | Next |
+| 4 | Jobs core + worker + T9; ID/code generator + T11 | |
+| 5 | Web: app shell, login, home, generated client, OpenAPI check T12 | |
+| 6 | README run instructions, restart check T10, M1 demo notes | |
 
 ## 15. Decisions for the owner
 

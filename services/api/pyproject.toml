@@ -9,6 +9,10 @@ dependencies = [
     "uvicorn[standard]>=0.54,<0.55",
     "pydantic>=2.14,<3",
     "pydantic-settings>=2.16,<3",
+    "sqlalchemy>=2.1,<2.2",
+    "alembic>=1.20,<2",
+    "psycopg[binary]>=3.3,<4",
+    "structlog>=26.1,<27",
 ]
 
 [project.scripts]
@@ -36,6 +40,8 @@ src = ["src", "tests"]
 # E/F/W: pycodestyle + pyflakes, I: imports, B: bugbear, UP: pyupgrade, S: bandit (security),
 # N: naming, SIM: simplifications, RUF: ruff-specific, DTZ: timezone-aware datetimes.
 select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "RUF", "DTZ"]
+# Domain errors read as plain words (NotFound, Conflict), matching the API error codes.
+ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]  # assert is how pytest works
@@ -50,9 +56,23 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs a real PostgreSQL server (see tests/integration/conftest.py)",
+]
+filterwarnings = ["error"]
 
 [tool.importlinter]
 root_package = "qbank"
+
+[[tool.importlinter.contracts]]
+name = "feature modules are independent (talk only through public.py, added when needed)"
+type = "independence"
+modules = [
+    "qbank.modules.audit",
+    "qbank.modules.health",
+    "qbank.modules.identity",
+    "qbank.modules.organizations",
+]
 
 [[tool.importlinter.contracts]]
 name = "core must not depend on feature modules"
