@@ -11,3 +11,11 @@ Uploads, extraction, AI runs, translation, model-catalogue refresh must run in t
 − Lower peak throughput than Redis-based queues; acceptable for Phase 1–2 volumes. Revisit with measurements (Celery/Redis or cloud queue) if needed.
 ## Alternatives
 Celery + Redis (more moving parts; native Windows unsupported). Cloud queues (SQS/Pub/Sub; not available locally).
+
+## Implementation note (M1 PR 4, 18 Oct 2026)
+The "final pick at M1" is **our own small queue on the `jobs` table** rather than Procrastinate. Reasons: our
+`jobs` table already had to be the durable source of truth (state, progress, cancel); a library would add a
+second set of job tables; and claiming across coachings needs narrow database functions so the runtime
+role stays tenant-restricted. The mechanism is the standard PostgreSQL pattern: `SELECT … FOR UPDATE SKIP
+LOCKED` to claim, a lease (`locked_until`) to recover jobs of crashed workers, bounded retries with backoff.
+About 200 lines in `core/jobs.py` and migration 0003. The decision above (PostgreSQL, not Redis) is unchanged.

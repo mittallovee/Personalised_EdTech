@@ -27,14 +27,6 @@ PLATFORM = TenantContext(is_platform=True)
 
 
 @pytest.fixture
-def owner_db(migrated_database: MigratedDatabase) -> Iterator[Database]:
-    """Table-owner access, used only to arrange test data the app itself may not write."""
-    database = Database(migrated_database.owner_url)
-    yield database
-    database.dispose()
-
-
-@pytest.fixture
 def client(migrated_database: MigratedDatabase) -> Iterator[TestClient]:
     settings = Settings(
         app_env=AppEnv.TEST,
