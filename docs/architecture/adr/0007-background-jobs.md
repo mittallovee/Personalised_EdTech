@@ -1,5 +1,5 @@
 # ADR-0007: PostgreSQL-backed job queue behind our own interface
-- Status: Proposed · Date: 2026-10-18
+- Status: **Accepted** (owner, 18 Oct 2026) · Date: 2026-10-18
 ## Context
 Uploads, extraction, AI runs, translation, model-catalogue refresh must run in the background, survive restarts, retry safely and be cancellable. Small team; Windows PC for development.
 ## Decision

@@ -1,6 +1,6 @@
 # M1 Design Note — Foundation ("walking skeleton")
 
-> Status: **Draft, needs owner approval before coding** · Milestone M1 of Phase 1 ([phase plan](../product/02-phase-plan.md))
+> Status: **Approved** (owner, 18 Oct 2026) · in progress · Milestone M1 of Phase 1 ([phase plan](../product/02-phase-plan.md))
 > Requirements: A-01, A-03, N-01, N-05, N-07, N-08, N-13, N-14 · ADRs 0002–0007, 0010–0013
 
 ## 1. Goal
@@ -20,7 +20,7 @@ features onto this skeleton without changing its foundations.
 
 | Process | Tech | Port (local) | Responsibility in M1 |
 |---|---|---|---|
-| `postgres` | PostgreSQL (latest stable supported by RDS + Cloud SQL) | 5432 (internal only) | Data, RLS, job queue |
+| `postgres` | PostgreSQL 17 (supported by AWS RDS and Google Cloud SQL) | 5432 (internal only) | Data, RLS, job queue |
 | `api` | FastAPI (Uvicorn) | 8000 | `/health/*`, auth (password + session), `/api/v1/me` |
 | `worker` | same Python package, `python -m qbank.worker` | — | Runs background jobs (M1: a `noop` health job) |
 | `web` | Next.js | 3000 | Login page, home page, app shell |
