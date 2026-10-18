@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     session_absolute_days: int = Field(default=7, ge=1)
     login_max_failures: int = Field(default=5, ge=1)
     login_lock_minutes: int = Field(default=15, ge=1)
+    # Throttle before any lookup or password hashing (protects CPU/memory from login floods).
+    login_attempts_per_ip: int = Field(default=20, ge=1)
+    login_attempts_per_email: int = Field(default=10, ge=1)
+    login_rate_window_seconds: int = Field(default=300, ge=1)
 
     @model_validator(mode="after")
     def _refuse_unsafe_production_settings(self) -> Settings:

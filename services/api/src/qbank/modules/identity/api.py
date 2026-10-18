@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from qbank.core.auth import CurrentPrincipal, Principal
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
+from qbank.core.errors import TooManyRequests
+from qbank.core.ratelimit import LoginRateLimiter
 from qbank.modules.identity import service
 from qbank.modules.identity.authenticator import CSRF_COOKIE, SESSION_COOKIE
 from qbank.modules.identity.schemas import LoginRequest, LoginResponse, Me, MyOrganization
@@ -55,7 +57,10 @@ def _set_auth_cookies(response: Response, settings: Settings, result: service.Lo
 @router.post(
     "/auth/login",
     summary="Sign in with email and password",
-    responses={401: {"description": "Email or password is incorrect (one message for all cases)"}},
+    responses={
+        401: {"description": "Email or password is incorrect (one message for all cases)"},
+        429: {"description": "Too many attempts; see the Retry-After header"},
+    },
 )
 def login(
     body: LoginRequest,
@@ -64,6 +69,13 @@ def login(
     database: Annotated[Database, Depends(get_database)],
     settings: Annotated[Settings, Depends(get_settings_from_app)],
 ) -> LoginResponse:
+    limiter: LoginRateLimiter = request.app.state.login_limiter
+    client_ip = request.client.host if request.client else "unknown"
+    wait = limiter.check(client_ip, body.email)
+    if wait:
+        raise TooManyRequests(
+            "Too many sign-in attempts. Please wait and try again.", retry_after_seconds=wait
+        )
     result = service.login(database, settings, body.email, body.password, request.state.request_id)
     _set_auth_cookies(response, settings, result)
     return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
