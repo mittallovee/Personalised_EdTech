@@ -4,7 +4,7 @@
 |---|---|
 | [`spec-v1/`](./spec-v1/docs/README.md) | **Current requirements baseline**: consolidated package of 18 Oct 2026 (52 docs, unchanged, with its archive zips). |
 | [`spec-v0/`](./spec-v0/) | Earlier documentation pack (36 docs, unchanged). Superseded by spec-v1; kept for history. |
-| [`review/`](./review/) | Review of spec-v0 and the plan to turn it into an industry-grade, buildable spec (spec-v1). |
+| [`review/`](./review/) | Reviews of spec-v0 and spec-v1, recommended approach, open questions and vocabulary guide. |
 
 ## Review reading order
 
