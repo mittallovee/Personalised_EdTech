@@ -1,5 +1,7 @@
 # 03 — Recommended Approach (How a Big-Tech Team Would Do This)
 
+> **Update:** the stack recommendation below is revised in [06-review-of-spec-v1](./06-review-of-spec-v1.md) (accept FastAPI/Python backend).
+>
 > Status: **Proposal** — recommendations marked *(pending Qn)* depend on answers in
 > [`04-open-questions.md`](./04-open-questions.md).
 
