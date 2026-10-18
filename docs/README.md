@@ -12,6 +12,7 @@
 1. [Requirements](./product/01-requirements.md): every feature with ID, phase and origin.
 2. [Phase plan](./product/02-phase-plan.md): Phase 1 milestones, later phases, stack, open questions.
 3. [AI prompt library](./product/03-ai-prompt-library.md): view/edit/test/version AI prompts.
+4. [Phase 1 scope](./product/04-phase-1-scope.md): **what we build first**: screens, journeys, in/out of scope.
 
 ## Review reading order (history)
 

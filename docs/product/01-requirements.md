@@ -147,7 +147,7 @@ Admins/Owner hold all grants implicitly.
 | G-08 | **Adaptive layout patterns** (learn a layout once, reuse to cut AI cost) | P2 | S — it's a cost optimisation; we first measure real cost in P1 |
 | G-09 | Originals kept until admin deletes; faculty can view originals | P1 | S |
 | G-10 | Admin storage dashboard + safe original deletion (questions and needed diagrams survive) | P2 | S |
-| G-11 | **Golden evaluation set** built from your real sample pages to measure extraction quality before/after every change | P1 | R — needs ~30–50 sample pages by milestone M6 |
+| G-11 | **Golden evaluation set**: during M6 the owner uploads real files through the app; with owner approval a subset of reviewed results becomes the reference set used to measure extraction quality before/after every change | P1 | R + owner |
 
 ### H. AI platform
 
@@ -162,13 +162,14 @@ Admins/Owner hold all grants implicitly.
 | H-07 | AI metadata tagging (fills fields directly; human can change) | P1 | S |
 | H-08 | AI translation on request → new linked question (own code, own review) | P1 | S |
 | H-09 | AI solve missing answer (on request) | P1 | S |
-| H-10 | AI check answer/solution → findings + suggestion; per-question opt-in "apply correction" showing old/new/reason | P1 | S |
+| H-10 | **AI verification** of a question (stem, options, answer, solution, units/signs) → findings + suggested fix; per-question opt-in "apply correction" showing old/new/reason. User chooses prompt (coaching default / personal / one-off custom) and model per run | P1 | S + N |
 | H-11 | AI variant generation (count, mixed target type/difficulty, instructions; keeps primary concept) | P2 | S |
 | H-12 | AI diagram generation/editing | P2 | S |
-| H-13 | **AI Prompt Library**: users can view and update the prompts used for translation, AI check, solve, tagging, extraction, etc. — versioned, testable, rollback | P1 | **N** — see [03-ai-prompt-library](./03-ai-prompt-library.md) |
+| H-13 | **AI Prompt Library**: every user can view prompts (verification, translation, solve, tagging, extraction), save **personal** prompts or use a one-off custom prompt per run; authorized users change the coaching default — versioned, testable, rollback | P1 | **N** — see [03-ai-prompt-library](./03-ai-prompt-library.md) |
 | H-14 | **Translation glossary** per coaching per language (e.g. velocity → वेग) automatically given to the translation prompt | P1 | R |
 | H-15 | Every AI run records model, prompt version, input revision, output, cost; AI output never counts as human QC | P1 | S |
 | H-16 | AI quality dashboard: acceptance/correction rates per operation, model and prompt version | P2 | R |
+| H-17 | **Live model catalogue**: the list of models is fetched from each provider's model-list API with the coaching's key (refresh on demand + daily), so users always choose from what the provider offers *today*; admin enables models; capability (text/vision/JSON) and price info come from provider data or an admin-editable overlay; unknown price → cost shown as "unknown", budget rules still apply | P1 | **N** |
 
 ### I. Notifications, admin & audit
 
@@ -207,6 +208,7 @@ Admins/Owner hold all grants implicitly.
 | N-10 | Accessibility | Keyboard navigation, labels, contrast, alt text for diagrams |
 | N-11 | UI language | English UI in P1 (question content in all 7 languages); Hindi UI later if wanted |
 | N-12 | Privacy | Minimal personal data; DPDP Act applies to faculty data now and student data (incl. minors' consent) from P4 |
+| N-14 | Hosting | Development on the owner's PC (Docker); later a cloud (AWS or Google Cloud) using its **managed PostgreSQL** (RDS / Cloud SQL — both support pgvector) and object storage (S3 / GCS). Code stays cloud-neutral: containers, storage interface, config via environment |
 | N-13 | Maintainability | Engineering standards, CI gates, module boundaries enforced, ADRs for decisions (see `docs/engineering/`, next deliverable) |
 
 ## 5. Decisions taken (this round)
@@ -219,6 +221,12 @@ Admins/Owner hold all grants implicitly.
 | 4 | Answer limits configurable with spec-v1 values as defaults; owner checks PYQs |
 | 5 | New: AI Prompt Library in Phase 1 |
 | 6 | Spec packs are input only; this document set is the baseline |
+| 7 | "QC prompt" = AI verification prompt: users can view it, save their own, or type a one-off prompt, and choose the model per run (18 Oct) |
+| 8 | Models come from providers' live model lists, not a fixed list (18 Oct) |
+| 9 | Develop on owner's PC; later cloud (AWS/GCP) with managed database (18 Oct) |
+| 10 | Sample files arrive through the app's upload during M6 (18 Oct) |
+| 11 | OTP login and self-service password reset in Phase 2 (18 Oct) |
+| 12 | After Phase 1, Phase 2 (ingestion at scale & AI) comes next (18 Oct) |
 
 ## 6. Still open — owner input needed
 

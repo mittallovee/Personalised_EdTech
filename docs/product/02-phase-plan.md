@@ -26,7 +26,7 @@
 | P7 | Courses & classes | Courses, live classes, recorded sessions |
 | P8 | Personalized AI teaching | Level-aware AI explanations and concept videos |
 
-The order of P3–P8 can change; we re-plan after each phase with real usage data.
+Confirmed (18 Oct): **P2 follows P1**. The order of P3–P8 can change; we re-plan after each phase with real usage data.
 
 ## 3. Phase 1 — Question Bank Core (in detail)
 
@@ -39,9 +39,9 @@ with AI doing the heavy lifting and humans in control.
 | **M2 Identity & coaching admin** | Email/password + Google login, sessions, coaching creation, Owner/admin/faculty, invites (activation links), grants, ownership transfer, admin reset links, audit log | Create your coaching, invite faculty, give grants | Role/grant tests; removed user loses access immediately |
 | **M3 Question authoring** | Taxonomy + exam + source + Bloom catalogues with Excel import; editor for all 9 formats; LaTeX + visual equations; images; passages; validation; codes/versions/revisions; student-style preview | Faculty enter questions by hand with equations/diagrams | All 9 formats: valid saves, invalid answers rejected (fixtures from spec-v1) |
 | **M4 Review & bank** ⭐ *first real use* | Workflow (submit → QC → approve → publish, return for correction), shared queue, revision-bound approvals, diff view, history, archive/restore, bank list/filters/counts, code lookup, free-text + fuzzy search, exact/fuzzy duplicate check, in-app notifications | **Faculty start real work**: enter, review and publish questions, search the bank | Published versions immutable; stale-approval tests; search p95 measured on 1-lakh fixture |
-| **M5 AI assist & prompt library** | Provider adapters (Anthropic, OpenAI, Google, OpenRouter), encrypted coaching keys, model settings, AI runs + cost ledger, budgets 80/100, tagging, translation (+ glossary, "source updated" flag), solve, check + opt-in correction, **Prompt Library** (view/edit/test/activate/rollback) | Use AI on questions; admins tune prompts and budgets | Every run traced to model + prompt version; budget stop works; no cross-coaching key use |
+| **M5 AI assist & prompt library** | Provider adapters (Anthropic, OpenAI, Google, OpenRouter), encrypted coaching keys, **live model catalogue** from provider APIs, model settings, AI runs + cost ledger, budgets 80/100, tagging, translation (+ glossary, "source updated" flag), solve, **AI verification** + opt-in correction, **Prompt Library** (view, personal prompts, one-off custom prompt, edit/test/activate/rollback) | Use AI on questions; admins tune prompts and budgets | Every run traced to model + prompt version; budget stop works; no cross-coaching key use |
 | **M6 Document ingestion v1** | Upload (PDF/DOCX/images), background jobs (progress, cancel, retry), AI page extraction to candidates with source anchors, side-by-side review screen, duplicate check, convert to questions; golden evaluation set | Upload existing papers and turn them into reviewed questions | Extraction quality measured on your sample pages; cancel/retry never loses or duplicates work |
-| **M7 Hardening & first hosting** | Performance pass, security review, backup + **restore drill**, monitoring, deploy to a small cloud server (or office machine) | Faculty use it from anywhere, not only your PC | Restore tested; security checklist done; owner sign-off |
+| **M7 Hardening & cloud** | Performance pass, security review, choose AWS vs Google Cloud (short comparison doc), infrastructure as code, deploy with **managed PostgreSQL** + object storage, backup + **restore drill**, monitoring | Faculty use it from anywhere, not only your PC | Restore tested; security checklist done; owner sign-off |
 
 Rough effort: each milestone is ~1–3 weeks of focused work for you + Claude Code. Treat that as an estimate
 to refine after M1, not a commitment.
@@ -84,16 +84,17 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 4. ADRs: stack, multi-client API/auth, job queue, search, observability, tenant isolation.
 5. M1 design note.
 
-## 7. Open questions for the owner
+## 7. Owner answers (18 Oct 2026)
 
-1. **Prompt permissions**: OK that all faculty can *view* prompts, and only admins (plus faculty given
-   `MANAGE_AI_PROMPTS`) can edit/activate? Should individual faculty also have *personal* prompt versions?
-   *(Recommendation: no personal versions. Per-run extra instructions cover that need, and one shared
-   version keeps quality consistent.)*
-2. **"QC prompts"**: you meant the AI answer/solution **check**, right? (Human QC has no prompt.)
-3. **Hosting for M7**: are faculty working in the same office as your PC, or do they need internet access
-   (small cloud server, roughly a few thousand rupees per month)?
-4. **Samples**: can you share 30–50 representative pages (printed, scanned, handwritten, Hindi) before M6?
-   They become our golden evaluation set.
-5. **OTP and self-service password reset in Phase 2**: OK? (Phase 1 uses admin-generated links and Google login.)
-6. **After Phase 1**: is the next priority P2 (better ingestion/AI) or P3 (tests & papers)?
+| Question | Answer |
+|---|---|
+| Who builds | Owner + Claude Code; Codex may review |
+| Prompts | "QC prompt" = AI verification prompt. Users can view it, save their own, use a one-off prompt, and pick the model per run (live provider list) |
+| Hosting | Develop on owner's PC; later cloud (AWS or Google Cloud) incl. managed database (decided in M7) |
+| Samples | Owner uploads real files through the app during M6 |
+| OTP + self-service reset | Phase 2 |
+| Next phase after P1 | P2 |
+
+## 8. Open questions
+
+None blocking. The next owner decision is approving the M1 design note.

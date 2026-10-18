@@ -15,15 +15,16 @@ Industry name: **prompt management** (also "prompt registry" or "prompt versioni
 | Operation | What the prompt controls | Phase |
 |---|---|---|
 | `TRANSLATE_QUESTION` | Translation style, terminology, what must not be translated (symbols, units, LaTeX) | P1 |
-| `CHECK_ANSWER_SOLUTION` (AI check) | How strictly the AI checks the answer and solution, what to report | P1 |
+| `VERIFY_QUESTION` (AI verification, the "QC prompt") | How the AI verifies the question: stem completeness, answer, options, solution, units/sign conventions, what to report | P1 |
 | `SOLVE_MISSING_ANSWER` | How the AI solves and shows its working | P1 |
 | `TAG_METADATA` | How chapter/topic/concepts/difficulty/Bloom are chosen | P1 |
 | `EXTRACT_QUESTIONS` (ingestion) | How pages are split into questions and structured | P1 (edit marked "advanced") |
 | `GENERATE_VARIANTS` | How variants are produced | P2 (with the feature) |
 | `GENERATE_DIAGRAM` / `EDIT_DIAGRAM` | Diagram style and rules | P2 (with the feature) |
 
-Note: in this app **"QC" means human review**. The AI equivalent is the *AI check* operation above. AI check
-results are advisory and never count as human QC.
+Note: in this app **"QC" means human review**. The AI equivalent is the *AI verification* operation above
+(what the owner calls the "QC prompt"). Its results are advisory findings plus suggested corrections; they
+never count as human QC.
 
 ## 3. What a prompt is made of
 
@@ -42,13 +43,36 @@ Otherwise one edit could break result parsing or let uploaded document text stee
 
 ## 4. Levels (who overrides whom)
 
-1. **Platform default**: shipped and maintained by us, versioned (`translate v3`).
-2. **Coaching override**: a coaching may create its own versions from the default. Optionally per target
-   language (e.g. a special Tamil translation prompt).
-3. **Per-run extra instructions**: when running an AI action, faculty may add one-off instructions
-   ("keep SI units", "simpler Hindi"). These are stored on that run only and not saved to the library.
+1. **Platform default**: shipped and maintained by us, versioned (`verify v3`).
+2. **Coaching default**: a coaching may create its own versions from the platform default; used by everyone
+   in the coaching. Optionally per target language (e.g. a special Tamil translation prompt).
+3. **Personal prompt** (owner decision, 18 Oct): any faculty may save **their own** prompt versions for an
+   operation ("My strict verification prompt"). They're visible only to that faculty (admins can view them)
+   and never change what others use.
+4. **Per-run choice**: when running an AI action, the user picks which prompt to use: coaching default,
+   one of their personal prompts, or a **one-off custom prompt** typed for this run only. They can also add
+   short extra instructions. The run records exactly what was used.
 
-Effective prompt = coaching's active version (if any) → otherwise platform default; plus per-run extras.
+The locked parts (output format, safety preamble, variables) apply at every level. That is what lets a
+user's own prompt still produce results the app can read and validate.
+
+## 4a. Model selection for every run
+
+In the same dialog the user picks the **AI model** from the coaching's enabled models. That list comes from
+the providers' **live model lists as of today** (see requirement H-17), not a list hard-coded by us.
+Defaults: the coaching's default model for that operation.
+
+```text
+┌ Verify question Q7K2M9P ─────────────────────────────────────────┐
+│ Prompt:  (•) Coaching default  "Verify v4"   [view]               │
+│          ( ) My prompts        [Strict numeric check v2 ▾] [view] │
+│          ( ) Custom for this run  [ edit box ]                    │
+│ Extra instructions (optional): [ check sign conventions        ]  │
+│ Model:   [ provider / model ▾ ]  (enabled, supports this task)    │
+│ Estimated cost: ₹… · Budget left this month: ₹…                   │
+│                                   [ Cancel ]  [ Run verification ]│
+└───────────────────────────────────────────────────────────────────┘
+```
 
 ## 5. Behaviour
 
@@ -72,10 +96,11 @@ Effective prompt = coaching's active version (if any) → otherwise platform def
 
 | Action | Faculty | Faculty with `MANAGE_AI_PROMPTS` | Admin / Owner | Platform admin |
 |---|---|---|---|---|
-| View prompts and history | ✅ (recommended for transparency) | ✅ | ✅ | ✅ |
-| Per-run extra instructions | ✅ | ✅ | ✅ | ✅ |
-| Create draft, test run | — | ✅ | ✅ | ✅ |
-| Activate / rollback / reset | — | ✅ | ✅ | ✅ |
+| View coaching/platform prompts and history | ✅ | ✅ | ✅ | ✅ |
+| Create/edit/test **personal** prompts; one-off custom prompt per run | ✅ | ✅ | ✅ | ✅ |
+| Choose model per run (from enabled list) | ✅ | ✅ | ✅ | ✅ |
+| Create/test/activate/rollback **coaching default** prompts | — | ✅ | ✅ | ✅ |
+| View any faculty's personal prompts | — | — | ✅ | ✅ |
 | Edit platform defaults | — | — | — | ✅ |
 
 ## 7. Safety & integrity
@@ -90,11 +115,13 @@ Effective prompt = coaching's active version (if any) → otherwise platform def
 ## 8. Data model (sketch)
 
 ```text
-prompt_templates   (id, operation, scope: PLATFORM|COACHING, organization_id NULL, target_language NULL)
+prompt_templates   (id, operation, scope: PLATFORM|COACHING|PERSONAL, organization_id NULL,
+                    owner_user_id NULL, name, target_language NULL)
 prompt_versions    (id, template_id, version_no, instructions, settings_json, change_note,
                     author_id, created_at, status: DRAFT|ACTIVE|RETIRED, content_hash)
 prompt_activations (template_id, version_id, activated_by, activated_at)   -- history of switches
-ai_runs.prompt_version_id, ai_runs.rendered_prompt_hash, ai_runs.extra_instructions
+ai_runs.prompt_version_id NULL, ai_runs.custom_prompt_text NULL (one-off), ai_runs.rendered_prompt_hash,
+ai_runs.extra_instructions, ai_runs.model_id
 translation_glossary (organization_id, language, source_term, target_term, note)
 ```
 
@@ -107,3 +134,6 @@ translation_glossary (organization_id, language, source_term, target_term, note)
 5. A version using `{{unknown}}` is rejected with a clear error.
 6. Coaching A's prompt versions are invisible to coaching B.
 7. Reset to default makes the next run use the platform default version.
+8. Faculty X's personal prompt is not visible to faculty Y and never used for Y's runs; an admin can view it.
+9. A one-off custom prompt is stored on that run and shown in the question's AI history; it does not appear in the library.
+10. The model dropdown shows only models that are enabled for the coaching **and** support the operation.
