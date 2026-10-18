@@ -1,0 +1,276 @@
+{
+  "prepared_date": "2026-10-18",
+  "status": "consolidated documentation for review; no application implementation",
+  "payloads": [
+    {
+      "path": "README.md",
+      "bytes": 996,
+      "sha256": "0ffcf6d99b76c5ed69b7e1ac31d6e9ca680bfe69931e842145bac2c490a41da9"
+    },
+    {
+      "path": "docs/ACCEPTANCE_TEST_PLAN.md",
+      "bytes": 32347,
+      "sha256": "8f9cc9ea0b1130b1dd49b2827515dfe614a68332c3bdd9b781a6b8455b2f4464"
+    },
+    {
+      "path": "docs/ADAPTIVE_EXTRACTION_PATTERNS.md",
+      "bytes": 6191,
+      "sha256": "2003556eac9ae23ad4ada280256653d29ffe0bc41256e9ab40a94ae49abc22d0"
+    },
+    {
+      "path": "docs/AI_ANSWER_ASSISTANCE.md",
+      "bytes": 7112,
+      "sha256": "b75f8f62a960a00bfbf7fb489b13a295f81cdb4d788b62a84669d03225a0f6cd"
+    },
+    {
+      "path": "docs/AI_DIAGRAM_ASSISTANCE.md",
+      "bytes": 3287,
+      "sha256": "750e4e7727389ddc0c9c1b6763b30c9e1e68a8abda52ab9f1379052a4dc25a69"
+    },
+    {
+      "path": "docs/AI_MODEL_ORCHESTRATION.md",
+      "bytes": 5279,
+      "sha256": "5a2754271771c6fe4d0ece09c928b762eee9c389c68be28d6f3e260ab8f62b03"
+    },
+    {
+      "path": "docs/AI_USAGE_AND_COST.md",
+      "bytes": 3149,
+      "sha256": "17add158919b1d2c68eed9072855c84ddd4c4910e045372ff84f09d76a5f4000"
+    },
+    {
+      "path": "docs/AI_VARIANT_GENERATION.md",
+      "bytes": 6954,
+      "sha256": "db34c657d572750f2737894a72b217e0c29a6ec256d9b73048e8dc72fef82d2a"
+    },
+    {
+      "path": "docs/API_CONTRACTS_DRAFT.md",
+      "bytes": 7790,
+      "sha256": "f71ede49aa81a2fe27c8e201c6e867f3c58adab7929de5a920d3991a813e924a"
+    },
+    {
+      "path": "docs/BACKGROUND_JOBS_AND_CANCELLATION.md",
+      "bytes": 2903,
+      "sha256": "ae0a709494d3d62c57d3a65fe919646e1f22b3a4283497f63bfa962129d758f7"
+    },
+    {
+      "path": "docs/CAPACITY_AND_PERFORMANCE.md",
+      "bytes": 4628,
+      "sha256": "bc41632cebd1effb9d125c40045d004ece70afe173da51c5c7a09f107e0e1bfc"
+    },
+    {
+      "path": "docs/CODEX_HANDOVER_PROMPT.md",
+      "bytes": 2393,
+      "sha256": "f8e74f1ca59f1f85c4f3d65cd27fc7d41d066bac2cf3df1e36196c75e43b6cbc"
+    },
+    {
+      "path": "docs/CONSOLIDATION_REPORT.md",
+      "bytes": 4261,
+      "sha256": "b3de836a5f72201f0263e3d012585e1c001ec4d45bb9d72ad3a9c4f52bf19a14"
+    },
+    {
+      "path": "docs/CROSS_COACHING_DATA_SHARING.md",
+      "bytes": 12077,
+      "sha256": "8b55f62431167e10ec2a7ab16a8a84c9d52bc1d4baa31e2c98269c9cb889ecfc"
+    },
+    {
+      "path": "docs/DATABASE_SCHEMA.md",
+      "bytes": 11272,
+      "sha256": "f2e203b79e0327defc0acdc6f965e6c1935a8da9c17574e5a4aa302a614380e5"
+    },
+    {
+      "path": "docs/DECISIONS_AND_OPEN_QUESTIONS.md",
+      "bytes": 3738,
+      "sha256": "adddadd44f2b32e1e6834425db06165b682c2dd298e88c17217d95f36f5c9366"
+    },
+    {
+      "path": "docs/DOCUMENTATION_READINESS.md",
+      "bytes": 3173,
+      "sha256": "9ee0f2724c58c21ad56704ebb60c06dd24f52edb4f4fcd733dac0de748c5d4f1"
+    },
+    {
+      "path": "docs/DUPLICATE_AND_VARIANT_POLICY.md",
+      "bytes": 4090,
+      "sha256": "f8b4c69fcf1552c250d8f0873b629b2f46b697b7823e00624ce6b7d524d27014"
+    },
+    {
+      "path": "docs/FUTURE_LEARNING_AND_AI_TEACHING.md",
+      "bytes": 4994,
+      "sha256": "33bcf7fb532743c8198f57380319caabd7f1abc0fdcfa806a9e518b9c24f1926"
+    },
+    {
+      "path": "docs/IDENTITY_AND_ACCESS.md",
+      "bytes": 5041,
+      "sha256": "1415b1e109d23eace5dc506645e492c58f26bb795503d3b0dade004bb1f18b63"
+    },
+    {
+      "path": "docs/IMPLEMENTATION_ROADMAP.md",
+      "bytes": 4678,
+      "sha256": "656fe97b266d4348de83d124139666e02823f9bc55171c726fc669c7eff0b8a9"
+    },
+    {
+      "path": "docs/LANGUAGE_SUPPORT.md",
+      "bytes": 2320,
+      "sha256": "1fb1ff9422ae77a034d46f51bc08bfb53c124abc6cbe46f54dce06528b60f099"
+    },
+    {
+      "path": "docs/LOCAL_DEVELOPMENT_PLAN.md",
+      "bytes": 3737,
+      "sha256": "0e745bfd6f2c802ade8d6a9556001f6d6da2b1da37a5de800b3d328ddc8d4cd9"
+    },
+    {
+      "path": "docs/MULTI_FILE_INGESTION.md",
+      "bytes": 4296,
+      "sha256": "a6b224b19a141c1a3f61476ba3adf693a00f71deca5fccf2c7e3a63f52aedc98"
+    },
+    {
+      "path": "docs/OCR_AND_HANDWRITING.md",
+      "bytes": 4652,
+      "sha256": "e3f9e57bc82358d39f71890ecec2bb124d941806e7218b842c5af8e93ff0b165"
+    },
+    {
+      "path": "docs/PERMISSIONS_MATRIX.md",
+      "bytes": 4121,
+      "sha256": "d06e2e6247b78e0aadf4404de42e42eec9d626a9835ae696e667f6e56d4711ba"
+    },
+    {
+      "path": "docs/PLATFORM_ADMIN_ACCESS.md",
+      "bytes": 6566,
+      "sha256": "a00da885e51d9106ba719b3c9f9911ede4282443931791dcc2acb42875d998b5"
+    },
+    {
+      "path": "docs/PRD.md",
+      "bytes": 7914,
+      "sha256": "a16680b286d5923b6c7e425725109df887ba228751ddd8a2765cbfc26ad385fa"
+    },
+    {
+      "path": "docs/PRODUCT_DECISION_REGISTER.md",
+      "bytes": 6793,
+      "sha256": "b5acc5a23f4ca421127b8cf380bb14a06e35a1a2688039e41a9e71b3b9a6beb3"
+    },
+    {
+      "path": "docs/PROJECT_MASTER_CONTEXT.md",
+      "bytes": 8029,
+      "sha256": "b71495dc656e932d98ea2dc0c457bdf3fa41fd8892ebb5b6b01b2b36eb8724e2"
+    },
+    {
+      "path": "docs/PUBLICATION_REQUIREMENTS.md",
+      "bytes": 5556,
+      "sha256": "d0910884a8044728c05f6744d57bc010f1ac36e523c0f92a77184af4962717e0"
+    },
+    {
+      "path": "docs/QUESTION_ARCHIVAL.md",
+      "bytes": 3712,
+      "sha256": "0aecd3c45ab744aec9c2ee947e38aad2874cd4d1b5b500b9ac168c49bbc47053"
+    },
+    {
+      "path": "docs/QUESTION_CONTENT_EDITOR.md",
+      "bytes": 3263,
+      "sha256": "26e184f98ede87a1865947d677f55ce93786bdd5cc90cfce0c77624e1d2a81fd"
+    },
+    {
+      "path": "docs/QUESTION_INGESTION_PIPELINE.md",
+      "bytes": 3812,
+      "sha256": "43f2f93554520d7157c4ebeb4a99d2f7c6c453e97209c4023a968c7b19175afe"
+    },
+    {
+      "path": "docs/QUESTION_LIFECYCLE_AND_QC.md",
+      "bytes": 5003,
+      "sha256": "58c80c55091b0d665ecc08b94668eb414a1ca83b3a8b095de2d471577011bc0d"
+    },
+    {
+      "path": "docs/QUESTION_SCHEMA_EXAMPLES.md",
+      "bytes": 20760,
+      "sha256": "ef5fa5239c0c626eb7ff2d7223e6428e50a774d7c47bb8d43ab9737a91efa33e"
+    },
+    {
+      "path": "docs/QUESTION_TYPES_SPECIFICATION.md",
+      "bytes": 3880,
+      "sha256": "c0c1e5a0d42738082aee5131f985fd8ee2703b60e0213ccb80640e82d111bcb1"
+    },
+    {
+      "path": "docs/README.md",
+      "bytes": 3210,
+      "sha256": "839acb7a71aab757b69cfaf13d05e3ca3711b085ad854ba6d0e57061c974a9b6"
+    },
+    {
+      "path": "docs/REQUIREMENTS_REVIEW_HI.md",
+      "bytes": 7159,
+      "sha256": "bb101a9905122babc1b1918e1ee35d74ae24f118782b751a4f894404efb13694"
+    },
+    {
+      "path": "docs/REQUIREMENTS_TRACEABILITY.md",
+      "bytes": 8370,
+      "sha256": "1f33365598902d482c4638502fd6a306d90b8cdb76e4d1fd82ec18739510aefb"
+    },
+    {
+      "path": "docs/REVIEW_CLOSURE_PLAN.md",
+      "bytes": 1430,
+      "sha256": "3533e8b7fd901b33d39fd544b3e9c8a63707ddad1da782bd79f6a3e23555bd72"
+    },
+    {
+      "path": "docs/SECURITY_AND_MULTI_TENANCY.md",
+      "bytes": 3837,
+      "sha256": "2d368f1df75f1aeb4b824dee8eaf08df0bd816362a4434f0d7ce4811679ab87b"
+    },
+    {
+      "path": "docs/SESSION_CHECKPOINT.md",
+      "bytes": 3112,
+      "sha256": "2a0d8fdf730ae91c3f4994a406a623eed2a249fa2ba5bc59e9d3fec314d04d75"
+    },
+    {
+      "path": "docs/SOURCE_STORAGE_AND_RETENTION.md",
+      "bytes": 5258,
+      "sha256": "ea328484a4a55a3265f019af2e378848e495c0eabfbe129be1bb8146137fd522"
+    },
+    {
+      "path": "docs/SYSTEM_ARCHITECTURE.md",
+      "bytes": 4744,
+      "sha256": "5f2c841d2f0b2de93820b0f9f1bc8a18d80d13c806c24cbd2c8ead344b4a924d"
+    },
+    {
+      "path": "docs/TAXONOMY_AND_KNOWLEDGE_GRAPH.md",
+      "bytes": 4297,
+      "sha256": "e95493fe7a17ae1ceb6d4fcfa235a5de216ee9b7450220f7dc4426f33bf98f38"
+    },
+    {
+      "path": "docs/TECHNICAL_DESIGN_PROPOSALS.md",
+      "bytes": 11228,
+      "sha256": "b19dec7bf2e4e5a06aca1a373c59bad5a85c564a4fa561b662a1bb4a5b3fa92f"
+    },
+    {
+      "path": "docs/TECHNICAL_REFERENCES.md",
+      "bytes": 4033,
+      "sha256": "103c56a4c33103f981791c4e259db839e0ee5a37663f7c9661bed0f8c196ebe9"
+    },
+    {
+      "path": "docs/TENANT_AI_CREDENTIALS.md",
+      "bytes": 2101,
+      "sha256": "68e227075d0d898b10529d37743c74f63b76e08db5b600b2e306b341f59619cf"
+    },
+    {
+      "path": "docs/TEST_BUILDER_AND_ANALYTICS.md",
+      "bytes": 4223,
+      "sha256": "32aa962b2c05517b416bc145738299f5dbccb2b2f44a228ac7c31557d54b8eaa"
+    },
+    {
+      "path": "docs/UPLOAD_AND_ASSET_POLICY.md",
+      "bytes": 2687,
+      "sha256": "3f22cd9121d6e42f5a99d092e895503835f3182f70d23e69779c7a0a4a90e8a6"
+    },
+    {
+      "path": "docs/USER_WORKFLOWS_AND_PERMISSIONS.md",
+      "bytes": 4332,
+      "sha256": "835358984a3dfea5eb0c96c16d8cfd2f4d358d83a000cab3cde55f2497e1d995"
+    },
+    {
+      "path": "question-platform-project-handover.zip",
+      "bytes": 18303,
+      "sha256": "74cce2891c4deed0a8ae4a1d1d760f76734c4871da216341065e14c40aea814b"
+    },
+    {
+      "path": "question-platform-review-history-2026-10-18.zip",
+      "bytes": 280798,
+      "sha256": "d8a5d123f0a7afd375e4e8aabdf17b0d947ea554cc756ecf4beb5e40eaa3c3c7"
+    }
+  ]
+}
