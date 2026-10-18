@@ -6,8 +6,8 @@ Create Date: 2026-10-18
 
 Security model (ADR-0005):
 - Tables are owned by the migration role. The runtime role ``qbank_app`` (created outside
-  migrations, see infra/db/init) gets only the privileges listed below and cannot bypass
-  row-level security.
+  migrations, see infra/db/ensure-app-role.sh) gets only the privileges listed below and
+  cannot bypass row-level security.
 - Policies read transaction-local settings set by ``qbank.core.tenancy``. When no coaching is set,
   tenant tables return no rows (fail closed).
 """

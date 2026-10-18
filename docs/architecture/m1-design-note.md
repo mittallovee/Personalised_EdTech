@@ -56,8 +56,9 @@ infra/docker/          api.Dockerfile · web.Dockerfile
 ## 5. Database (migrations `0001_foundation` and `0002_identity`)
 
 Two DB roles: `qbank_owner` (owns tables, runs migrations) and `qbank_app` (runtime: no ownership, no
-superuser, no `BYPASSRLS`). `qbank_app` is created outside migrations (locally by
-`infra/db/init/01-create-app-role.sh`; in the cloud by infrastructure code), so no password lives in a migration.
+superuser, no `BYPASSRLS`). `qbank_app` is created outside migrations (locally by the `db-init`
+compose service running `infra/db/ensure-app-role.sh` on every start, so existing volumes work too; in the
+cloud by infrastructure code), so no password lives in a migration.
 
 Split (decided during PR 2 to keep PRs small): **0001** = organizations, users, memberships, audit_events
 (PR 2). **0002** = password_credentials, platform_roles, sessions (PR 3). The `jobs` table comes with PR 4.

@@ -17,8 +17,8 @@ tests and papers, student apps, live exams, analytics, courses and personalized 
 | `services/api/` | Python backend: FastAPI API (later also the background worker) |
 | `apps/web/` | Next.js + TypeScript web app for faculty and admins |
 | `infra/docker/` | Dockerfiles |
-| `infra/db/init/` | Creates the restricted database role on first start |
-| `compose.yaml` | Local stack: PostgreSQL, migrations, API, web |
+| `infra/db/` | Script that creates/updates the restricted database role (`db-init` service) |
+| `compose.yaml` | Local stack: PostgreSQL, role setup, migrations, API, web |
 | `docs/` | Requirements, architecture decisions, standards |
 
 ## Run it locally (Windows PC with Docker Desktop)

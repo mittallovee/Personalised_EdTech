@@ -29,7 +29,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U qbank_owner" --health-interval 5s
+          --health-cmd "pg_isready -U qbank_owner -d postgres" --health-interval 5s
           --health-timeout 3s --health-retries 10
     env:
       QBANK_TEST_ADMIN_URL: postgresql+psycopg://qbank_owner:ci-owner-password@localhost:5432/postgres
