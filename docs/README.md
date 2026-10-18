@@ -5,6 +5,8 @@
 | [`product/`](./product/) | **Our baseline (source of truth)**: requirements, phase plan, AI prompt library spec. |
 | [`spec-v1/`](./spec-v1/docs/README.md) | Input/reference: consolidated package of 18 Oct 2026 (52 docs, unchanged, with its archive zips). |
 | [`spec-v0/`](./spec-v0/) | Input/reference: earlier documentation pack (36 docs, unchanged). |
+| [`architecture/`](./architecture/) | API style guide, ADRs (decision records), milestone design notes. |
+| [`engineering/`](./engineering/) | Engineering standards: layout, coding, security, tests, CI, Definition of Done. |
 | [`review/`](./review/) | Reviews of spec-v0 and spec-v1, recommended approach, open questions and vocabulary guide. |
 
 ## Start here
@@ -13,6 +15,9 @@
 2. [Phase plan](./product/02-phase-plan.md): Phase 1 milestones, later phases, stack, open questions.
 3. [AI prompt library](./product/03-ai-prompt-library.md): view/edit/test/version AI prompts.
 4. [Phase 1 scope](./product/04-phase-1-scope.md): **what we build first**: screens, journeys, in/out of scope.
+5. [Engineering standards](./engineering/standards.md) and [`AGENTS.md`](../AGENTS.md): how code is written and checked.
+6. [API style guide](./architecture/api-style-guide.md) and [ADRs](./architecture/adr/README.md): API rules and technical decisions.
+7. [M1 design note](./architecture/m1-design-note.md): **next to approve**, the foundation milestone.
 
 ## Review reading order (history)
 

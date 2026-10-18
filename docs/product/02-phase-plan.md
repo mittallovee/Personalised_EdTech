@@ -76,7 +76,7 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 3. CI must be green. **Codex reviews** the PR (optional), and you check behaviour in the running app.
 4. **You merge.** Decisions go into ADRs; docs are updated in the same PR.
 
-## 6. Next deliverables (before M1 code)
+## 6. Pre-M1 deliverables (done 18 Oct, awaiting approval)
 
 1. `docs/engineering/standards.md`: repo layout, coding rules, testing, CI, PR rules.
 2. `AGENTS.md` / `CLAUDE.md`: rules every AI coding agent follows in this repo.
