@@ -13,10 +13,12 @@ dependencies = [
     "alembic>=1.20,<2",
     "psycopg[binary]>=3.3,<4",
     "structlog>=26.1,<27",
+    "argon2-cffi>=25.1,<26",
+    "email-validator>=2.3,<3",
 ]
 
 [project.scripts]
-qbank = "qbank.cli:main"
+qbank = "qbank.cli:run"
 
 [dependency-groups]
 dev = [
@@ -44,7 +46,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "RUF", "DTZ"]
 ignore = ["N818"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]  # assert is how pytest works
+"tests/**" = ["S101", "S105", "S106"]  # pytest asserts; obviously fake test passwords
 
 [tool.mypy]
 strict = true
@@ -65,13 +67,16 @@ filterwarnings = ["error"]
 root_package = "qbank"
 
 [[tool.importlinter.contracts]]
-name = "feature modules are independent (talk only through public.py, added when needed)"
+name = "feature modules are independent: they may only use each other's public.py"
 type = "independence"
 modules = [
     "qbank.modules.audit",
     "qbank.modules.health",
     "qbank.modules.identity",
     "qbank.modules.organizations",
+]
+ignore_imports = [
+    "qbank.modules.** -> qbank.modules.*.public",
 ]
 
 [[tool.importlinter.contracts]]

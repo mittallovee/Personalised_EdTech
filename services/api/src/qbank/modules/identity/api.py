@@ -1,0 +1,86 @@
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request, Response, status
+
+from qbank.core.auth import CurrentPrincipal, Principal
+from qbank.core.config import Settings
+from qbank.core.db import Database, get_database
+from qbank.modules.identity import service
+from qbank.modules.identity.authenticator import CSRF_COOKIE, SESSION_COOKIE
+from qbank.modules.identity.schemas import LoginRequest, LoginResponse, Me, MyOrganization
+
+router = APIRouter(prefix="/api/v1", tags=["identity"])
+
+
+def get_settings_from_app(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+def to_me(principal: Principal) -> Me:
+    organization = None
+    if principal.organization_id is not None and principal.role is not None:
+        organization = MyOrganization(id=principal.organization_id, role=principal.role)
+    return Me(
+        id=principal.user_id,
+        display_name=principal.display_name,
+        is_platform_admin=principal.is_platform_admin,
+        organization=organization,
+        acting_organization_id=principal.acting_organization_id,
+    )
+
+
+def _set_auth_cookies(response: Response, settings: Settings, result: service.LoginResult) -> None:
+    """Session cookie: HttpOnly (scripts cannot read it). CSRF cookie: readable by our web app.
+
+    SameSite=Lax keeps the cookies off cross-site sub-requests while normal links into the app still
+    work; the CSRF token is the real protection for changes.
+    """
+    max_age = settings.session_absolute_days * 24 * 60 * 60
+    for name, value, http_only in (
+        (SESSION_COOKIE, result.session_token, True),
+        (CSRF_COOKIE, result.csrf_token, False),
+    ):
+        response.set_cookie(
+            name,
+            value,
+            max_age=max_age,
+            httponly=http_only,
+            secure=settings.session_cookie_secure,
+            samesite="lax",
+            path="/",
+        )
+
+
+@router.post(
+    "/auth/login",
+    summary="Sign in with email and password",
+    responses={401: {"description": "Email or password is incorrect (one message for all cases)"}},
+)
+def login(
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    settings: Annotated[Settings, Depends(get_settings_from_app)],
+) -> LoginResponse:
+    result = service.login(database, settings, body.email, body.password, request.state.request_id)
+    _set_auth_cookies(response, settings, result)
+    return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
+
+
+@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Sign out")
+def logout(
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+) -> None:
+    service.logout(database, principal, request.state.request_id)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(CSRF_COOKIE, path="/")
+
+
+@router.get("/me", summary="The signed-in user")
+def me(principal: CurrentPrincipal) -> Me:
+    return to_me(principal)

@@ -11,6 +11,8 @@ from qbank.core.errors import install_error_handlers
 from qbank.core.logging import configure_logging, install_request_logging
 from qbank.core.migrations import migration_heads
 from qbank.modules.health.api import router as health_router
+from qbank.modules.identity.api import router as identity_router
+from qbank.modules.identity.authenticator import SessionCookieAuthenticator
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -35,8 +37,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = database
     app.state.migration_heads = migration_heads(settings.migrations_dir)
+    # Ways a caller can sign in, tried in order (ADR-0006). Bearer tokens join this list in P4.
+    app.state.authenticators = [SessionCookieAuthenticator(database, settings)]
 
     install_request_logging(app)
     install_error_handlers(app)
     app.include_router(health_router)
+    app.include_router(identity_router)
     return app

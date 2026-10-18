@@ -1,5 +1,6 @@
 """M1 exit test T8: migrations go up, down and up again cleanly on an empty database."""
 
+import secrets
 from collections.abc import Iterator
 
 import pytest
@@ -7,7 +8,6 @@ from alembic import command
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect
 
-from qbank.core.ids import new_id
 from qbank.main import create_app
 from tests.conftest import make_settings
 from tests.integration.conftest import (
@@ -20,7 +20,7 @@ from tests.integration.conftest import (
 
 @pytest.fixture
 def empty_database() -> Iterator[tuple[str, str]]:
-    name = f"qbank_test_{new_id().hex[:12]}"
+    name = f"qbank_test_{secrets.token_hex(6)}"
     owner_url, app_url = create_database(name)
     try:
         yield owner_url, app_url
@@ -41,7 +41,15 @@ def test_upgrade_downgrade_upgrade(empty_database: tuple[str, str]) -> None:
     config = alembic_config(owner_url)
 
     command.upgrade(config, "head")
-    assert {"organizations", "users", "memberships", "audit_events"} <= table_names(owner_url)
+    assert {
+        "organizations",
+        "users",
+        "memberships",
+        "audit_events",
+        "password_credentials",
+        "platform_roles",
+        "sessions",
+    } <= table_names(owner_url)
 
     command.downgrade(config, "base")
     assert table_names(owner_url) <= {"alembic_version"}

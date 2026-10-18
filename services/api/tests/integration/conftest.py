@@ -8,6 +8,7 @@ Each test session creates a fresh database and drops it afterwards.
 """
 
 import os
+import secrets
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
@@ -88,7 +89,7 @@ class MigratedDatabase:
 
 @pytest.fixture(scope="session")
 def migrated_database() -> Iterator[MigratedDatabase]:
-    name = f"qbank_test_{new_id().hex[:12]}"
+    name = f"qbank_test_{secrets.token_hex(6)}"
     owner_url, app_url = create_database(name)
     try:
         command.upgrade(alembic_config(owner_url), "head")
