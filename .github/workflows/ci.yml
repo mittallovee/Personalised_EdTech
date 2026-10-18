@@ -19,6 +19,21 @@ jobs:
     defaults:
       run:
         working-directory: services/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: qbank_owner
+          POSTGRES_PASSWORD: ci-owner-password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qbank_owner -d postgres" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      QBANK_TEST_ADMIN_URL: postgresql+psycopg://qbank_owner:ci-owner-password@localhost:5432/postgres
+      QBANK_TEST_APP_PASSWORD: ci-app-password
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -30,7 +45,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run lint-imports
-      - run: uv run pytest
+      - run: uv run pytest   # unit + API + integration (real PostgreSQL, incl. migrations)
 
   web:
     name: Web (lint, types, build)
@@ -53,6 +68,9 @@ jobs:
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read   # gitleaks lists the PR's commits to scan only those
     steps:
       - uses: actions/checkout@v7
         with:

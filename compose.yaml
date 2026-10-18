@@ -19,20 +19,52 @@ services:
       timeout: 3s
       retries: 10
 
+  # One-off: create/update the restricted runtime role (new or existing volume), then exit.
+  db-init:
+    image: postgres:17
+    entrypoint: ["sh", "/scripts/ensure-app-role.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-qbank_owner}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+      PGDATABASE: ${POSTGRES_DB:-qbank_dev}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-change-me-app-local}
+    volumes:
+      - ./infra/db:/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-off: bring the schema up to date (as the table owner), then exit.
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qbank_owner}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-qbank_dev}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
   api:
     build:
       context: .
       dockerfile: infra/docker/api.Dockerfile
-    env_file:
-      - path: .env
-        required: false
     environment:
       APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+psycopg://qbank_app:${APP_DB_PASSWORD:-change-me-app-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
     ports:
       - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   web:
     build:
@@ -41,7 +73,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

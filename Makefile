@@ -7,9 +7,12 @@ install:            ## Install backend and web dependencies
 
 check: backend-check web-check   ## Run every check CI runs
 
+# Integration tests need PostgreSQL: start it with `docker compose up -d postgres` and
+# copy .env.example to .env (its QBANK_TEST_* values point at that server).
 backend-check:
 	cd services/api && uv run ruff check . && uv run ruff format --check . \
-		&& uv run mypy && uv run lint-imports && uv run pytest
+		&& uv run mypy && uv run lint-imports \
+		&& { set -a; [ ! -f ../../.env ] || . ../../.env; set +a; } && uv run pytest
 
 web-check:
 	pnpm lint && pnpm typecheck && pnpm format:check && pnpm build

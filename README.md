@@ -17,7 +17,8 @@ tests and papers, student apps, live exams, analytics, courses and personalized 
 | `services/api/` | Python backend: FastAPI API (later also the background worker) |
 | `apps/web/` | Next.js + TypeScript web app for faculty and admins |
 | `infra/docker/` | Dockerfiles |
-| `compose.yaml` | Local stack: PostgreSQL, API, web |
+| `infra/db/` | Script that creates/updates the restricted database role (`db-init` service) |
+| `compose.yaml` | Local stack: PostgreSQL, role setup, migrations, API, web |
 | `docs/` | Requirements, architecture decisions, standards |
 
 ## Run it locally (Windows PC with Docker Desktop)
@@ -34,6 +35,7 @@ docker compose up --build     # first run downloads images and takes a few minut
 Then open:
 - Web app: http://localhost:3000
 - API health: http://localhost:8000/health/live → `{"status":"ok"}`
+- API readiness: http://localhost:8000/health/ready → database reachable and schema up to date
 - API docs (local only): http://localhost:8000/api/docs
 
 Stop with `Ctrl+C` or `docker compose down`. Database data is kept in a Docker volume between runs.
@@ -42,7 +44,11 @@ Stop with `Ctrl+C` or `docker compose down`. Database data is kept in a Docker v
 Needs [uv](https://docs.astral.sh/uv/), Node.js 22 and pnpm (`corepack enable`).
 
 ```bash
-make install   # install backend + web dependencies
-make check     # everything CI runs: lint, format, types, import rules, tests, build
-make format    # auto-fix formatting
+make install                  # install backend + web dependencies
+docker compose up -d postgres # integration tests need PostgreSQL (uses the values in .env)
+make check                    # everything CI runs: lint, format, types, import rules, tests, build
+make format                   # auto-fix formatting
 ```
+
+Backend tests are in `services/api/tests/`: `unit/` and `api/` need nothing; `integration/` creates and
+drops its own temporary database on the PostgreSQL server named by `QBANK_TEST_ADMIN_URL`.
