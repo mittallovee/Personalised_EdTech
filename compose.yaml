@@ -81,7 +81,9 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Its own role: the only one allowed to claim/complete jobs across coachings.
       DATABASE_URL: postgresql+psycopg://qbank_worker:${WORKER_DB_PASSWORD:-change-me-worker-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
+      # Same settings as the api: the worker loads and validates the same configuration.
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
     stop_grace_period: 30s   # lets the current job finish on `docker compose down`
     restart: unless-stopped  # come back by itself after a crash or a PC restart
     depends_on:
