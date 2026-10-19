@@ -178,7 +178,7 @@ uploads (M6); cloud deployment (M7).
 | 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | Merged (#3) |
 | 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | Merged (#4) |
 | 4 | Jobs core + worker + T9; ID/code generator + T11 (migration 0003) | In review |
-| 5 | Web: app shell, login, home, generated client, OpenAPI check T12 | |
+| 5 | Web: app shell, login, home, generated client, OpenAPI check T12; Origin allow-list on unsafe API requests (owner decision, 19 Oct) | |
 | 6 | README run instructions, restart check T10, M1 demo notes | |
 
 ## 15. Decisions for the owner
