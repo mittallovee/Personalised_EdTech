@@ -25,11 +25,16 @@ Four providers at start (Anthropic, OpenAI, Google, OpenRouter), coaching-owned 
     left `SUBMITTING` without a batch ID (crash, lost lease, unknown outcome) is resolved only by
     **reconciliation**: looking up the provider's batches for the run-ID tag until it is found (then
     adopted, and cancelled if the user cancelled meanwhile) or until the provider's visibility window has
-    passed (then marked "submission unknown", reservation settled from the provider's usage records, and
-    the user may start a new run). Economy is offered only for models whose provider supports such a lookup.
-  - **Exact budget settlement.** Every terminal state, including cancellation and "submission unknown",
-    replaces the reservation with the actual charge (zero, partial or full) and releases only the unused
-    remainder; nothing stays reserved. Economy needs a known price for the model (H-17) to reserve against.
+    passed (then marked "submission unknown"; its full reservation stays held until an admin resolves it
+    against the provider's billing, because usage reports may not identify the run; the user may start a
+    new run). Economy is offered only for models whose provider supports such a lookup.
+  - **Budget settlement.** Every terminal state with a known charge replaces the reservation with that
+    actual charge (zero, partial or full) and releases only the unused remainder. Where the charge cannot
+    be attributed to the run ("submission unknown"), the full estimate stays reserved (never undercounted)
+    until an admin settles it. Economy needs a known price for the model (H-17) to reserve against.
+  - **Cancellation is final for applying.** Cancelling records the user's intent on the run first (then
+    asks the provider to stop); any result that still arrives, because provider cancellation is not
+    instant, is stored and charged but never applied.
   - **Authorization at apply time (B-10).** Just before applying, the submitter's current membership and
     the operation's grant are checked again; if they no longer hold, or the question moved past the
     stored revision, the result is kept unapplied ("needs review" / "out of date") and never changes the
