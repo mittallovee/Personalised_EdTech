@@ -170,6 +170,7 @@ Admins/Owner hold all grants implicitly.
 | H-15 | Every AI run records model, prompt version, input revision, output, cost; AI output never counts as human QC | P1 | S |
 | H-16 | AI quality dashboard: acceptance/correction rates per operation, model and prompt version | P2 | R |
 | H-17 | **Live model catalogue**: the list of models is fetched from each provider's model-list API with the coaching's key (refresh on demand + daily), so users always choose from what the provider offers *today*; admin enables models; capability (text/vision/JSON) and price info come from provider data or an admin-editable overlay; unknown price → cost shown as "unknown", budget rules still apply | P1 | **N** |
+| H-18 | **Economy AI runs (batch mode)**: for work that is not urgent, a run can use the provider's Batch API (Anthropic, OpenAI, Google and OpenRouter offer one, typically about half price with results within 24 hours, often much sooner). Each run offers "Now (normal price)" or "Economy (about half price, done within 24 h)"; admins set the default per operation; Economy appears only for models whose provider supports it (a capability in the H-17 catalogue). The user keeps working; when the results arrive they are applied like any other run (H-15 record, H-05 ledger at the actual discounted cost, budgets H-06 reserve the estimate at submission), and an in-app notification (I-01) links to them. Economy runs can be cancelled while waiting; expired or failed batches are reported, never silently retried at full price | P1 | N (19 Oct) |
 
 ### I. Notifications, admin & audit
 
@@ -227,6 +228,7 @@ Admins/Owner hold all grants implicitly.
 | 10 | Sample files arrive through the app's upload during M6 (18 Oct) |
 | 11 | OTP login and self-service password reset in Phase 2 (18 Oct) |
 | 12 | After Phase 1, Phase 2 (ingestion at scale & AI) comes next (18 Oct) |
+| 13 | Economy (batch) AI runs in Phase 1, M5: user picks per run, admins set defaults per operation, in-app notification when done (19 Oct, H-18) |
 
 ## 6. Still open — owner input needed
 
