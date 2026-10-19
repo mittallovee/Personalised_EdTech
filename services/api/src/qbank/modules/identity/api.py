@@ -2,13 +2,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
-from qbank.core.auth import CurrentPrincipal, Principal
+from qbank.core.auth import SESSION_COOKIE, CurrentPrincipal, Principal
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
 from qbank.core.errors import TooManyRequests
 from qbank.core.ratelimit import LoginRateLimiter
 from qbank.modules.identity import service
-from qbank.modules.identity.authenticator import CSRF_COOKIE, SESSION_COOKIE
+from qbank.modules.identity.authenticator import CSRF_COOKIE
 from qbank.modules.identity.schemas import LoginRequest, LoginResponse, Me, MyOrganization
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])

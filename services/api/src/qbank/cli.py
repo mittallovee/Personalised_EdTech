@@ -4,12 +4,15 @@
 
 Commands that create privileged accounts connect as the table owner (MIGRATION_DATABASE_URL),
 because the runtime role is deliberately not allowed to do that.
+
+``qbank export-openapi`` is a developer command (``make openapi``): it writes the API contract.
 """
 
 import argparse
 import getpass
 import os
 import sys
+from pathlib import Path
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
 
@@ -59,6 +62,24 @@ def _create_platform_admin(args: argparse.Namespace) -> int:
     return 0
 
 
+def _export_openapi(args: argparse.Namespace) -> int:
+    # Builds the whole app, so it is imported only when this command runs.
+    from qbank.contract import OPENAPI_FILE, render_openapi
+
+    target = Path(args.output) if args.output else OPENAPI_FILE
+    document = render_openapi()
+    if args.check:
+        if not target.is_file() or target.read_text(encoding="utf-8") != document:
+            print(f"{target} is out of date: run `make openapi` and commit it.", file=sys.stderr)
+            return 1
+        print(f"{target} matches the code.")
+        return 0
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(document, encoding="utf-8")
+    print(f"Wrote {target}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="qbank", description="Question bank admin commands")
     commands = parser.add_subparsers(dest="command")
@@ -66,6 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     admin.add_argument("--email", required=True)
     admin.add_argument("--name", help="Display name (asked if omitted)")
     admin.set_defaults(handler=_create_platform_admin)
+
+    openapi = commands.add_parser("export-openapi", help="Write the API contract (OpenAPI JSON)")
+    openapi.add_argument("--output", help="Default: api/openapi.json in the repository")
+    openapi.add_argument("--check", action="store_true", help="Fail if the file is out of date")
+    openapi.set_defaults(handler=_export_openapi)
 
     args = parser.parse_args(argv)
     if args.command is None:

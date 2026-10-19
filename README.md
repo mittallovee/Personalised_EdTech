@@ -54,6 +54,7 @@ Needs [uv](https://docs.astral.sh/uv/), Node.js 22 and pnpm (`corepack enable`).
 make install                  # install backend + web dependencies
 docker compose up -d postgres # integration tests need PostgreSQL (uses the values in .env)
 make check                    # everything CI runs: lint, format, types, import rules, tests, build
+make openapi                  # after changing the API: regenerate api/openapi.json and commit it
 make format                   # auto-fix formatting
 ```
 

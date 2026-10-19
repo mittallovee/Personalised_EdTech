@@ -10,10 +10,23 @@ from dataclasses import dataclass
 from typing import Annotated, Protocol
 from uuid import UUID
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Security
+from fastapi.security import APIKeyCookie
 
 from qbank.core.errors import Unauthenticated
 from qbank.core.tenancy import TenantContext
+
+# How the web app signs in (style guide §7). Part of the API contract, so defined here.
+SESSION_COOKIE = "qb_session"
+CSRF_HEADER = "X-CSRF-Token"
+
+# Declares the cookie in the OpenAPI contract; reading and checking it is the authenticators' job.
+_session_cookie = APIKeyCookie(
+    name=SESSION_COOKIE,
+    scheme_name="sessionCookie",
+    description="Session cookie set by POST /api/v1/auth/login (HttpOnly; the browser sends it).",
+    auto_error=False,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +70,7 @@ def get_optional_principal(request: Request) -> Principal | None:
 
 def require_principal(
     principal: Annotated[Principal | None, Depends(get_optional_principal)],
+    _contract: Annotated[str | None, Security(_session_cookie)] = None,
 ) -> Principal:
     if principal is None:
         raise Unauthenticated("Please sign in.")

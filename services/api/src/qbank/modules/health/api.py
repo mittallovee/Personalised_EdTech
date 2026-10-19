@@ -21,6 +21,7 @@ def live() -> LiveStatus:
 @router.get(
     "/ready",
     summary="Ready to serve: database reachable and schema up to date",
+    response_model=ReadyStatus,
     responses={503: {"model": ReadyStatus, "description": "Not ready"}},
 )
 def ready(request: Request, database: Annotated[Database, Depends(get_database)]) -> JSONResponse:

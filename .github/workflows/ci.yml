@@ -46,6 +46,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run lint-imports
+      - name: API contract matches the code (api/openapi.json)
+        run: uv run qbank export-openapi --check
       - run: uv run pytest   # unit + API + integration (real PostgreSQL, incl. migrations)
 
   web:
@@ -65,6 +67,29 @@ jobs:
       - run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+  contract:
+    # API style guide §8: no breaking changes inside /api/v1. Compares this PR's api/openapi.json
+    # with the base branch's (removed endpoints, new required inputs, changed types...).
+    name: API contract (no breaking changes)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Compare with the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          OASDIFF: tufin/oasdiff:v1.34.0@sha256:dd742562c1f3146f6e2a80bc01951cc87d15a249ac2aca05665339e30cf03620
+        run: |
+          mkdir -p "$RUNNER_TEMP/base"
+          if ! git show "origin/$BASE_REF:api/openapi.json" > "$RUNNER_TEMP/base/openapi.json" 2>/dev/null; then
+            echo "No api/openapi.json on $BASE_REF yet: nothing to compare."
+            exit 0
+          fi
+          docker run --rm -v "$RUNNER_TEMP/base:/base:ro" -v "$PWD/api:/head:ro" "$OASDIFF" \
+            breaking /base/openapi.json /head/openapi.json --fail-on ERR
 
   secrets:
     name: Secret scan

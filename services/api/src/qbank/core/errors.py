@@ -5,7 +5,27 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+class ErrorField(BaseModel):
+    path: str  # e.g. "body.email"
+    code: str  # e.g. "MISSING"
+
+
+class ErrorInfo(BaseModel):
+    code: str  # stable; see docs/architecture/error-codes.md
+    message: str  # for people; clients must not branch on it
+    request_id: str | None
+    fields: list[ErrorField]
+    details: dict[str, Any]
+
+
+class ErrorResponse(BaseModel):
+    """The one error envelope every API error uses (style guide §5); documented in OpenAPI."""
+
+    error: ErrorInfo
 
 
 class AppError(Exception):
