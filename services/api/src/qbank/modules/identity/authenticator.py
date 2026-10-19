@@ -2,16 +2,14 @@
 
 from fastapi import Request
 
-from qbank.core.auth import Principal
+from qbank.core.auth import CSRF_HEADER, SESSION_COOKIE, Principal
 from qbank.core.config import Settings
 from qbank.core.db import Database
 from qbank.core.errors import PermissionDenied
 from qbank.core.security import token_matches
 from qbank.modules.identity.service import resolve_session
 
-SESSION_COOKIE = "qb_session"
 CSRF_COOKIE = "qb_csrf"
-CSRF_HEADER = "X-CSRF-Token"
 # Requests that change something must prove they come from our web app (CSRF protection).
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 

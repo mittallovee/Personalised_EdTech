@@ -10,6 +10,7 @@ from qbank.core.db import Database
 from qbank.core.errors import install_error_handlers
 from qbank.core.logging import configure_logging, install_request_logging
 from qbank.core.migrations import migration_heads
+from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import LoginRateLimiter
 from qbank.modules.health.api import router as health_router
@@ -52,4 +53,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(identity_router)
+    install_openapi(app)
     return app
