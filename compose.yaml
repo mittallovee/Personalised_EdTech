@@ -59,6 +59,10 @@ services:
       # Local development serves plain http://localhost; staging/production refuse this setting.
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
+      # Real client address behind a tunnel/edge (ADR-0014), e.g. CLIENT_IP_HEADER=CF-Connecting-IP.
+      # Believed only from the web container (Docker's private network ranges).
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
+      TRUSTED_PROXIES: '["172.16.0.0/12", "192.168.0.0/16", "10.0.0.0/8"]'
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

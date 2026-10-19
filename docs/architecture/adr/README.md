@@ -19,3 +19,4 @@ Status values: `Proposed` → `Accepted` (owner approved) → `Superseded by ADR
 | [0011](./0011-identifiers.md) | UUIDv7 internal IDs + 8-character question codes | **Accepted** |
 | [0012](./0012-file-storage.md) | Storage interface: local disk → S3/GCS | Proposed |
 | [0013](./0013-cloud-neutral-deployment.md) | Containers, cloud-neutral; cloud choice at M7 | Proposed |
+| [0014](./0014-web-reaches-api-through-same-origin-proxy.md) | Web app reaches the API through a same-origin proxy; trusted client-IP header | Proposed |

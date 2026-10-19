@@ -16,4 +16,6 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 WORKDIR /app
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "qbank.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# --no-proxy-headers: never rewrite the client address from X-Forwarded-For (anyone can send it);
+# the trusted client-IP header is handled in core/clientip.py (ADR-0014).
+CMD ["uvicorn", "qbank.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

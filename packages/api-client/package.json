@@ -1,0 +1,27 @@
+{
+  "name": "@qbank/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed client for the Question Bank API, generated from api/openapi.json",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "check-generated": "node scripts/generate.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "vitest": "5.0.5"
+  }
+}

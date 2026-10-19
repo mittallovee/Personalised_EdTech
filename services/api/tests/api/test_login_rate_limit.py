@@ -46,3 +46,30 @@ def test_rate_limited_response_says_when_to_retry() -> None:
     assert response.status_code == 429
     assert response.json()["error"]["code"] == "RATE_LIMITED"
     assert int(response.headers["Retry-After"]) > 0
+
+
+def test_behind_a_trusted_proxy_each_real_client_has_its_own_limit() -> None:
+    settings = Settings(
+        app_env=AppEnv.TEST,
+        database_url=UNREACHABLE_DB,
+        login_attempts_per_ip=1,
+        login_attempts_per_email=100,
+        client_ip_header="CF-Connecting-IP",
+        trusted_proxies=["172.16.0.0/12"],
+    )
+    # Every request arrives from the web app's proxy container.
+    client = TestClient(
+        create_app(settings), raise_server_exceptions=False, client=("172.18.0.5", 40000)
+    )
+
+    def attempt_from(ip: str, n: int) -> int:
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": f"user{n}@example.com", "password": "x"},
+            headers={"CF-Connecting-IP": ip},
+        )
+        return response.status_code
+
+    assert attempt_from("203.0.113.1", 1) == 500  # passes the limiter (database unreachable)
+    assert attempt_from("203.0.113.1", 2) == 429  # same real client: limited
+    assert attempt_from("203.0.113.2", 3) == 500  # another real client: not blocked by the first

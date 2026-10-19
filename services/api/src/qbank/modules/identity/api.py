@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from qbank.core.auth import SESSION_COOKIE, CurrentPrincipal, Principal
+from qbank.core.clientip import client_address
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
 from qbank.core.errors import TooManyRequests
@@ -70,7 +71,7 @@ def login(
     settings: Annotated[Settings, Depends(get_settings_from_app)],
 ) -> LoginResponse:
     limiter: LoginRateLimiter = request.app.state.login_limiter
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = client_address(request)
     wait = limiter.check(client_ip, body.email)
     if wait:
         raise TooManyRequests(

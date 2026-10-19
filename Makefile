@@ -14,14 +14,16 @@ backend-check:
 		&& uv run mypy && uv run lint-imports \
 		&& { set -a; [ ! -f ../../.env ] || . ../../.env; set +a; } && uv run pytest
 
-openapi:            ## Regenerate the API contract api/openapi.json after changing the API
+openapi:            ## Regenerate the API contract api/openapi.json and the web client's types
 	cd services/api && uv run qbank export-openapi
+	pnpm --filter @qbank/api-client generate
 
-openapi-check:      ## Fail if api/openapi.json does not match the code (M1 test T12)
+openapi-check:      ## Fail if api/openapi.json or the client types are out of date (M1 test T12)
 	cd services/api && uv run qbank export-openapi --check
+	pnpm --filter @qbank/api-client check-generated
 
 web-check:
-	pnpm lint && pnpm typecheck && pnpm format:check && pnpm build
+	pnpm lint && pnpm typecheck && pnpm format:check && pnpm test && pnpm build
 
 format:             ## Auto-format all code
 	cd services/api && uv run ruff format . && uv run ruff check --fix .

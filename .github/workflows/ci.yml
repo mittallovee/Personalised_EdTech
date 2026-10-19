@@ -62,8 +62,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - name: Generated API client matches api/openapi.json
+        run: pnpm --filter @qbank/api-client check-generated
       - run: pnpm typecheck
       - run: pnpm format:check
+      - run: pnpm test
       - run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
