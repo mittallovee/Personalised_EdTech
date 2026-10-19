@@ -46,6 +46,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run lint-imports
+      - name: API contract matches the code (api/openapi.json)
+        run: uv run qbank export-openapi --check
       - run: uv run pytest   # unit + API + integration (real PostgreSQL, incl. migrations)
 
   web:

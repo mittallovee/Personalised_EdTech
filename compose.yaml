@@ -58,6 +58,7 @@ services:
       DATABASE_URL: postgresql+psycopg://qbank_app:${APP_DB_PASSWORD:-change-me-app-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
       # Local development serves plain http://localhost; staging/production refuse this setting.
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

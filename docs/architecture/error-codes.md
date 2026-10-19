@@ -12,6 +12,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `CONFLICT` | 409 | Request conflicts with the current state (more specific codes preferred) | M1 |
 | `VALIDATION_FAILED` | 422 | Well-formed but breaks a business rule (more specific codes preferred) | M1 |
 | `INTERNAL_ERROR` | 500 | Unexpected server fault; details are only in server logs (search by `request_id`) | M1 |
+| `ORIGIN_NOT_ALLOWED` | 403 | A change (POST/PUT/PATCH/DELETE) came from a browser on a web address not in `ALLOWED_ORIGINS` | M1 |
 | `CSRF_TOKEN_INVALID` | 403 | A change was sent without the `X-CSRF-Token` header from sign-in | M1 |
 | `EMAIL_TAKEN` | 409 | An account with this email already exists | M1 |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The `Idempotency-Key` was already used with a different request body | M1 |

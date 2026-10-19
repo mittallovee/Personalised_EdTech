@@ -4,6 +4,9 @@ A cross-site HTML form can only send form-encoded, multipart or text/plain bodie
 endpoint accepts JSON only (FastAPI does not parse a text/plain body as JSON), so such a form
 fails before any lookup and no session cookie is set. A cross-site script sending real JSON
 needs CORS approval, which this API does not grant.
+
+These tests send no ``Origin`` header so they check this layer on its own; the Origin allow-list
+in front of it is tested in ``test_origin_check.py``.
 """
 
 from fastapi.testclient import TestClient
@@ -24,7 +27,7 @@ def test_text_plain_form_with_json_shaped_body_is_rejected() -> None:
     response = make_client().post(
         "/api/v1/auth/login",
         content=JSON_LOOKING_BODY,
-        headers={"Content-Type": "text/plain", "Origin": "https://evil.example"},
+        headers={"Content-Type": "text/plain"},
     )
 
     assert response.status_code == 400  # never reaches the database (which is unreachable here)
@@ -35,7 +38,6 @@ def test_url_encoded_form_is_rejected() -> None:
     response = make_client().post(
         "/api/v1/auth/login",
         data={"email": "attacker@example.com", "password": "attackers-password"},
-        headers={"Origin": "https://evil.example"},
     )
 
     assert response.status_code == 400

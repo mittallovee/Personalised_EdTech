@@ -10,6 +10,7 @@ from qbank.core.db import Database
 from qbank.core.errors import install_error_handlers
 from qbank.core.logging import configure_logging, install_request_logging
 from qbank.core.migrations import migration_heads
+from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import LoginRateLimiter
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         window_seconds=settings.login_rate_window_seconds,
     )
 
+    install_origin_check(app, settings.allowed_origins)  # added first, so it runs inside logging
     install_request_logging(app)
     install_error_handlers(app)
     app.include_router(health_router)

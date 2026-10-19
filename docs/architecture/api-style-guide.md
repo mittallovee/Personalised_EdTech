@@ -97,6 +97,11 @@ All three resolve to the same internal **Principal** (user or client, coaching, 
 only sees the Principal, never cookies or tokens.
 
 - The coaching (tenant) comes from the Principal. Clients never send an organization ID to choose a tenant.
+- **Origin allow-list** (owner decision, 19 Oct 2026): a change (POST/PUT/PATCH/DELETE) whose `Origin`
+  header, or `Referer` when `Origin` is missing, names a web address outside `ALLOWED_ORIGINS` is refused
+  with `403 ORIGIN_NOT_ALLOWED` before any handler runs. Requests with neither header (apps, partners,
+  scripts) continue to normal authentication. This adds to SameSite cookies, the CSRF header, JSON-only
+  bodies and the absence of CORS permissions; it also blocks "login CSRF".
 - **Platform admins** choose a coaching to act in via `POST /api/v1/platform/acting-organization`; it's stored
   in their session, shown in the UI, and recorded in every audit event.
 
