@@ -148,6 +148,12 @@ def enqueue(
     return existing_id
 
 
+def poll_backoff(poll_interval: float, failures: int) -> float:
+    """Seconds to wait after ``failures`` polling errors in a row: doubles, capped at 30 s."""
+    # Cap the exponent first: 2**failures grows without limit in a long outage and would overflow.
+    return min(poll_interval * 2.0 ** min(failures, 16), MAX_POLL_BACKOFF_SECONDS)
+
+
 def retry_delay(attempt: int) -> timedelta:
     """Delay before retry number ``attempt`` (1-based), with ±20 % jitter."""
     base = RETRY_DELAYS_SECONDS[min(attempt, len(RETRY_DELAYS_SECONDS)) - 1]
@@ -184,7 +190,7 @@ class Worker:
             except Exception:  # e.g. the database is restarting: wait, then try again
                 failures += 1
                 log.exception("worker_poll_failed", failures=failures)
-                time.sleep(min(self._poll_interval * 2**failures, MAX_POLL_BACKOFF_SECONDS))
+                time.sleep(poll_backoff(self._poll_interval, failures))
                 continue
             failures = 0
             if not worked:

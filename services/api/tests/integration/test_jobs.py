@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session
 
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
-from qbank.core.jobs import Job, JobRegistry, PermanentJobError, Worker, enqueue, retry_delay
+from qbank.core.jobs import (
+    Job,
+    JobRegistry,
+    PermanentJobError,
+    Worker,
+    enqueue,
+    poll_backoff,
+    retry_delay,
+)
 from qbank.core.tenancy import TenantContext
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.audit.public import record_event
@@ -333,3 +341,10 @@ def test_retry_delays_grow() -> None:
 
     assert timedelta(seconds=1.5) < first < timedelta(seconds=2.5)
     assert first < second < third
+
+
+def test_poll_backoff_grows_and_stays_capped_in_a_long_outage() -> None:
+    assert poll_backoff(1.0, 1) == 2.0
+    assert poll_backoff(1.0, 2) == 4.0
+    assert poll_backoff(1.0, 6) == 30.0
+    assert poll_backoff(1.0, 5_000) == 30.0  # hours of outage: still a number, still capped
