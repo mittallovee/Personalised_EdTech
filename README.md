@@ -32,18 +32,23 @@ cp .env.example .env          # local settings; never commit .env
 docker compose up --build     # first run downloads images and takes a few minutes
 ```
 
-Then open:
-- Web app: http://localhost:3000
-- API health: http://localhost:8000/health/live → `{"status":"ok"}`
-- API readiness: http://localhost:8000/health/ready → database reachable and schema up to date
-- API docs (local only): http://localhost:8000/api/docs
-
 Create your platform admin account (once):
 
 ```bash
 docker compose run --rm migrate qbank create-platform-admin --email you@example.com --name "Your Name"
 # asks for a password (min 12 characters) twice
 ```
+
+Then view and test it:
+1. Open **http://localhost:3000**: you are sent to the sign-in page.
+2. Sign in with the admin email and password: the home page shows your name, "Platform admin" and
+   system health (API, database, migrations all `ok`).
+3. A wrong password shows one generic message; after 5 wrong tries the account is locked for 15 minutes.
+4. **Sign out**: you are back on the sign-in page and the home page is no longer reachable.
+
+Useful addresses: API readiness http://localhost:8000/health/ready · API docs (local only)
+http://localhost:8000/api/docs. To open the app on your own domain, see
+[`docs/operations/remote-access.md`](docs/operations/remote-access.md).
 
 Stop with `Ctrl+C` or `docker compose down`. Database data is kept in a Docker volume between runs.
 

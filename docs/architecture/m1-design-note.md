@@ -120,6 +120,8 @@ platform roles are visible to the runtime role only for the signed-in user.
 - App shell: top bar (user name, logout), side navigation placeholders for later modules.
 - Home: "Signed in as …, platform admin", API health status.
 - Uses the generated API client only. Session cookie is handled by the browser; CSRF token sent on mutations.
+- The browser only talks to the web app's origin; Next.js forwards `/api/v1/*` and `/health/*` to the API
+  (ADR-0014). Remote access through a Cloudflare Tunnel: [`docs/operations/remote-access.md`](../operations/remote-access.md).
 
 ## 9. Background jobs (M1)
 
@@ -184,8 +186,8 @@ uploads (M6); cloud deployment (M7).
 | 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | Merged (#3) |
 | 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | Merged (#4) |
 | 4 | Jobs core + worker + T9; ID/code generator + T11 (migration 0003) | In review |
-| 5a | API contract export `api/openapi.json` + CI check T12; Origin allow-list on unsafe API requests (owner decision, 19 Oct) | In review |
-| 5b | Web: app shell, login, home, generated client (split from 5 to keep PRs small) | |
+| 5a | API contract export `api/openapi.json` + CI check T12; Origin allow-list on unsafe API requests (owner decision, 19 Oct) | Merged (#6) |
+| 5b | Web: app shell, login, home, generated client (split from 5 to keep PRs small); same-origin proxy (ADR-0014) | In review |
 | 6 | README run instructions, restart check T10, M1 demo notes | |
 
 ## 15. Decisions for the owner

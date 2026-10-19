@@ -1,11 +1,15 @@
 # Web image: Next.js standalone server.
 FROM node:22-slim AS build
-ENV NEXT_TELEMETRY_DISABLED=1
+# The web server forwards /api/* and /health/* here; rewrites are fixed at build time (ADR-0014).
+ARG API_INTERNAL_URL=http://api:8000
+ENV NEXT_TELEMETRY_DISABLED=1 API_INTERNAL_URL=${API_INTERNAL_URL}
 RUN corepack enable
 WORKDIR /repo
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json apps/web/
-RUN pnpm install --frozen-lockfile --filter @qbank/web
+COPY packages/api-client/package.json packages/api-client/
+RUN pnpm install --frozen-lockfile --filter "@qbank/web..."
+COPY packages/api-client/ packages/api-client/
 COPY apps/web/ apps/web/
 RUN pnpm --filter @qbank/web build
 
