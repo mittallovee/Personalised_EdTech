@@ -17,5 +17,6 @@ The "final pick at M1" is **our own small queue on the `jobs` table** rather tha
 `jobs` table already had to be the durable source of truth (state, progress, cancel); a library would add a
 second set of job tables; and claiming across coachings needs narrow database functions so the runtime
 role stays tenant-restricted. The mechanism is the standard PostgreSQL pattern: `SELECT … FOR UPDATE SKIP
-LOCKED` to claim, a lease (`locked_until`) to recover jobs of crashed workers, bounded retries with backoff.
-About 200 lines in `core/jobs.py` and migration 0003. The decision above (PostgreSQL, not Redis) is unchanged.
+LOCKED` to claim, a lease (`locked_until`) renewed in the background while a job runs (a heartbeat) so only
+crashed workers lose their jobs, bounded retries with backoff. About 300 lines in `core/jobs.py` and
+migration 0003. The decision above (PostgreSQL, not Redis) is unchanged.

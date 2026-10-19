@@ -1,15 +1,17 @@
 """M1 exit test T9: background jobs are durable, run once in their coaching, and retry safely."""
 
+import time
 from collections.abc import Iterator
 from datetime import timedelta
 from uuid import UUID
 
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
 from qbank.core.db import Database
+from qbank.core.errors import Conflict
 from qbank.core.jobs import Job, JobRegistry, PermanentJobError, Worker, enqueue, retry_delay
 from qbank.core.tenancy import TenantContext
 from qbank.modules.audit.models import AuditEvent
@@ -191,6 +193,23 @@ def test_idempotency_key_creates_one_job_per_coaching(
     assert other_coaching != first
 
 
+def test_reused_idempotency_key_with_a_different_payload_is_rejected(
+    db: Database, coaching_a: Coaching
+) -> None:
+    add_job(db, coaching_a, idempotency_key="upload-43")  # payload {"n": 1}
+
+    with pytest.raises(Conflict) as error, db.transaction(coaching_a.context) as session:
+        enqueue(
+            session,
+            "test.record",
+            {"n": 2},
+            context=coaching_a.context,
+            idempotency_key="upload-43",
+        )
+
+    assert error.value.code == "IDEMPOTENCY_KEY_REUSED"
+
+
 def test_running_job_is_not_claimed_by_a_second_worker(
     db: Database, worker: Worker, recorder: Recorder, coaching_a: Coaching
 ) -> None:
@@ -225,6 +244,45 @@ def test_job_of_a_crashed_worker_is_recovered_and_the_late_result_discarded(
     assert job_row(owner_db, job_id)["state"] == "SUCCEEDED"
     assert job_row(owner_db, job_id)["attempts"] == 2
     assert audit_rows(owner_db, coaching_a, job_id) == 1  # worker-a's late writes were rolled back
+
+
+def test_lease_is_renewed_while_a_long_job_runs(
+    db: Database, owner_db: Database, coaching_a: Coaching
+) -> None:
+    job_id = add_job(db, coaching_a)
+    taken_over: list[Job | None] = []
+    other = Worker(db, JobRegistry(), worker_id="worker-b")
+
+    def slow(session: Session, job: Job) -> None:
+        time.sleep(1.5)  # longer than worker-a's 1-second lease
+        taken_over.append(other._claim())
+
+    registry = JobRegistry()
+    registry.register("test.record", slow)
+    worker = Worker(db, registry, worker_id="worker-a", lease=timedelta(seconds=1))
+
+    assert worker.run_until_idle() == 1
+    assert taken_over == [None]  # worker-a kept renewing its lease
+    assert job_row(owner_db, job_id)["state"] == "SUCCEEDED"
+    assert job_row(owner_db, job_id)["attempts"] == 1
+
+
+def test_worker_keeps_polling_after_a_database_error(db: Database) -> None:
+    worker = Worker(db, JobRegistry(), worker_id="worker-a", poll_interval=0.01)
+    calls = 0
+
+    def flaky_run_next() -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OperationalError("SELECT jobs_claim(...)", {}, Exception("server restarting"))
+        worker.stop()
+        return False
+
+    worker.run_next = flaky_run_next  # type: ignore[method-assign]
+    worker.run_forever()  # must not raise
+
+    assert calls == 2
 
 
 def test_coachings_see_only_their_own_jobs(

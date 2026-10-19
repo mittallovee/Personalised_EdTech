@@ -80,6 +80,7 @@ services:
       DATABASE_URL: postgresql+psycopg://qbank_app:${APP_DB_PASSWORD:-change-me-app-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     stop_grace_period: 30s   # lets the current job finish on `docker compose down`
+    restart: unless-stopped  # come back by itself after a crash or a PC restart
     depends_on:
       migrate:
         condition: service_completed_successfully

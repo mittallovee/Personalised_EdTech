@@ -8,8 +8,9 @@ Jobs (ADR-0007): a PostgreSQL table is both the queue and the durable record of 
 job. Workers claim work with ``FOR UPDATE SKIP LOCKED`` so two workers never take the same job,
 and a lease (``locked_until``) lets another worker recover a job whose worker crashed.
 - The runtime role may enqueue and read jobs of its own coaching (tenant policy, like other tables).
-- Claiming, completing and failing jobs across coachings happens only through the ``jobs_*``
-  SECURITY DEFINER functions below; the worker then runs each job inside that job's coaching.
+- Claiming, renewing, completing and failing jobs across coachings happens only through the
+  ``jobs_*`` SECURITY DEFINER functions below; the worker then runs each job inside that job's
+  coaching, renewing its lease while the job runs.
 
 Public codes (ADR-0011): one row per issued 8-character code, globally unique and never reused.
 The unique primary key detects collisions across all coachings; each coaching sees only its rows.
@@ -130,6 +131,19 @@ def upgrade() -> None:
             SELECT EXISTS (SELECT 1 FROM done)
         $$;
 
+        -- Keep a long-running job: push the lease forward. False = another worker has it now.
+        CREATE FUNCTION jobs_extend_lease(p_job_id uuid, p_worker text, p_lease interval)
+        RETURNS boolean
+        LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+            WITH renewed AS (
+                UPDATE jobs
+                SET locked_until = now() + p_lease, updated_at = now()
+                WHERE id = p_job_id AND state = 'RUNNING' AND locked_by = p_worker
+                RETURNING 1
+            )
+            SELECT EXISTS (SELECT 1 FROM renewed)
+        $$;
+
         -- Record a failure: retry later if attempts remain and the error is retryable.
         CREATE FUNCTION jobs_fail(
             p_job_id uuid, p_worker text, p_error text, p_retry_in interval)
@@ -153,11 +167,13 @@ def upgrade() -> None:
         REVOKE EXECUTE ON FUNCTION
             jobs_claim(text, interval),
             jobs_complete(uuid, text),
+            jobs_extend_lease(uuid, text, interval),
             jobs_fail(uuid, text, text, interval)
         FROM PUBLIC;
         GRANT EXECUTE ON FUNCTION
             jobs_claim(text, interval),
             jobs_complete(uuid, text),
+            jobs_extend_lease(uuid, text, interval),
             jobs_fail(uuid, text, text, interval)
         TO {APP_ROLE};
 
@@ -169,6 +185,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("""
         DROP FUNCTION jobs_fail(uuid, text, text, interval);
+        DROP FUNCTION jobs_extend_lease(uuid, text, interval);
         DROP FUNCTION jobs_complete(uuid, text);
         DROP FUNCTION jobs_claim(text, interval);
         DROP TABLE public_codes;

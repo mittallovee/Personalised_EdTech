@@ -125,11 +125,14 @@ platform roles are visible to the runtime role only for the signed-in user.
 `Worker` (`python -m qbank.worker`, the `worker` compose service). M1 ships a `health.ping` job. Tests prove:
 enqueue in the same transaction as a data change (rollback = no job), each job runs once inside its own
 coaching, the handler's writes and "job done" commit together, retries with growing backoff (2 s, 10 s, 60 s…),
-permanent errors and unknown job types are not retried, an idempotency key creates one job per coaching, a
-running job cannot be claimed twice, and a crashed worker's job is recovered while its late result is discarded.
+permanent errors and unknown job types are not retried, an idempotency key creates one job per coaching (and
+the same key with a different payload is refused), a running job cannot be claimed twice, a long job keeps its
+lease (renewed in the background), a crashed worker's job is recovered while its late result is discarded, and
+the worker survives a database outage (it retries with growing waits; compose also restarts it).
 
 Jobs live in the `jobs` table (migration 0003). The runtime role may enqueue and read its own coaching's jobs;
-claiming/completing/failing across coachings goes through `jobs_claim`, `jobs_complete`, `jobs_fail`
+claiming/renewing/completing/failing across coachings goes through `jobs_claim`, `jobs_extend_lease`,
+`jobs_complete`, `jobs_fail`
 (SECURITY DEFINER, executable only by `qbank_app`). See ADR-0007's implementation note.
 
 **Codes (T11):** `core/codes.py` generates 8-character Crockford Base32 codes, normalises typed input
