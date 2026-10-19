@@ -21,7 +21,7 @@ from tests.integration.conftest import (
 @pytest.fixture
 def empty_database() -> Iterator[tuple[str, str]]:
     name = f"qbank_test_{secrets.token_hex(6)}"
-    owner_url, app_url = create_database(name)
+    owner_url, app_url, _worker_url = create_database(name)
     try:
         yield owner_url, app_url
     finally:
@@ -49,6 +49,8 @@ def test_upgrade_downgrade_upgrade(empty_database: tuple[str, str]) -> None:
         "password_credentials",
         "platform_roles",
         "sessions",
+        "jobs",
+        "public_codes",
     } <= table_names(owner_url)
 
     command.downgrade(config, "base")

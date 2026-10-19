@@ -55,8 +55,10 @@ infra/docker/          api.Dockerfile · web.Dockerfile
 
 ## 5. Database (migrations `0001_foundation` and `0002_identity`)
 
-Two DB roles: `qbank_owner` (owns tables, runs migrations) and `qbank_app` (runtime: no ownership, no
-superuser, no `BYPASSRLS`). `qbank_app` is created outside migrations (locally by the `db-init`
+DB roles: `qbank_owner` (owns tables, runs migrations), `qbank_app` (API runtime: no ownership, no
+superuser, no `BYPASSRLS`) and, from PR 4, `qbank_worker` (worker runtime: a member of `qbank_app` with the
+same limits, plus the only role allowed to run the cross-coaching `jobs_*` functions). The runtime roles are
+created outside migrations (locally by the `db-init`
 compose service running `infra/db/ensure-app-role.sh` on every start, so existing volumes work too; in the
 cloud by infrastructure code), so no password lives in a migration.
 
@@ -121,9 +123,24 @@ platform roles are visible to the runtime role only for the signed-in user.
 
 ## 9. Background jobs (M1)
 
-`core/jobs.py` exposes `enqueue(job_type, payload, *, org_id, idempotency_key)` and a handler registry.
-M1 ships a `noop` job used by tests to prove: enqueue in the same transaction as a data change, worker picks it
-up, retries on failure with backoff, and a duplicate idempotency key does not run twice.
+`core/jobs.py` exposes `enqueue(session, job_type, payload, *, context, idempotency_key)`, a `JobRegistry` and a
+`Worker` (`python -m qbank.worker`, the `worker` compose service). M1 ships a `health.ping` job. Tests prove:
+enqueue in the same transaction as a data change (rollback = no job), each job runs once inside its own
+coaching, the handler's writes and "job done" commit together, retries with growing backoff (2 s, 10 s, 60 s…),
+permanent errors and unknown job types are not retried, an idempotency key creates one job per coaching (and
+the same key with a different payload is refused), a running job cannot be claimed twice, a long job keeps its
+lease (renewed in the background), a crashed worker's job is recovered while its late result is discarded, and
+the worker survives a database outage (it retries with growing waits; compose also restarts it).
+
+Jobs live in the `jobs` table (migration 0003). The runtime role may enqueue and read its own coaching's jobs;
+claiming/renewing/completing/failing across coachings goes through `jobs_claim`, `jobs_extend_lease`,
+`jobs_complete`, `jobs_fail`
+(SECURITY DEFINER, executable only by the worker's own role `qbank_worker`, never by the API's `qbank_app`).
+See ADR-0007's implementation note.
+
+**Codes (T11):** `core/codes.py` generates 8-character Crockford Base32 codes, normalises typed input
+(lower case, O→0, I/L→1, hyphens/spaces ignored) and `reserve_code` records each code in `public_codes`
+(global primary key, never changed or reused), retrying on collision.
 
 ## 10. Observability (M1)
 
@@ -165,9 +182,9 @@ uploads (M6); cloud deployment (M7).
 |---|---|---|
 | 1 | Repo skeleton, tooling configs, compose, Dockerfiles, CI with lint/format only | Merged (#2) |
 | 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | Merged (#3) |
-| 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | In review |
-| 4 | Jobs core + worker + T9; ID/code generator + T11 | |
-| 5 | Web: app shell, login, home, generated client, OpenAPI check T12 | |
+| 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | Merged (#4) |
+| 4 | Jobs core + worker + T9; ID/code generator + T11 (migration 0003) | In review |
+| 5 | Web: app shell, login, home, generated client, OpenAPI check T12; Origin allow-list on unsafe API requests (owner decision, 19 Oct) | |
 | 6 | README run instructions, restart check T10, M1 demo notes | |
 
 ## 15. Decisions for the owner

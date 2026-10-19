@@ -19,7 +19,7 @@ services:
       timeout: 3s
       retries: 10
 
-  # One-off: create/update the restricted runtime role (new or existing volume), then exit.
+  # One-off: create/update the restricted runtime roles (new or existing volume), then exit.
   db-init:
     image: postgres:17
     entrypoint: ["sh", "/scripts/ensure-app-role.sh"]
@@ -29,6 +29,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
       PGDATABASE: ${POSTGRES_DB:-qbank_dev}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-change-me-app-local}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:-change-me-worker-local}
     volumes:
       - ./infra/db:/scripts:ro
     depends_on:
@@ -64,6 +65,24 @@ services:
       interval: 10s
       timeout: 3s
       retries: 6
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Background jobs (ADR-0007). Same image as the API, different command.
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["python", "-m", "qbank.worker"]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Its own role: the only one allowed to claim/complete jobs across coachings.
+      DATABASE_URL: postgresql+psycopg://qbank_worker:${WORKER_DB_PASSWORD:-change-me-worker-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+    stop_grace_period: 30s   # lets the current job finish on `docker compose down`
+    restart: unless-stopped  # come back by itself after a crash or a PC restart
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -21,6 +21,16 @@ def test_runtime_role_has_no_bypass_attributes(db: Database) -> None:
     assert row.rolbypassrls is False
 
 
+def test_worker_role_has_no_bypass_attributes(worker_db: Database) -> None:
+    with worker_db.engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        ).one()
+
+    assert row.rolsuper is False
+    assert row.rolbypassrls is False
+
+
 def test_runtime_role_owns_no_tables(db: Database) -> None:
     with db.engine.connect() as conn:
         owners = conn.execute(

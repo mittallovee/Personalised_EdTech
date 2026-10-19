@@ -2,7 +2,8 @@
 
 Needs a disposable PostgreSQL server reachable with an admin (superuser/owner) account:
   QBANK_TEST_ADMIN_URL      e.g. postgresql+psycopg://qbank_owner:PASSWORD@localhost:5432/postgres
-  QBANK_TEST_APP_PASSWORD   password of the restricted `qbank_app` role (created here if missing)
+  QBANK_TEST_APP_PASSWORD     password of the restricted `qbank_app` role (created here if missing)
+  QBANK_TEST_WORKER_PASSWORD  password of the `qbank_worker` role (created here if missing)
 Defaults match `.env.example`, so `docker compose up -d postgres` is enough locally.
 Each test session creates a fresh database and drops it afterwards.
 """
@@ -34,6 +35,8 @@ ADMIN_URL = os.environ.get(
 )
 APP_PASSWORD = os.environ.get("QBANK_TEST_APP_PASSWORD", "change-me-app-local")
 APP_ROLE = "qbank_app"
+WORKER_PASSWORD = os.environ.get("QBANK_TEST_WORKER_PASSWORD", "change-me-worker-local")
+WORKER_ROLE = "qbank_worker"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -50,21 +53,34 @@ def _admin_connection() -> psycopg.Connection:
         pytest.fail(f"Integration tests need PostgreSQL at QBANK_TEST_ADMIN_URL: {exc}")
 
 
-def create_database(name: str) -> tuple[str, str]:
-    """Create an empty database; return (owner_url, app_url) for it."""
+def _ensure_role(conn: psycopg.Connection, role: str, password: str) -> None:
+    """Same attributes as ``infra/db/ensure-app-role.sh`` gives the role locally."""
+    if conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)).fetchone():
+        return
+    conn.execute(
+        sql.SQL(
+            "CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE"
+        ).format(sql.Identifier(role), sql.Literal(password))
+    )
+
+
+def create_database(name: str) -> tuple[str, str, str]:
+    """Create an empty database; return (owner_url, app_url, worker_url) for it."""
     with _admin_connection() as conn:
-        exists = conn.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (APP_ROLE,)).fetchone()
-        if not exists:
-            conn.execute(
-                sql.SQL(
-                    "CREATE ROLE {} LOGIN PASSWORD {}"
-                    " NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE"
-                ).format(sql.Identifier(APP_ROLE), sql.Literal(APP_PASSWORD))
-            )
+        _ensure_role(conn, APP_ROLE, APP_PASSWORD)
+        _ensure_role(conn, WORKER_ROLE, WORKER_PASSWORD)
+        conn.execute(
+            sql.SQL("GRANT {} TO {}").format(sql.Identifier(APP_ROLE), sql.Identifier(WORKER_ROLE))
+        )
         conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     owner = make_url(ADMIN_URL).set(database=name)
     app = owner.set(username=APP_ROLE, password=APP_PASSWORD)
-    return owner.render_as_string(hide_password=False), app.render_as_string(hide_password=False)
+    worker = owner.set(username=WORKER_ROLE, password=WORKER_PASSWORD)
+    return (
+        owner.render_as_string(hide_password=False),
+        app.render_as_string(hide_password=False),
+        worker.render_as_string(hide_password=False),
+    )
 
 
 def drop_database(name: str) -> None:
@@ -85,15 +101,16 @@ class MigratedDatabase:
     name: str
     owner_url: str
     app_url: str
+    worker_url: str
 
 
 @pytest.fixture(scope="session")
 def migrated_database() -> Iterator[MigratedDatabase]:
     name = f"qbank_test_{secrets.token_hex(6)}"
-    owner_url, app_url = create_database(name)
+    owner_url, app_url, worker_url = create_database(name)
     try:
         command.upgrade(alembic_config(owner_url), "head")
-        yield MigratedDatabase(name, owner_url, app_url)
+        yield MigratedDatabase(name, owner_url, app_url, worker_url)
     finally:
         drop_database(name)
 
@@ -102,6 +119,22 @@ def migrated_database() -> Iterator[MigratedDatabase]:
 def db(migrated_database: MigratedDatabase) -> Iterator[Database]:
     """Runtime-role database access, exactly as the app uses it."""
     database = Database(migrated_database.app_url)
+    yield database
+    database.dispose()
+
+
+@pytest.fixture
+def worker_db(migrated_database: MigratedDatabase) -> Iterator[Database]:
+    """Worker-role database access, exactly as the background worker uses it."""
+    database = Database(migrated_database.worker_url)
+    yield database
+    database.dispose()
+
+
+@pytest.fixture
+def owner_db(migrated_database: MigratedDatabase) -> Iterator[Database]:
+    """Table-owner access, used only to arrange test data the app itself may not write."""
+    database = Database(migrated_database.owner_url)
     yield database
     database.dispose()
 
