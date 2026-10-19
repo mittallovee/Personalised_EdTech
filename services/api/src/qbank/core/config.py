@@ -3,6 +3,7 @@
 import re
 from enum import StrEnum
 from functools import lru_cache
+from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
@@ -57,6 +58,19 @@ class Settings(BaseSettings):
     # Web addresses allowed to send changes (POST/PUT/PATCH/DELETE) from a browser; see
     # core/origin.py. JSON list, e.g. ALLOWED_ORIGINS='["https://app.example.com"]'.
     allowed_origins: list[str] = Field(default=["http://localhost:3000"], min_length=1)
+
+    # Who the client is, for per-IP sign-in limits (core/clientip.py, ADR-0014). Behind a proxy
+    # that sets a header clients cannot forge (Cloudflare: CF-Connecting-IP), name it here; it is
+    # believed only from TRUSTED_PROXIES addresses. Unset: the connection's own address is used.
+    client_ip_header: str | None = None
+    trusted_proxies: list[IPv4Network | IPv6Network] = Field(
+        default=[IPv4Network("127.0.0.1/32"), IPv6Network("::1/128")]
+    )
+
+    @field_validator("client_ip_header", mode="before")
+    @classmethod
+    def _blank_means_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @field_validator("allowed_origins")
     @classmethod
