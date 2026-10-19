@@ -190,6 +190,40 @@ def test_expired_session_is_rejected(client: TestClient, owner_db: Database) -> 
     assert client.get("/api/v1/me").status_code == 401
 
 
+def test_short_idle_window_is_refreshed_while_the_user_is_active(
+    migrated_database: MigratedDatabase, owner_db: Database
+) -> None:
+    settings = Settings(
+        app_env=AppEnv.TEST,
+        database_url=migrated_database.app_url,
+        session_cookie_secure=False,
+        session_idle_minutes=5,  # the shortest allowed idle window
+    )
+    email = unique_email("admin")
+    user_id = create_platform_admin(owner_db, email, "Admin", PASSWORD)
+    with TestClient(create_app(settings)) as short_client:
+        sign_in(short_client, email)
+        # Pretend the sign-in was 4 minutes ago: 1 minute of the idle window is left.
+        now = datetime.now(UTC)
+        with owner_db.transaction(PLATFORM) as session:
+            session.execute(
+                update(UserSession)
+                .where(UserSession.user_id == user_id)
+                .values(
+                    last_seen_at=now - timedelta(minutes=4),
+                    idle_expires_at=now + timedelta(minutes=1),
+                )
+            )
+
+        assert short_client.get("/api/v1/me").status_code == 200
+
+    with owner_db.transaction(PLATFORM) as session:
+        idle_expires_at = session.scalars(
+            select(UserSession.idle_expires_at).where(UserSession.user_id == user_id)
+        ).one()
+    assert idle_expires_at > now + timedelta(minutes=4)  # activity restarted the 5-minute window
+
+
 def test_faculty_sees_their_coaching(client: TestClient, owner_db: Database) -> None:
     faculty = make_faculty(owner_db)
     sign_in(client, faculty.email)

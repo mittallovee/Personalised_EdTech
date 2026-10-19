@@ -25,7 +25,8 @@ PLATFORM_ADMIN = "PLATFORM_ADMIN"
 # One message for every login failure, so callers cannot learn whether an account exists.
 LOGIN_FAILED = "Email or password is incorrect."
 # Refresh the idle expiry at most this often, to avoid a database write on every request.
-_SEEN_REFRESH = timedelta(minutes=5)
+# Never more than a tenth of the idle window, so a short window is still extended in time.
+_SEEN_REFRESH_MAX = timedelta(minutes=5)
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,17 +186,15 @@ def resolve_session(database: Database, settings: Settings, token: str) -> Sessi
         if principal is None:
             return None  # user disabled or removed from their coaching since signing in
 
-        if now - row.last_seen_at > _SEEN_REFRESH:
+        idle_window = timedelta(minutes=settings.session_idle_minutes)
+        if now - row.last_seen_at > min(_SEEN_REFRESH_MAX, idle_window / 10):
             apply_tenant_context(session, TenantContext(user_id=row.user_id))
             session.execute(
                 update(UserSession)
                 .where(UserSession.id == row.id)
                 .values(
                     last_seen_at=now,
-                    idle_expires_at=min(
-                        now + timedelta(minutes=settings.session_idle_minutes),
-                        row.absolute_expires_at,
-                    ),
+                    idle_expires_at=min(now + idle_window, row.absolute_expires_at),
                 )
             )
         return SessionCheck(principal, row.csrf_token_hash)
