@@ -38,6 +38,13 @@ Then open:
 - API readiness: http://localhost:8000/health/ready → database reachable and schema up to date
 - API docs (local only): http://localhost:8000/api/docs
 
+Create your platform admin account (once):
+
+```bash
+docker compose run --rm migrate qbank create-platform-admin --email you@example.com --name "Your Name"
+# asks for a password (min 12 characters) twice
+```
+
 Stop with `Ctrl+C` or `docker compose down`. Database data is kept in a Docker volume between runs.
 
 ## Developer checks (optional on your PC; CI runs them on every pull request)

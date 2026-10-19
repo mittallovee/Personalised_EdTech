@@ -100,9 +100,17 @@ Login failures return one generic message (no "email not found" leaks); progress
 ## 7. CLI
 
 ```bash
-docker compose run --rm api qbank create-platform-admin --email you@example.com
+docker compose run --rm migrate qbank create-platform-admin --email you@example.com
 # prompts for name + password (min 12 chars), refuses if a platform admin with that email exists
 ```
+
+Runs in the `migrate` service because creating a platform admin needs the table-owner connection;
+the runtime role is deliberately unable to create accounts or read password hashes.
+
+**Login data access (added in PR 3):** the runtime role has no privileges on `password_credentials`.
+Login uses four `SECURITY DEFINER` functions (`auth_find_login`, `auth_register_login_failure`,
+`auth_register_login_success`, `auth_find_session`) executable only by `qbank_app`. Sessions and
+platform roles are visible to the runtime role only for the signed-in user.
 
 ## 8. Web (M1)
 
@@ -156,8 +164,8 @@ uploads (M6); cloud deployment (M7).
 | PR | Content | Status |
 |---|---|---|
 | 1 | Repo skeleton, tooling configs, compose, Dockerfiles, CI with lint/format only | Merged (#2) |
-| 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | In review |
-| 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | Next |
+| 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | Merged (#3) |
+| 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | In review |
 | 4 | Jobs core + worker + T9; ID/code generator + T11 | |
 | 5 | Web: app shell, login, home, generated client, OpenAPI check T12 | |
 | 6 | README run instructions, restart check T10, M1 demo notes | |

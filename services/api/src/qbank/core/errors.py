@@ -51,6 +51,15 @@ class ValidationFailed(AppError):
     code = "VALIDATION_FAILED"
 
 
+class TooManyRequests(AppError):
+    status_code = 429
+    code = "RATE_LIMITED"
+
+    def __init__(self, message: str, *, retry_after_seconds: int) -> None:
+        super().__init__(message, details={"retry_after_seconds": retry_after_seconds})
+        self.retry_after_seconds = retry_after_seconds
+
+
 def error_body(
     request: Request,
     code: str,
@@ -80,7 +89,10 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         body = error_body(request, exc.code, exc.message, details=exc.details)
-        return JSONResponse(status_code=exc.status_code, content=body)
+        headers = None
+        if isinstance(exc, TooManyRequests):
+            headers = {"Retry-After": str(exc.retry_after_seconds)}
+        return JSONResponse(status_code=exc.status_code, content=body, headers=headers)
 
     @app.exception_handler(RequestValidationError)
     async def handle_malformed_request(
