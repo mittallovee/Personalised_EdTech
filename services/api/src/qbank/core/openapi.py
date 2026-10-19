@@ -7,7 +7,8 @@ without extra work:
 - malformed input is our ``400 MALFORMED_REQUEST``, not FastAPI's default 422;
 - every error response uses the ``ErrorResponse`` envelope;
 - signed-in operations need the session cookie, and changes also need the CSRF header;
-- changes can be refused with 403 (Origin allow-list, CSRF header).
+- changes can be refused with 403 (Origin allow-list, CSRF header);
+- 429 responses carry ``Retry-After`` (seconds), as ``TooManyRequests`` always sends it.
 """
 
 from typing import Any
@@ -24,6 +25,10 @@ CSRF_SCHEME = "csrfHeader"
 
 _ERROR_CONTENT = {
     "application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}},
+}
+_RETRY_AFTER = {
+    "description": "Seconds to wait before trying again",
+    "schema": {"type": "integer", "minimum": 1},
 }
 
 
@@ -80,4 +85,6 @@ def _describe_operation(method: str, operation: dict[str, Any]) -> None:
     for status, response in responses.items():
         if status.isdigit() and int(status) >= 400 and "content" not in response:
             response["content"] = _ERROR_CONTENT
+    if "429" in responses:
+        responses["429"].setdefault("headers", {})["Retry-After"] = _RETRY_AFTER
     operation["responses"] = dict(sorted(responses.items()))

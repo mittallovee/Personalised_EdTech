@@ -107,3 +107,9 @@ def test_error_envelope_model_matches_what_the_api_sends() -> None:
     )
 
     assert ErrorResponse.model_validate(body).model_dump() == body
+
+
+def test_rate_limited_responses_declare_retry_after() -> None:
+    too_many = operation("post", "/api/v1/auth/login")["responses"]["429"]
+
+    assert too_many["headers"]["Retry-After"]["schema"] == {"type": "integer", "minimum": 1}
