@@ -17,7 +17,7 @@ tests and papers, student apps, live exams, analytics, courses and personalized 
 | `services/api/` | Python backend: FastAPI API and background worker (`python -m qbank.worker`) |
 | `apps/web/` | Next.js + TypeScript web app for faculty and admins |
 | `infra/docker/` | Dockerfiles |
-| `infra/db/` | Script that creates/updates the restricted database role (`db-init` service) |
+| `infra/db/` | Script that creates/updates the restricted database roles `qbank_app` and `qbank_worker` (`db-init` service) |
 | `compose.yaml` | Local stack: PostgreSQL, role setup, migrations, API, worker, web |
 | `docs/` | Requirements, architecture decisions, standards |
 

@@ -6,7 +6,7 @@ Many coachings share one database. A leak of one coaching's questions to another
 Defence in depth:
 1. **Service layer**: the Principal's coaching is resolved server-side; every query is scoped.
 2. **PostgreSQL Row Level Security** on every tenant-owned table, `FORCE ROW LEVEL SECURITY`, policy `organization_id = current_setting('app.org_id', true)::uuid`. Each transaction runs `SET LOCAL app.org_id`. Missing setting gives NULL, which returns zero rows (fails closed).
-3. **DB roles**: `qbank_owner` owns tables and runs migrations; the runtime role `qbank_app` is not owner, not superuser, no `BYPASSRLS`.
+3. **DB roles**: `qbank_owner` owns tables and runs migrations; the runtime role `qbank_app` (API) is not owner, not superuser, no `BYPASSRLS`. The background worker uses `qbank_worker`: a member of `qbank_app` with the same attributes, plus the only role allowed to run the cross-coaching `jobs_*` functions (added in M1 PR 4 after review), so no API code path can reach another coaching's jobs.
 4. **Composite foreign keys** `(organization_id, id)` so cross-coaching references are impossible even with known IDs.
 5. **Platform admin** acts inside one target coaching at a time (sets `app.org_id` to it), audited. Platform-wide tables (organizations list) use a separate `app.is_platform` policy.
 6. Two-coaching isolation tests for every tenant-owned table, in CI.

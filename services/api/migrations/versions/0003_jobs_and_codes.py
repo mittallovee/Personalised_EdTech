@@ -9,8 +9,11 @@ job. Workers claim work with ``FOR UPDATE SKIP LOCKED`` so two workers never tak
 and a lease (``locked_until``) lets another worker recover a job whose worker crashed.
 - The runtime role may enqueue and read jobs of its own coaching (tenant policy, like other tables).
 - Claiming, renewing, completing and failing jobs across coachings happens only through the
-  ``jobs_*`` SECURITY DEFINER functions below; the worker then runs each job inside that job's
-  coaching, renewing its lease while the job runs.
+  ``jobs_*`` SECURITY DEFINER functions below, executable only by the ``qbank_worker`` role. The
+  API's role cannot call them, so no API code path can reach another coaching's jobs.
+  ``qbank_worker`` is a member of ``qbank_app`` (granted where the roles are created), so job
+  handlers get the same tenant-restricted table access as the API; the worker runs each job
+  inside that job's coaching, renewing its lease while the job runs.
 
 Public codes (ADR-0011): one row per issued 8-character code, globally unique and never reused.
 The unique primary key detects collisions across all coachings; each coaching sees only its rows.
@@ -26,6 +29,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 APP_ROLE = "qbank_app"
+WORKER_ROLE = "qbank_worker"
 
 
 def upgrade() -> None:
@@ -175,7 +179,7 @@ def upgrade() -> None:
             jobs_complete(uuid, text),
             jobs_extend_lease(uuid, text, interval),
             jobs_fail(uuid, text, text, interval)
-        TO {APP_ROLE};
+        TO {WORKER_ROLE};
 
         GRANT SELECT, INSERT ON jobs TO {APP_ROLE};   -- state changes only via jobs_* functions
         GRANT SELECT, INSERT ON public_codes TO {APP_ROLE};  -- codes are never changed or reused

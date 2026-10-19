@@ -61,10 +61,10 @@ def recorder() -> Recorder:
 
 
 @pytest.fixture
-def worker(db: Database, recorder: Recorder) -> Iterator[Worker]:
+def worker(worker_db: Database, recorder: Recorder) -> Iterator[Worker]:
     registry = JobRegistry()
     registry.register("test.record", recorder.handle)
-    yield Worker(db, registry, worker_id="worker-a")
+    yield Worker(worker_db, registry, worker_id="worker-a")
 
 
 def add_job(
@@ -211,12 +211,12 @@ def test_reused_idempotency_key_with_a_different_payload_is_rejected(
 
 
 def test_running_job_is_not_claimed_by_a_second_worker(
-    db: Database, worker: Worker, recorder: Recorder, coaching_a: Coaching
+    db: Database, worker_db: Database, worker: Worker, recorder: Recorder, coaching_a: Coaching
 ) -> None:
     add_job(db, coaching_a)
     registry = JobRegistry()
     registry.register("test.record", recorder.handle)
-    other = Worker(db, registry, worker_id="worker-b")
+    other = Worker(worker_db, registry, worker_id="worker-b")
 
     claimed = worker._claim()
     assert claimed is not None
@@ -224,7 +224,12 @@ def test_running_job_is_not_claimed_by_a_second_worker(
 
 
 def test_job_of_a_crashed_worker_is_recovered_and_the_late_result_discarded(
-    db: Database, owner_db: Database, worker: Worker, recorder: Recorder, coaching_a: Coaching
+    db: Database,
+    worker_db: Database,
+    owner_db: Database,
+    worker: Worker,
+    recorder: Recorder,
+    coaching_a: Coaching,
 ) -> None:
     job_id = add_job(db, coaching_a)
     stuck = worker._claim()  # worker-a takes the job, then "hangs"
@@ -237,7 +242,7 @@ def test_job_of_a_crashed_worker_is_recovered_and_the_late_result_discarded(
 
     registry = JobRegistry()
     registry.register("test.record", recorder.handle)
-    assert Worker(db, registry, worker_id="worker-b").run_until_idle() == 1
+    assert Worker(worker_db, registry, worker_id="worker-b").run_until_idle() == 1
 
     worker._run(stuck)  # worker-a wakes up and finishes late
 
@@ -247,11 +252,11 @@ def test_job_of_a_crashed_worker_is_recovered_and_the_late_result_discarded(
 
 
 def test_lease_is_renewed_while_a_long_job_runs(
-    db: Database, owner_db: Database, coaching_a: Coaching
+    db: Database, worker_db: Database, owner_db: Database, coaching_a: Coaching
 ) -> None:
     job_id = add_job(db, coaching_a)
     taken_over: list[Job | None] = []
-    other = Worker(db, JobRegistry(), worker_id="worker-b")
+    other = Worker(worker_db, JobRegistry(), worker_id="worker-b")
 
     def slow(session: Session, job: Job) -> None:
         time.sleep(1.5)  # longer than worker-a's 1-second lease
@@ -259,7 +264,7 @@ def test_lease_is_renewed_while_a_long_job_runs(
 
     registry = JobRegistry()
     registry.register("test.record", slow)
-    worker = Worker(db, registry, worker_id="worker-a", lease=timedelta(seconds=1))
+    worker = Worker(worker_db, registry, worker_id="worker-a", lease=timedelta(seconds=1))
 
     assert worker.run_until_idle() == 1
     assert taken_over == [None]  # worker-a kept renewing its lease
@@ -267,8 +272,8 @@ def test_lease_is_renewed_while_a_long_job_runs(
     assert job_row(owner_db, job_id)["attempts"] == 1
 
 
-def test_worker_keeps_polling_after_a_database_error(db: Database) -> None:
-    worker = Worker(db, JobRegistry(), worker_id="worker-a", poll_interval=0.01)
+def test_worker_keeps_polling_after_a_database_error(worker_db: Database) -> None:
+    worker = Worker(worker_db, JobRegistry(), worker_id="worker-a", poll_interval=0.01)
     calls = 0
 
     def flaky_run_next() -> bool:
@@ -294,6 +299,23 @@ def test_coachings_see_only_their_own_jobs(
         visible = session.execute(text("SELECT id FROM jobs WHERE id = :id"), {"id": job_b}).all()
 
     assert visible == []
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "SELECT * FROM jobs_claim('api', interval '1 minute')",
+        "SELECT jobs_extend_lease(gen_random_uuid(), 'api', interval '1 minute')",
+        "SELECT jobs_complete(gen_random_uuid(), 'api')",
+        "SELECT jobs_fail(gen_random_uuid(), 'api', 'error', NULL)",
+    ],
+)
+def test_api_role_cannot_use_the_cross_coaching_job_functions(db: Database, call: str) -> None:
+    with (
+        pytest.raises(DBAPIError, match="permission denied"),
+        db.transaction(TenantContext()) as session,
+    ):
+        session.execute(text(call))
 
 
 def test_runtime_role_cannot_change_job_state_directly(db: Database, coaching_a: Coaching) -> None:

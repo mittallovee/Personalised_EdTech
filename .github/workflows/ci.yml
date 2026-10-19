@@ -34,6 +34,7 @@ jobs:
     env:
       QBANK_TEST_ADMIN_URL: postgresql+psycopg://qbank_owner:ci-owner-password@localhost:5432/postgres
       QBANK_TEST_APP_PASSWORD: ci-app-password
+      QBANK_TEST_WORKER_PASSWORD: ci-worker-password
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

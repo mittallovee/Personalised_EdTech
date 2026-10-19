@@ -21,7 +21,7 @@ from tests.integration.conftest import (
 @pytest.fixture
 def empty_database() -> Iterator[tuple[str, str]]:
     name = f"qbank_test_{secrets.token_hex(6)}"
-    owner_url, app_url = create_database(name)
+    owner_url, app_url, _worker_url = create_database(name)
     try:
         yield owner_url, app_url
     finally:
