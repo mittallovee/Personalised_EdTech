@@ -8,11 +8,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+from fastapi import FastAPI
+from pydantic import BaseModel
 from starlette.requests import Request
 
 from qbank.cli import main
 from qbank.contract import OPENAPI_FILE, render_openapi
 from qbank.core.errors import ErrorResponse, error_body
+from qbank.core.openapi import install_openapi
 
 
 def test_committed_contract_matches_the_code() -> None:
@@ -113,3 +116,29 @@ def test_rate_limited_responses_declare_retry_after() -> None:
     too_many = operation("post", "/api/v1/auth/login")["responses"]["429"]
 
     assert too_many["headers"]["Retry-After"]["schema"] == {"type": "integer", "minimum": 1}
+
+
+def test_only_fastapis_own_422_is_replaced() -> None:
+    app = FastAPI()
+
+    class Body(BaseModel):
+        name: str
+
+    @app.post("/plain")
+    def plain(body: Body) -> None: ...
+
+    @app.post(
+        "/rule",
+        responses={422: {"model": ErrorResponse, "description": "Breaks a business rule"}},
+    )
+    def rule(body: Body) -> None: ...
+
+    install_openapi(app)
+    paths = app.openapi()["paths"]
+
+    assert set(paths["/plain"]["post"]["responses"]) >= {"400"} and (
+        "422" not in paths["/plain"]["post"]["responses"]
+    )
+    declared = paths["/rule"]["post"]["responses"]["422"]
+    assert declared["description"] == "Breaks a business rule"
+    assert declared["content"]["application/json"]["schema"] == ERROR_REF

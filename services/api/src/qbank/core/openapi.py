@@ -26,6 +26,7 @@ CSRF_SCHEME = "csrfHeader"
 _ERROR_CONTENT = {
     "application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}},
 }
+_FASTAPI_VALIDATION_ERROR = {"$ref": "#/components/schemas/HTTPValidationError"}
 _RETRY_AFTER = {
     "description": "Seconds to wait before trying again",
     "schema": {"type": "integer", "minimum": 1},
@@ -67,7 +68,10 @@ def _describe_shared_behaviour(schema: dict[str, Any]) -> dict[str, Any]:
 
 def _describe_operation(method: str, operation: dict[str, Any]) -> None:
     responses: dict[str, Any] = operation.setdefault("responses", {})
-    if responses.pop("422", None) is not None:
+    if _is_fastapi_validation_response(responses.get("422")):
+        # Our handler answers 400 MALFORMED_REQUEST. A 422 a route declares itself (a business
+        # rule, ValidationFailed) is a real response and is kept.
+        del responses["422"]
         responses["400"] = {"description": "The request is not valid (`MALFORMED_REQUEST`)"}
 
     signed_in = any(SESSION_SCHEME in need for need in operation.get("security", []))
@@ -88,3 +92,10 @@ def _describe_operation(method: str, operation: dict[str, Any]) -> None:
     if "429" in responses:
         responses["429"].setdefault("headers", {})["Retry-After"] = _RETRY_AFTER
     operation["responses"] = dict(sorted(responses.items()))
+
+
+def _is_fastapi_validation_response(response: dict[str, Any] | None) -> bool:
+    if response is None:
+        return False
+    schema = response.get("content", {}).get("application/json", {}).get("schema")
+    return bool(schema == _FASTAPI_VALIDATION_ERROR)
