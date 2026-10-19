@@ -19,13 +19,17 @@ Four providers at start (Anthropic, OpenAI, Google, OpenRouter), coaching-owned 
      in-app notification.
 
   Guarantees the M5 design must keep (it details them; tests prove each):
-  - **No double submission (N-05).** A crash can happen after the provider accepted a batch but before its
-    ID is saved. A retried submit job that finds the run `SUBMITTING` without an ID first **reconciles**:
-    it looks up the provider's recent batches for the run-ID tag (or uses the provider's idempotency key
-    where one exists) and adopts the batch it finds; only if none exists does it submit. Providers or
-    models without such a lookup are **not offered Economy**.
-  - **Exact budget settlement.** Every terminal state replaces the reservation with the actual charge
-    (zero, partial or full) and releases only the unused remainder; nothing stays reserved.
+  - **At-most-once submission (N-05).** `submit_batch` is called only by the job that moves the run
+    from `QUEUED` to `SUBMITTING` (one conditional database update, so only one worker can win), and
+    never again for that run: no automatic retry, overlapping worker or cancellation re-submits it. A run
+    left `SUBMITTING` without a batch ID (crash, lost lease, unknown outcome) is resolved only by
+    **reconciliation**: looking up the provider's batches for the run-ID tag until it is found (then
+    adopted, and cancelled if the user cancelled meanwhile) or until the provider's visibility window has
+    passed (then marked "submission unknown", reservation settled from the provider's usage records, and
+    the user may start a new run). Economy is offered only for models whose provider supports such a lookup.
+  - **Exact budget settlement.** Every terminal state, including cancellation and "submission unknown",
+    replaces the reservation with the actual charge (zero, partial or full) and releases only the unused
+    remainder; nothing stays reserved. Economy needs a known price for the model (H-17) to reserve against.
   - **Authorization at apply time (B-10).** Just before applying, the submitter's current membership and
     the operation's grant are checked again; if they no longer hold, or the question moved past the
     stored revision, the result is kept unapplied ("needs review" / "out of date") and never changes the
