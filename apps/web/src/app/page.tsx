@@ -10,18 +10,35 @@ import { api } from "@/lib/api";
 
 type ReadyStatus = components["schemas"]["ReadyStatus"];
 
+const ALERT =
+  "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300";
+
 export default function HomePage() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [health, setHealth] = useState<ReadyStatus | "unreachable" | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const who = await api().GET("/api/v1/me");
+      let who;
+      try {
+        who = await api().GET("/api/v1/me");
+      } catch {
+        if (!cancelled) setLoadError("Cannot reach the server. Check your connection.");
+        return;
+      }
       if (cancelled) return;
-      if (who.response.status === 401 || !who.data) {
+      // Only "not signed in" leads to the sign-in page; any other failure is an outage to report.
+      if (who.response.status === 401) {
         router.replace("/login");
+        return;
+      }
+      if (!who.data) {
+        setLoadError("The server could not load your account right now.");
         return;
       }
       setMe(who.data);
@@ -34,15 +51,48 @@ export default function HomePage() {
         if (!cancelled) setHealth("unreachable");
       }
     }
-    load().catch(() => router.replace("/login"));
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, attempt]);
+
+  function retry() {
+    setLoadError(null);
+    setAttempt((n) => n + 1);
+  }
 
   async function signOut() {
-    await api().POST("/api/v1/auth/logout");
-    router.replace("/login");
+    setSignOutError(null);
+    try {
+      const { response } = await api().POST("/api/v1/auth/logout");
+      // 401: the session had already ended (expired or revoked), so the user is signed out anyway.
+      if (response.ok || response.status === 401) {
+        router.replace("/login");
+        return;
+      }
+    } catch {
+      // network failure: fall through
+    }
+    // Never show the signed-out screen while the server session may still be valid.
+    setSignOutError("Could not sign out. You are still signed in; please try again.");
+  }
+
+  if (loadError) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
+        <p role="alert" className={ALERT}>
+          {loadError} Please try again.
+        </p>
+        <button
+          type="button"
+          onClick={retry}
+          className="rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700"
+        >
+          Try again
+        </button>
+      </main>
+    );
   }
 
   if (!me) {
@@ -57,6 +107,11 @@ export default function HomePage() {
 
   return (
     <AppShell me={me} onSignOut={signOut}>
+      {signOutError && (
+        <p role="alert" className={`mb-6 max-w-md ${ALERT}`}>
+          {signOutError}
+        </p>
+      )}
       <h1 className="text-2xl font-semibold">Welcome, {me.display_name}</h1>
       <p className="mt-1 text-zinc-600 dark:text-zinc-400">Signed in as {role}.</p>
 
