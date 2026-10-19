@@ -94,3 +94,19 @@ def test_hosted_environments_require_https_origins() -> None:
             database_url=UNREACHABLE_DB,
             allowed_origins=["http://app.example.com"],
         )
+
+
+def test_default_ports_are_canonicalised_like_browsers_do() -> None:
+    settings = Settings(
+        app_env=AppEnv.TEST,
+        database_url=UNREACHABLE_DB,
+        allowed_origins=["https://app.example.com:443", "http://localhost:80"],
+    )
+    assert settings.allowed_origins == ["https://app.example.com", "http://localhost"]
+
+    with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        browser_origin = {"Origin": "https://app.example.com"}  # browsers omit default ports
+        explicit_referer = {"Referer": "https://app.example.com:443/login"}
+
+        assert login(client, browser_origin) == 400  # reached request validation
+        assert login(client, explicit_referer) == 400

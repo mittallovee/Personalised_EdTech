@@ -8,7 +8,8 @@ without extra work:
 - every error response uses the ``ErrorResponse`` envelope;
 - signed-in operations need the session cookie, and changes also need the CSRF header;
 - changes can be refused with 403 (Origin allow-list, CSRF header);
-- 429 responses carry ``Retry-After`` (seconds), as ``TooManyRequests`` always sends it.
+- 429 responses carry ``Retry-After`` (seconds), as ``TooManyRequests`` always sends it;
+- any operation can fail with ``500 INTERNAL_ERROR`` (core.logging turns crashes into it).
 """
 
 from typing import Any
@@ -86,6 +87,10 @@ def _describe_operation(method: str, operation: dict[str, Any]) -> None:
             refusals += ", `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token)"
         responses.setdefault("403", {"description": f"Refused: {refusals}"})
 
+    responses.setdefault(
+        "500",
+        {"description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id"},
+    )
     for status, response in responses.items():
         if status.isdigit() and int(status) >= 400 and "content" not in response:
             response["content"] = _ERROR_CONTENT

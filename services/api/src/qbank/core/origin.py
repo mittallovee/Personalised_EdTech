@@ -16,6 +16,7 @@ import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
+from qbank.core.config import without_default_port
 from qbank.core.errors import error_body
 
 log = structlog.get_logger("qbank.origin")
@@ -28,7 +29,7 @@ def request_origin(request: Request) -> str | None:
     """The web origin the request came from, or None when no browser header says."""
     origin = request.headers.get("origin")
     if origin is not None:
-        return origin.lower()
+        return without_default_port(origin.lower())
     referer = request.headers.get("referer")
     if not referer:
         return None
@@ -39,7 +40,8 @@ def request_origin(request: Request) -> str | None:
         return _UNKNOWN
     if not parts.scheme or not parts.hostname:
         return _UNKNOWN
-    return f"{parts.scheme}://{parts.hostname}" + (f":{port}" if port else "")
+    origin = f"{parts.scheme}://{parts.hostname}" + (f":{port}" if port else "")
+    return without_default_port(origin.lower())
 
 
 def install_origin_check(app: FastAPI, allowed_origins: Iterable[str]) -> None:

@@ -13,6 +13,14 @@ SERVICE_ROOT = Path(__file__).resolve().parents[3]
 
 # An origin is scheme://host[:port], nothing else (no path, no trailing slash, no wildcard).
 _ORIGIN = re.compile(r"https?://[a-z0-9.-]+(:[0-9]{1,5})?")
+_DEFAULT_PORTS = {"http": "80", "https": "443"}
+
+
+def without_default_port(origin: str) -> str:
+    """Browsers omit a scheme's default port (https://x, never https://x:443); so do we."""
+    scheme, _, rest = origin.partition("://")
+    host, _, port = rest.partition(":")
+    return f"{scheme}://{host}" if port == _DEFAULT_PORTS.get(scheme) else origin
 
 
 class AppEnv(StrEnum):
@@ -59,7 +67,7 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"ALLOWED_ORIGINS entries must look like https://host[:port], got {origin!r}"
                 )
-        return normalised
+        return [without_default_port(origin) for origin in normalised]
 
     @model_validator(mode="after")
     def _refuse_unsafe_production_settings(self) -> Settings:

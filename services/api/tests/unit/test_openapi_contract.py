@@ -142,3 +142,10 @@ def test_only_fastapis_own_422_is_replaced() -> None:
     declared = paths["/rule"]["post"]["responses"]["422"]
     assert declared["description"] == "Breaks a business rule"
     assert declared["content"]["application/json"]["schema"] == ERROR_REF
+
+
+def test_every_operation_documents_the_internal_error_response() -> None:
+    for item in CONTRACT["paths"].values():
+        for op in item.values():
+            assert error_schema(op, "500") == ERROR_REF
+            assert "INTERNAL_ERROR" in op["responses"]["500"]["description"]
