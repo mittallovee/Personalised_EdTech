@@ -109,12 +109,15 @@ Rules that hold everywhere:
     flow once, and verifies Google's ID token (signature, audience, nonce).
     - **Nothing decided at the start is trusted at the end.** Minutes may pass at Google, so the
       callback re-checks everything in the same transaction that makes the change, for every purpose:
-      - `SIGN_IN`: the user, membership and coaching are active.
+      - "Has access" below means exactly the check every request already makes when it loads the
+        Principal (M1's `_load_principal`): an active user who is **either** a platform admin **or** has
+        an active membership in an active coaching. One shared function, so the two can never drift apart.
+      - `SIGN_IN`: the user has access.
       - `ACTIVATE`: the link is still unused, unexpired and unrevoked, and the membership and coaching
         are active. It then links the subject (refused if that Google account is linked to someone
         else), marks the link used, activates the user and starts the session.
       - `LINK`: the session that started it (its ID is stored in the flow) is still valid and belongs to
-        the same user, and the user, membership and coaching are still active.
+        the same user, and the user still has access.
       Any failure changes nothing and shows the generic error. Removing a member or suspending a coaching
       while a flow is pending therefore stops it (B-10).
 - An account is found by Google's permanent **subject ID**, never by matching email (B-04). A Google login
@@ -199,7 +202,7 @@ available, so the screens only show or hide buttons.
 | T16 | Emails: two concurrent invitations for the same email (same or different coachings, different case/spaces) → exactly one member, the other `EMAIL_IN_USE` and nothing left behind; Google activation can't create a second account for a reserved email; removing a never-activated invitee frees the email. Links: single use, expiry (24 h / 1 h), new link revokes old, no use after removal or suspension, reset ends sessions, token never stored/logged | integration + api |
 | T17 | Stale changes: `If-Match` missing → 428, stale → 412; wrong expected role → 409 | api |
 | T18 | Isolation (T1–T4 pattern) for `membership_grants`, `account_links`, `external_identities` | integration |
-| T19 | Google: match by subject only (same email, different subject → no access); state/nonce/PKCE checked; pending flow single-use and expiring; **activation + Google** binds only the invited user and fails once the link is used, revoked or the member removed; removal, suspension, sign-out or link revocation while a flow is pending (any purpose) makes its callback change nothing; `LINK` needs the correct password in the same request (a fresh session alone is refused; wrong passwords count towards lockout); linking a second Google account, or two links racing, leaves exactly one (`ALREADY_LINKED` 409); unlink needs another method (Google simulated; no real Google call in CI) | api |
+| T19 | Google: match by subject only (same email, different subject → no access); state/nonce/PKCE checked; pending flow single-use and expiring; **activation + Google** binds only the invited user and fails once the link is used, revoked or the member removed; removal, suspension, sign-out or link revocation while a flow is pending (any purpose) makes its callback change nothing; a platform-only admin (no membership) can link Google and sign in with it; `LINK` needs the correct password in the same request (a fresh session alone is refused; wrong passwords count towards lockout); linking a second Google account, or two links racing, leaves exactly one (`ALREADY_LINKED` 409); unlink needs another method (Google simulated; no real Google call in CI) | api |
 | T20 | Every change in §7 writes exactly one audit event with correct actor/before/after and no secrets | api |
 | T22 | Retries: invitation / coaching creation with the same `Idempotency-Key` and body → one member, a fresh link, the earlier link revoked; different body → 409; link redemption and the signed-out endpoints work without a session or CSRF token but are refused from a foreign Origin | api |
 | T21 | Suspended coaching: members can't sign in or redeem links; data kept; reactivation restores access | api |
