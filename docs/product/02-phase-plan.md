@@ -98,4 +98,5 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 
 ## 8. Open questions
 
-None blocking. The next owner decision is approving the M1 design note.
+None blocking. The next owner decision is approving the [M2 design note](../architecture/m2-design-note.md)
+(20 Oct: links copied by admins, no email; Google login in M2 with a setup guide).

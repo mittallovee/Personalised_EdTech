@@ -5,7 +5,7 @@ solve and verify them, and reviewed questions are published into a versioned, se
 tests and papers, student apps, live exams, analytics, courses and personalized AI teaching on the same API.
 
 **Status:** Phase 1, milestone M1 (foundation) built; check it yourself with the [M1 demo](docs/operations/m1-demo.md).
-Next: M2 (identity and coaching admin). M1 design: [`docs/architecture/m1-design-note.md`](docs/architecture/m1-design-note.md).
+Next: M2 (identity and coaching admin), [design note](docs/architecture/m2-design-note.md) awaiting approval. M1 design: [`docs/architecture/m1-design-note.md`](docs/architecture/m1-design-note.md).
 
 ## Documentation
 - Start here: [`docs/README.md`](docs/README.md)
