@@ -30,21 +30,20 @@ def encode_cursor(created_at: datetime, row_id: UUID) -> str:
 
 def decode_cursor(cursor: str) -> tuple[datetime, UUID]:
     """Inverse of ``encode_cursor``. Newest-first lists continue strictly after this position."""
+    invalid = MalformedRequest("The page cursor is not valid. Start again from the first page.")
     try:
         padded = cursor + "=" * (-len(cursor) % 4)
         data = json.loads(base64.urlsafe_b64decode(padded.encode()))
+    except binascii.Error, UnicodeDecodeError, ValueError:  # JSONDecodeError is a ValueError
+        raise invalid from None
+    # Check the shape before parsing, so no unexpected JSON type can reach the parsers below.
+    if not isinstance(data, dict) or not all(isinstance(data.get(k), str) for k in ("t", "id")):
+        raise invalid
+    try:
         created_at = datetime.fromisoformat(data["t"])
-        if created_at.tzinfo is None:
-            raise ValueError("cursor time has no time zone")
-        return created_at, UUID(data["id"])
-    except (
-        binascii.Error,
-        json.JSONDecodeError,
-        UnicodeDecodeError,
-        KeyError,
-        TypeError,
-        ValueError,
-    ):
-        raise MalformedRequest(
-            "The page cursor is not valid. Start again from the first page."
-        ) from None
+        row_id = UUID(data["id"])
+    except ValueError:
+        raise invalid from None
+    if created_at.tzinfo is None:
+        raise invalid
+    return created_at, row_id
