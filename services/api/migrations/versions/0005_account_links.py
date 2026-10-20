@@ -10,7 +10,9 @@ M2 design note §4 and §6:
   inviting, through ``auth_reserve_email``. Filled here from existing password logins.
 - ``account_links``: activation and reset links. Only the SHA-256 hash of a link's token is
   stored, and the runtime role cannot even read that column. Coaching-owned: FORCE row-level
-  security with the tenant policy. Redemption arrives with M2 PR 4.
+  security with the tenant policy, and a composite key to ``memberships (organization_id, id,
+  user_id)``, so a link can only name a member of its own coaching (ADR-0005). Redemption
+  arrives with M2 PR 4.
 - ``idempotency_keys``: lets a client retry "create" requests safely (API style guide §6). Keys
   belong to the person who sent them, and are scoped by operation; they are honoured for 24 hours.
 """
@@ -37,17 +39,23 @@ def upgrade() -> None:
             SELECT email, user_id FROM password_credentials;
         ALTER TABLE account_emails ENABLE ROW LEVEL SECURITY;  -- no policies: deny all
 
+        ALTER TABLE memberships
+            ADD CONSTRAINT memberships_org_id_user UNIQUE (organization_id, id, user_id);
+
         CREATE TABLE account_links (
             id              uuid PRIMARY KEY,
-            organization_id uuid NOT NULL REFERENCES organizations (id),
-            user_id         uuid NOT NULL REFERENCES users (id),
+            organization_id uuid NOT NULL,
+            membership_id   uuid NOT NULL,
+            user_id         uuid NOT NULL,
             purpose         text NOT NULL CHECK (purpose IN ('ACTIVATION', 'RESET')),
             token_hash      text NOT NULL UNIQUE,
             created_by      uuid REFERENCES users (id),
             created_at      timestamptz NOT NULL DEFAULT now(),
             expires_at      timestamptz NOT NULL,
             used_at         timestamptz,
-            revoked_at      timestamptz
+            revoked_at      timestamptz,
+            FOREIGN KEY (organization_id, membership_id, user_id)
+                REFERENCES memberships (organization_id, id, user_id)
         );
         CREATE INDEX account_links_user ON account_links (user_id);
         ALTER TABLE account_links ENABLE ROW LEVEL SECURITY;
@@ -102,8 +110,8 @@ def upgrade() -> None:
         GRANT EXECUTE ON FUNCTION auth_reserve_email(text, uuid) TO {APP_ROLE};
         -- The token hash is not readable by the runtime role; links are redeemed by a definer
         -- function (M2 PR 4). Only revoking changes an existing link.
-        GRANT SELECT (id, organization_id, user_id, purpose, created_by, created_at, expires_at,
-                      used_at, revoked_at),
+        GRANT SELECT (id, organization_id, membership_id, user_id, purpose, created_by, created_at,
+                      expires_at, used_at, revoked_at),
               INSERT
             ON account_links TO {APP_ROLE};
         GRANT UPDATE (revoked_at) ON account_links TO {APP_ROLE};
@@ -116,5 +124,6 @@ def downgrade() -> None:
         DROP FUNCTION auth_reserve_email(text, uuid);
         DROP TABLE idempotency_keys;
         DROP TABLE account_links;
+        ALTER TABLE memberships DROP CONSTRAINT memberships_org_id_user;
         DROP TABLE account_emails;
     """)

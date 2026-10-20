@@ -80,6 +80,7 @@ def issue_account_link(
     session: Session,
     *,
     organization_id: UUID,
+    membership_id: UUID,
     user_id: UUID,
     purpose: LinkPurpose,
     created_by: UUID,
@@ -105,13 +106,15 @@ def issue_account_link(
     session.execute(
         text(
             "INSERT INTO account_links"
-            " (id, organization_id, user_id, purpose, token_hash, created_by, expires_at)"
-            " VALUES (:id, :organization_id, :user_id, :purpose, :token_hash, :created_by,"
-            " :expires_at)"
+            " (id, organization_id, membership_id, user_id, purpose, token_hash, created_by,"
+            " expires_at)"
+            " VALUES (:id, :organization_id, :membership_id, :user_id, :purpose, :token_hash,"
+            " :created_by, :expires_at)"
         ),
         {
             "id": new_id(),
             "organization_id": organization_id,
+            "membership_id": membership_id,
             "user_id": user_id,
             "purpose": purpose.value,
             "token_hash": hash_token(token),

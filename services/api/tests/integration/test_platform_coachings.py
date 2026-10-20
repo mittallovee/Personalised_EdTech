@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
@@ -21,7 +21,13 @@ from qbank.modules.audit.models import AuditEvent
 from qbank.modules.identity.models import User
 from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.organizations.models import Membership, Organization
-from tests.integration.conftest import MEMBER_PASSWORD, PLATFORM, MigratedDatabase, make_member
+from tests.integration.conftest import (
+    MEMBER_PASSWORD,
+    PLATFORM,
+    Coaching,
+    MigratedDatabase,
+    make_member,
+)
 
 ORIGIN = {"Origin": "http://localhost:3000"}
 
@@ -323,3 +329,55 @@ def test_email_cannot_be_reserved_without_a_coaching_or_platform_context(db: Dat
         db.transaction(TenantContext()) as session,
     ):
         session.execute(text("SELECT auth_reserve_email('x@example.com', gen_random_uuid())"))
+
+
+def test_retry_after_ownership_moved_returns_the_original_owner(
+    client: TestClient, owner_db: Database
+) -> None:
+    """The retried response describes the person the first request invited, even if they are no
+    longer the Owner (no new link then: they are no longer an invited account)."""
+    headers = {**sign_in(client, platform_admin(owner_db)), "Idempotency-Key": secrets.token_hex(8)}
+    body = new_coaching(f"Moved {secrets.token_hex(4)}")
+    first = client.post("/api/v1/platform/organizations", json=body, headers=headers).json()
+    org_id = first["organization"]["id"]
+    successor = make_member(owner_db, "ADMIN", org_id=org_id)
+    with owner_db.transaction(TenantContext(organization_id=org_id)) as session:
+        session.execute(
+            text("UPDATE users SET status = 'ACTIVE' WHERE id = :u"),
+            {"u": first["owner"]["user_id"]},
+        )
+        session.execute(
+            text("UPDATE memberships SET role = 'ADMIN' WHERE id = :m"),
+            {"m": first["owner"]["membership_id"]},
+        )
+        session.execute(
+            text("UPDATE memberships SET role = 'OWNER' WHERE id = :m"),
+            {"m": successor.membership_id},
+        )
+
+    retried = client.post("/api/v1/platform/organizations", json=body, headers=headers).json()
+
+    assert retried["owner"] == first["owner"]
+    assert retried["activation"] is None
+
+
+def test_link_must_belong_to_a_member_of_its_coaching(
+    db: Database, coaching_a: Coaching, coaching_b: Coaching
+) -> None:
+    """A link row in coaching A can't name coaching B's member (composite key, ADR-0005)."""
+    with (
+        pytest.raises(IntegrityError),
+        db.transaction(coaching_a.context) as session,
+    ):
+        session.execute(
+            text(
+                "INSERT INTO account_links (id, organization_id, membership_id, user_id, purpose,"
+                " token_hash, expires_at)"
+                " VALUES (gen_random_uuid(), :org, :membership, :user, 'RESET', 'x', now())"
+            ),
+            {
+                "org": coaching_a.org_id,
+                "membership": coaching_a.membership_id,
+                "user": coaching_b.user_id,
+            },
+        )

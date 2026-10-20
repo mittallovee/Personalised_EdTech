@@ -74,6 +74,7 @@ def create_organization(
     link = issue_account_link(
         session,
         organization_id=organization_id,
+        membership_id=owner.id,
         user_id=owner_id,
         purpose=LinkPurpose.ACTIVATION,
         created_by=principal.user_id,
@@ -104,18 +105,21 @@ def create_organization(
 def _reissue_owner_link(
     session: Session, principal: Principal, organization: Organization, request_id: str | None
 ) -> tuple[Organization, Membership, IssuedLink | None]:
+    # The member the first request invited: the coaching's first membership, created in the same
+    # transaction as the coaching. Not "the current Owner": ownership may have moved since.
     owner = session.scalars(
         select(Membership)
-        .where(Membership.organization_id == organization.id, Membership.role == "OWNER")
-        .order_by(Membership.created_at)
+        .where(Membership.organization_id == organization.id)
+        .order_by(Membership.created_at, Membership.id)
     ).first()
     if owner is None:  # cannot happen: the Owner is created with the coaching, never deleted
-        raise RuntimeError(f"coaching {organization.id} has no Owner")
+        raise RuntimeError(f"coaching {organization.id} has no members")
     if owner.status != "ACTIVE" or user_status(session, owner.user_id) != INVITED:
         return organization, owner, None
     link = issue_account_link(
         session,
         organization_id=organization.id,
+        membership_id=owner.id,
         user_id=owner.user_id,
         purpose=LinkPurpose.ACTIVATION,
         created_by=principal.user_id,
