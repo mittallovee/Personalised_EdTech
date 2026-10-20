@@ -30,6 +30,8 @@ Google login (B-02) must never take over an account just because the email addre
   - The flow starts with a POST, and the pending flow is stored server-side and used once. For an
     activation, the link token is checked before leaving for Google, and the link's ID travels inside
     the pending flow, never in a URL.
+  - The callback re-checks all authority in the transaction that makes the change: the session, user,
+    membership, coaching and (for activation) the link. Removal or suspension while at Google stops it.
   - The redirect address is built from a `return_origin` that must be listed in `ALLOWED_ORIGINS`.
 - **Retries.** The secret is never stored, so a repeated "create" (same `Idempotency-Key`) cannot replay
   it. Instead it returns the same member with a fresh link and revokes the unseen one. Link redemption is
