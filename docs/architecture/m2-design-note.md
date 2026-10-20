@@ -63,19 +63,42 @@ Rules that hold everywhere:
   membership and coaching are still active. It then sets the password (Argon2id, min 12 characters) and
   marks the link used. A reset also ends all of that person's sessions. The person is then signed in.
 - Redeeming is rate-limited like sign-in. Every error is the same generic "link is invalid or expired".
+- **Retries are safe** (style guide §6). Creating a coaching and inviting a member take an
+  `Idempotency-Key`: the key and a hash of the body are stored with the created member
+  (`idempotency_keys`, migration 0004).
+  - Same key + same body: no second member, no `EMAIL_IN_USE`. The response is the same member with a
+    **fresh** link, and the unseen first link is revoked. The secret itself is never stored, so it can't
+    be replayed; a lost response therefore costs nothing.
+  - Same key + different body: `409 IDEMPOTENCY_KEY_REUSED`.
+  - "New link" actions need no key: any retry leaves exactly one valid link, the last one shown.
 - An invited person who has not activated has no way to sign in and sees no data.
 
 ## 5. Google login (B-02, B-04, ADR-0015)
 
 - OpenID Connect "authorization code" flow with PKCE, `state` and `nonce`, via Authlib. The pending flow is
   bound to a short-lived HttpOnly cookie, which stops "login CSRF".
-- `GET /api/v1/auth/google/start?return_origin=…` requires `return_origin` to be in `ALLOWED_ORIGINS`, so the
-  same setup works on `localhost:3000` and on `qb.loveemittal.online`.
+- The flow starts with `POST /api/v1/auth/google/start {purpose, return_origin, link_token?}`, which returns
+  the Google address to go to. Being a POST, it passes the Origin check.
+  - `return_origin` must be in `ALLOWED_ORIGINS`, so the same setup works on `localhost:3000` and on
+    `qb.loveemittal.online`.
+  - The API stores the pending flow server-side: a hash of `state`, PKCE verifier, nonce, purpose, and for
+    `ACTIVATE` the account link's ID, for `LINK` the signed-in user. It expires after 10 minutes, and its
+    random ID goes in the pending cookie.
+  - `purpose` is one of three:
+    - `SIGN_IN` needs nothing else;
+    - `ACTIVATE` needs the activation `link_token`, which the page reads from the `#` part, so the token
+      is checked **before** leaving for Google;
+    - `LINK` needs a session, the CSRF header and the password re-entered in the last 5 minutes.
+  - The callback (`GET /auth/google/callback`) requires the cookie and a matching `state`, uses the pending
+    flow once, and verifies Google's ID token (signature, audience, nonce).
+    - For `ACTIVATE` it re-checks, in one transaction, that the link is still valid and the membership
+      active. It then links the subject (refused if that Google account is linked to someone else), marks
+      the link used, activates the user and starts the session.
 - An account is found by Google's permanent **subject ID**, never by matching email (B-04). A Google login
   with no linked account fails with a generic message; it never creates an account.
-- Ways to link Google:
-  - while activating, choose "Continue with Google" instead of setting a password;
-  - when signed in, use "Link Google account" after re-entering the password.
+- Ways to link Google (both through the flow above):
+  - while activating, choose "Continue with Google" instead of setting a password (`ACTIVATE`);
+  - when signed in, use "Link Google account" after re-entering the password (`LINK`).
 - You can unlink Google only if a password remains, so nobody locks themselves out.
 - The feature is off until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set in `.env`. Both stay out of
   git, and the button is hidden while they are unset.
@@ -88,32 +111,38 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 
 | Migration | Change |
 |---|---|
-| 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant)` |
+| 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant)`; `idempotency_keys (organization_id, key, request_hash, resource_id, created_at)`, kept 24 h |
 | 0005 | `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, email, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: check email free, redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
-| 0006 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)`; lookup by subject through a definer function |
+| 0006 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)`; `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
 action (e.g. `MEMBER_ROLE_CHANGED`, same style as M1's `USER_SIGNED_OUT`), target, before and after. Tokens, hashes and passwords are never
 written to audit events or logs.
 
-## 7. API (all under `/api/v1`, session + CSRF on changes)
+## 7. API (all under `/api/v1`)
+
+Changes need a session and the CSRF header, except the endpoints for signed-out people. Those are sign-in,
+`POST /auth/links/redeem`, and `POST /auth/google/start` with purpose `SIGN_IN`/`ACTIVATE`. Like M1's
+login, they are protected by the Origin allow-list, rate limits, and a one-time secret (the link token or
+the OAuth `state` + cookie). The Google callback is a GET from Google: it changes nothing unless the pending
+cookie and `state` match.
 
 | Method & path | Purpose |
 |---|---|
 | `GET /me` | Adds the coaching's name, grants and the acting coaching |
-| `GET/POST /platform/organizations` | List coachings · create coaching + first Owner (returns activation link) |
+| `GET/POST /platform/organizations` | List coachings · create coaching + first Owner (returns activation link; `Idempotency-Key`) |
 | `PATCH /platform/organizations/{id}` | Rename, timezone (`If-Match`) |
 | `POST /platform/organizations/{id}/suspend` · `/reactivate` | A-07 |
 | `POST/DELETE /platform/acting-organization` | Start/stop acting in a coaching (A-06) |
 | `GET /members` · `GET /members/{id}` | Member list (paginated) with role, status, grants, email |
-| `POST /members/invitations` | Invite faculty or admin (returns activation link) |
+| `POST /members/invitations` | Invite faculty or admin (returns activation link; `Idempotency-Key`) |
 | `POST /members/{id}/activation-link` · `/reset-link` | New link (old one revoked) |
 | `PUT /members/{id}/grants` | Set faculty grants (`If-Match`) |
 | `POST /members/{id}/change-role` · `/remove` | Promote/demote · remove, naming the expected current role |
 | `POST /organization/transfer-ownership` | To an active admin; `If-Match` on the coaching |
-| `POST /auth/links/redeem` | Activate or reset with a link token |
+| `POST /auth/links/redeem` | Activate or reset with a link token (no session; see above) |
 | `GET /auth/methods` | Which sign-in methods are on (hides the Google button when off) |
-| `GET /auth/google/start` · `/callback` · `POST /auth/google/unlink` | §5 |
+| `POST /auth/google/start` · `GET /auth/google/callback` · `POST /auth/google/unlink` | §5 |
 | `GET /audit-events` | Coaching (or platform) audit log, filters: actor, entity, time; paginated |
 
 New error codes are added to `error-codes.md`, for example `LINK_INVALID`, `EMAIL_IN_USE`,
@@ -146,8 +175,9 @@ available, so the screens only show or hide buttons.
 | T16 | Links: single use, expiry (24 h / 1 h), new link revokes old, no use after removal or suspension, reset ends sessions, token never stored/logged | integration + api |
 | T17 | Stale changes: `If-Match` missing → 428, stale → 412; wrong expected role → 409 | api |
 | T18 | Isolation (T1–T4 pattern) for `membership_grants`, `account_links`, `external_identities` | integration |
-| T19 | Google: match by subject only (same email, different subject → no access); state/nonce/PKCE checked; unlink needs another method (Google simulated; no real Google call in CI) | api |
+| T19 | Google: match by subject only (same email, different subject → no access); state/nonce/PKCE checked; pending flow single-use and expiring; **activation + Google** binds only the invited user and fails once the link is used, revoked or the member removed; `LINK` needs recent password; unlink needs another method (Google simulated; no real Google call in CI) | api |
 | T20 | Every change in §7 writes exactly one audit event with correct actor/before/after and no secrets | api |
+| T22 | Retries: invitation / coaching creation with the same `Idempotency-Key` and body → one member, a fresh link, the earlier link revoked; different body → 409; link redemption and the signed-out endpoints work without a session or CSRF token but are refused from a foreign Origin | api |
 | T21 | Suspended coaching: members can't sign in or redeem links; data kept; reactivation restores access | api |
 
 ## 10. Out of scope for M2

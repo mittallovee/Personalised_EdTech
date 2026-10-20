@@ -24,7 +24,14 @@ Google login (B-02) must never take over an account just because the email addre
   - Google is linked only by someone who already proves control of the account: while redeeming an
     activation link, or while signed in after re-entering their password.
   - A login method can be removed only if another one remains.
+  - The flow starts with a POST, and the pending flow is stored server-side and used once. For an
+    activation, the link token is checked before leaving for Google, and the link's ID travels inside
+    the pending flow, never in a URL.
   - The redirect address is built from a `return_origin` that must be listed in `ALLOWED_ORIGINS`.
+- **Retries.** The secret is never stored, so a repeated "create" (same `Idempotency-Key`) cannot replay
+  it. Instead it returns the same member with a fresh link and revokes the unseen one. Link redemption is
+  for signed-out people: no session or CSRF token, but the Origin allow-list, rate limits and the one-time
+  token apply.
 - No new authority comes from a link or from Google: both end in the same session and Principal as a
   password login (ADR-0006), with membership and grants loaded from the database on every request.
 
