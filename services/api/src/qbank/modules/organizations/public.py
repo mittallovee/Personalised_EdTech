@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from qbank.modules.organizations.models import Membership, Organization
+from qbank.modules.organizations.models import Membership, MembershipGrant, Organization
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,3 +39,12 @@ def get_organization(session: Session, organization_id: UUID) -> OrganizationInf
     if row is None:
         return None
     return OrganizationInfo(row.id, row.display_name, row.status)
+
+
+def membership_grants(session: Session, membership_id: UUID) -> frozenset[str]:
+    """The faculty grants of a membership. Needs its coaching in the tenant context."""
+    return frozenset(
+        session.scalars(
+            select(MembershipGrant.grant_name).where(MembershipGrant.membership_id == membership_id)
+        )
+    )

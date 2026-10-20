@@ -7,6 +7,7 @@ from qbank.core.clientip import client_address
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
 from qbank.core.errors import TooManyRequests
+from qbank.core.permissions import Grant, has_grant
 from qbank.core.ratelimit import LoginRateLimiter
 from qbank.modules.identity import service
 from qbank.modules.identity.authenticator import CSRF_COOKIE
@@ -23,7 +24,12 @@ def get_settings_from_app(request: Request) -> Settings:
 def to_me(principal: Principal) -> Me:
     organization = None
     if principal.organization_id is not None and principal.role is not None:
-        organization = MyOrganization(id=principal.organization_id, role=principal.role)
+        organization = MyOrganization(
+            id=principal.organization_id,
+            display_name=principal.organization_name or "",
+            role=principal.role,
+            grants=sorted(grant for grant in Grant if has_grant(principal, grant)),
+        )
     return Me(
         id=principal.user_id,
         display_name=principal.display_name,

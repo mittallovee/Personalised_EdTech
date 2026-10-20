@@ -44,6 +44,13 @@ class AppError(Exception):
         self.details = details or {}
 
 
+class MalformedRequest(AppError):
+    """The request has the wrong shape in a way the schema can't check (e.g. a corrupt cursor)."""
+
+    status_code = 400
+    code = "MALFORMED_REQUEST"
+
+
 class Unauthenticated(AppError):
     status_code = 401
     code = "UNAUTHENTICATED"

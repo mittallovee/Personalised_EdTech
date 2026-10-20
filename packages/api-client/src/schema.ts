@@ -86,10 +86,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit log: who changed what, and when (I-03)
+         * @description Owner and admins see their coaching's events. A platform admin sees the coaching they act in, or platform-level events when not acting in one. Newest first.
+         */
+        get: operations["list_audit_events_api_v1_audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AuditActor */
+        AuditActor: {
+            /** User Id */
+            user_id: string | null;
+            /**
+             * Display Name
+             * @description Null when the person is not visible here, e.g. a platform admin.
+             */
+            display_name: string | null;
+            /**
+             * Is Platform Admin
+             * @description The change was made with platform authority.
+             */
+            is_platform_admin: boolean;
+        };
+        /** AuditEventOut */
+        AuditEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Action
+             * @example USER_SIGNED_OUT
+             */
+            action: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Entity Id */
+            entity_id: string | null;
+            actor: components["schemas"]["AuditActor"];
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            } | null;
+            /** After */
+            after: {
+                [key: string]: unknown;
+            } | null;
+            /** Request Id */
+            request_id: string | null;
+        };
+        /** AuditEventPage */
+        AuditEventPage: {
+            /** Data */
+            data: components["schemas"]["AuditEventOut"][];
+            page: components["schemas"]["PageInfo"];
+        };
         /** ErrorField */
         ErrorField: {
             /** Path */
@@ -168,8 +242,25 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Display Name */
+            display_name: string;
             /** Role */
             role: string;
+            /**
+             * Grants
+             * @description Grants in effect (Owner and admins hold all of them), sorted by name.
+             */
+            grants: string[];
+        };
+        /** PageInfo */
+        PageInfo: {
+            /**
+             * Next Cursor
+             * @description Pass as `cursor` to get the next page.
+             */
+            next_cursor: string | null;
+            /** Has More */
+            has_more: boolean;
         };
         /** ReadyStatus */
         ReadyStatus: {
@@ -401,6 +492,72 @@ export interface operations {
             };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_audit_events_api_v1_audit_events_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                entity_type?: string | null;
+                entity_id?: string | null;
+                actor_user_id?: string | null;
+                /** @description Events at or after this time (with time zone). */
+                since?: string | null;
+                /** @description Events before this time (with time zone). */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventPage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins may read it (`PERMISSION_DENIED`) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

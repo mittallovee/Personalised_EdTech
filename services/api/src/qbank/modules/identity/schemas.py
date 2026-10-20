@@ -10,7 +10,11 @@ class LoginRequest(BaseModel):
 
 class MyOrganization(BaseModel):
     id: UUID
+    display_name: str
     role: str
+    grants: list[str] = Field(
+        description="Grants in effect (Owner and admins hold all of them), sorted by name."
+    )
 
 
 class Me(BaseModel):

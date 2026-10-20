@@ -17,7 +17,11 @@ from qbank.core.security import hash_password, hash_token, new_token, verify_pas
 from qbank.core.tenancy import NO_CONTEXT, TenantContext, apply_tenant_context
 from qbank.modules.audit.public import record_event
 from qbank.modules.identity.models import PasswordCredential, PlatformRole, User, UserSession
-from qbank.modules.organizations.public import find_active_membership, get_organization
+from qbank.modules.organizations.public import (
+    find_active_membership,
+    get_organization,
+    membership_grants,
+)
 
 log = structlog.get_logger("qbank.identity")
 
@@ -58,13 +62,14 @@ def _load_principal(session: Session, user_id: UUID, session_id: UUID | None) ->
         is not None
     )
     membership = find_active_membership(session, user_id)
+    organization = None
     if membership is not None:
         apply_tenant_context(
             session, TenantContext(organization_id=membership.organization_id, user_id=user_id)
         )
         organization = get_organization(session, membership.organization_id)
         if organization is None or organization.status != "ACTIVE":
-            membership = None  # suspended coaching (A-07): no access through it
+            membership = organization = None  # suspended coaching (A-07): no access through it
     if membership is None and not is_platform_admin:
         return None
     return Principal(
@@ -74,6 +79,8 @@ def _load_principal(session: Session, user_id: UUID, session_id: UUID | None) ->
         organization_id=membership.organization_id if membership else None,
         role=membership.role if membership else None,
         session_id=session_id,
+        organization_name=organization.display_name if organization else None,
+        grants=membership_grants(session, membership.membership_id) if membership else frozenset(),
     )
 
 

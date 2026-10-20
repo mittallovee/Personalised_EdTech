@@ -17,7 +17,7 @@ export function AppShell({
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
-        <span className="font-semibold">Question Bank</span>
+        <span className="font-semibold">{me.organization?.display_name ?? "Question Bank"}</span>
         <div className="flex items-center gap-4 text-sm">
           <span>{me.display_name}</span>
           <button

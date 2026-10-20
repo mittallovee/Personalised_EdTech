@@ -13,6 +13,7 @@ from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import LoginRateLimiter
+from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
 from qbank.modules.identity.authenticator import SessionCookieAuthenticator
@@ -53,5 +54,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(identity_router)
+    app.include_router(audit_router)
     install_openapi(app)
     return app
