@@ -230,14 +230,19 @@ def create_platform_admin(owner_database: Database, email: str, name: str, passw
     """Create the first (or another) platform admin (A-03). Run by the operator as table owner."""
     normalized = email.strip().lower()
     with owner_database.transaction(TenantContext(is_platform=True)) as session:
+        # account_emails covers every account, including invited ones not activated yet (B-07).
         taken = session.scalar(
-            select(PasswordCredential.user_id).where(PasswordCredential.email == normalized)
+            text("SELECT user_id FROM account_emails WHERE email = :email"), {"email": normalized}
         )
         if taken is not None:
             raise Conflict("An account with this email already exists.", code="EMAIL_TAKEN")
         user = User(id=new_id(), display_name=name)
         session.add(user)
         session.flush()
+        session.execute(
+            text("INSERT INTO account_emails (email, user_id) VALUES (:email, :user_id)"),
+            {"email": normalized, "user_id": user.id},
+        )
         session.add(
             PasswordCredential(
                 user_id=user.id, email=normalized, password_hash=hash_password(password)

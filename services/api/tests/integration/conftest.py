@@ -19,6 +19,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from psycopg import sql
+from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 from qbank.core.config import SERVICE_ROOT
@@ -218,6 +219,10 @@ def make_member(
             PasswordCredential(
                 user_id=user_id, email=email, password_hash=hash_password(MEMBER_PASSWORD)
             )
+        )
+        session.execute(
+            text("INSERT INTO account_emails (email, user_id) VALUES (:email, :user_id)"),
+            {"email": email, "user_id": user_id},
         )
     with owner_db.transaction(TenantContext(organization_id=org_id)) as session:
         session.add(
