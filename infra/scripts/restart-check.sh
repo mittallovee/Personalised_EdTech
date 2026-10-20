@@ -27,7 +27,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 call() {
   local method="$1" body_file="$2" path="$3"
   shift 3
-  curl -sS -o "$body_file" -w '%{http_code}' -b "$jar" -c "$jar" -X "$method" \
+  # --max-time: a server that accepts but never answers must not hang the check.
+  curl -sS --max-time 10 -o "$body_file" -w '%{http_code}' -b "$jar" -c "$jar" -X "$method" \
     -H "Origin: $url" "$@" "$url$path"
 }
 
@@ -44,9 +45,9 @@ docker compose down
 docker compose up -d
 
 echo "3/4 Waiting for the app to be ready"
-for attempt in $(seq 1 60); do
-  [[ "$(call GET "$after" /health/ready 2>/dev/null)" == 200 ]] && break
-  [[ "$attempt" == 60 ]] && fail "not ready after 2 minutes (see: docker compose logs)"
+deadline=$((SECONDS + 120))
+until [[ "$(call GET "$after" /health/ready 2>/dev/null)" == 200 ]]; do
+  ((SECONDS < deadline)) || fail "not ready after 2 minutes (see: docker compose logs)"
   sleep 2
 done
 grep -q '"database":"ok"' "$after" && grep -q '"migrations":"ok"' "$after" \
