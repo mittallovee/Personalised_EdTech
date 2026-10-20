@@ -65,8 +65,8 @@ Rules that hold everywhere:
 - Redeeming is rate-limited like sign-in. Every error is the same generic "link is invalid or expired".
 - **Retries are safe** (style guide §6). Creating a coaching and inviting a member take an
   `Idempotency-Key`: the key and a hash of the body are stored with the created member
-  (`idempotency_keys`, migration 0004).
-  - Same key + same body: no second member, no `EMAIL_IN_USE`. The response is the same member with a
+  (`idempotency_keys`, migration 0005).
+  - Same key + same body: no second member, no `EMAIL_TAKEN`. The response is the same member with a
     **fresh** link, and the unseen first link is revoked. The secret itself is never stored, so it can't
     be replayed; a lost response therefore costs nothing.
   - Same key + different body: `409 IDEMPOTENCY_KEY_REUSED`.
@@ -77,7 +77,7 @@ Rules that hold everywhere:
   - The reservation is made inside the invitation (or coaching-creation) transaction, by a narrow
     function, before the user and membership rows are written.
   - The email is normalised first (trimmed, lower-case). A second invitation for the same email, in any
-    coaching and even at the same moment, hits the primary key and gets `409 EMAIL_IN_USE`; its
+    coaching and even at the same moment, hits the primary key and gets `409 EMAIL_TAKEN`; its
     transaction leaves nothing behind.
   - Activation reuses the reserved email, whether by password or by Google, so it can never create a
     second account for it.
@@ -138,8 +138,8 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 
 | Migration | Change |
 |---|---|
-| 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant)`; `idempotency_keys (organization_id, key, request_hash, resource_id, created_at)`, kept 24 h |
-| 0005 | `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, email, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
+| 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant_name)` |
+| 0005 | `idempotency_keys (organization_id, key, request_hash, resource_id, created_at)`, kept 24 h (moved here from 0004 in PR 2: first used by coaching creation); `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, email, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
 | 0006 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
@@ -172,8 +172,9 @@ cookie and `state` match.
 | `POST /auth/google/start` · `GET /auth/google/callback` · `POST /auth/google/unlink` | §5 |
 | `GET /audit-events` | Coaching (or platform) audit log, filters: actor, entity, time; paginated |
 
-New error codes are added to `error-codes.md`, for example `LINK_INVALID`, `EMAIL_IN_USE`,
-`ROLE_CHANGED` (409), `LAST_OWNER` and `ACTION_NOT_ALLOWED` (403). The contract (`api/openapi.json`) and
+New error codes are added to `error-codes.md`, for example `LINK_INVALID`, `ROLE_CHANGED` (409) and
+`LAST_OWNER`. Existing M1 codes are reused where they fit: `EMAIL_TAKEN` (409) and `PERMISSION_DENIED`
+(403). The contract (`api/openapi.json`) and
 the generated client are updated in the same PR as each endpoint.
 
 ## 8. Web
@@ -199,7 +200,7 @@ available, so the screens only show or hide buttons.
 | T13 | Permission table (§3): every action × Faculty/Admin/Owner/Platform/another coaching's admin → allowed or 403/404 | api |
 | T14 | **Removed user loses access immediately**: their existing session gets 401 on the next request; links revoked; their audit history and memberships stay | api + integration |
 | T15 | Ownership transfer: two concurrent transfers or replays leave exactly one Owner; old Owner becomes admin; Owner can't be removed/demoted | integration |
-| T16 | Emails: two concurrent invitations for the same email (same or different coachings, different case/spaces) → exactly one member, the other `EMAIL_IN_USE` and nothing left behind; Google activation can't create a second account for a reserved email; removing a never-activated invitee frees the email. Links: single use, expiry (24 h / 1 h), new link revokes old, no use after removal or suspension, reset ends sessions, token never stored/logged | integration + api |
+| T16 | Emails: two concurrent invitations for the same email (same or different coachings, different case/spaces) → exactly one member, the other `EMAIL_TAKEN` and nothing left behind; Google activation can't create a second account for a reserved email; removing a never-activated invitee frees the email. Links: single use, expiry (24 h / 1 h), new link revokes old, no use after removal or suspension, reset ends sessions, token never stored/logged | integration + api |
 | T17 | Stale changes: `If-Match` missing → 428, stale → 412; wrong expected role → 409 | api |
 | T18 | Isolation (T1–T4 pattern) for `membership_grants`, `account_links`, `external_identities` | integration |
 | T19 | Google: match by subject only (same email, different subject → no access); state/nonce/PKCE checked; pending flow single-use and expiring; **activation + Google** binds only the invited user and fails once the link is used, revoked or the member removed; removal, suspension, sign-out or link revocation while a flow is pending (any purpose) makes its callback change nothing; a platform-only admin (no membership) can link Google and sign in with it; `LINK` needs the correct password in the same request (a fresh session alone is refused; wrong passwords count towards lockout); linking a second Google account, or two links racing, leaves exactly one (`ALREADY_LINKED` 409); unlink needs another method (Google simulated; no real Google call in CI) | api |
@@ -213,7 +214,7 @@ available, so the screens only show or hide buttons.
 - Two-factor authentication for platform admins (P2, B-12).
 - A device list or remote logout of other devices (spec says none).
 - Inviting someone who already belongs to another coaching (B-07: one coaching per person; the invite is
-  refused with `EMAIL_IN_USE`).
+  refused with `EMAIL_TAKEN`).
 - **Coaching logo** (A-04): moved to M6, when file uploads and their safety checks exist; M2 shows the name.
 
 ## 11. Work plan (pull requests)

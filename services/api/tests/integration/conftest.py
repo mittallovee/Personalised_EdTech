@@ -10,7 +10,7 @@ Each test session creates a fresh database and drops it afterwards.
 
 import os
 import secrets
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -24,10 +24,11 @@ from sqlalchemy.engine import make_url
 from qbank.core.config import SERVICE_ROOT
 from qbank.core.db import Database
 from qbank.core.ids import new_id
+from qbank.core.security import hash_password
 from qbank.core.tenancy import TenantContext
 from qbank.modules.audit.models import AuditEvent
-from qbank.modules.identity.models import User
-from qbank.modules.organizations.models import Membership, Organization
+from qbank.modules.identity.models import PasswordCredential, User
+from qbank.modules.organizations.models import Membership, MembershipGrant, Organization
 
 ADMIN_URL = os.environ.get(
     "QBANK_TEST_ADMIN_URL",
@@ -183,3 +184,50 @@ def coaching_a(db: Database) -> Coaching:
 @pytest.fixture
 def coaching_b(db: Database) -> Coaching:
     return make_coaching(db, "Coaching B")
+
+
+MEMBER_PASSWORD = "correct horse battery staple"
+
+
+@dataclass(frozen=True)
+class Member:
+    email: str
+    user_id: UUID
+    org_id: UUID
+    membership_id: UUID
+
+
+def make_member(
+    owner_db: Database,
+    role: str,
+    *,
+    org_id: UUID | None = None,
+    grants: Iterable[str] = (),
+    coaching_name: str = "Test Coaching",
+) -> Member:
+    """A member who can sign in with MEMBER_PASSWORD; creates a new coaching unless ``org_id``."""
+    email = f"{role.lower()}-{secrets.token_hex(5)}@example.com"
+    user_id, membership_id = new_id(), new_id()
+    with owner_db.transaction(PLATFORM) as session:
+        if org_id is None:
+            org_id = new_id()
+            session.add(Organization(id=org_id, display_name=coaching_name))
+        session.add(User(id=user_id, display_name=f"Test {role.title()}"))
+        session.flush()
+        session.add(
+            PasswordCredential(
+                user_id=user_id, email=email, password_hash=hash_password(MEMBER_PASSWORD)
+            )
+        )
+    with owner_db.transaction(TenantContext(organization_id=org_id)) as session:
+        session.add(
+            Membership(id=membership_id, organization_id=org_id, user_id=user_id, role=role)
+        )
+        session.flush()
+        for grant in grants:
+            session.add(
+                MembershipGrant(
+                    organization_id=org_id, membership_id=membership_id, grant_name=grant
+                )
+            )
+    return Member(email, user_id, org_id, membership_id)

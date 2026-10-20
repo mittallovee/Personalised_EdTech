@@ -51,6 +51,7 @@ def test_upgrade_downgrade_upgrade(empty_database: tuple[str, str]) -> None:
         "sessions",
         "jobs",
         "public_codes",
+        "membership_grants",
     } <= table_names(owner_url)
 
     command.downgrade(config, "base")

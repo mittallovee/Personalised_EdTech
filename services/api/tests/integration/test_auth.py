@@ -231,7 +231,12 @@ def test_faculty_sees_their_coaching(client: TestClient, owner_db: Database) -> 
     me = client.get("/api/v1/me").json()
 
     assert me["is_platform_admin"] is False
-    assert me["organization"] == {"id": str(faculty.org_id), "role": "FACULTY"}
+    assert me["organization"] == {
+        "id": str(faculty.org_id),
+        "display_name": "Test Coaching",
+        "role": "FACULTY",
+        "grants": [],
+    }
 
 
 def test_removed_member_loses_access_immediately(client: TestClient, owner_db: Database) -> None:
