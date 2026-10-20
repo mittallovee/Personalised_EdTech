@@ -356,6 +356,44 @@
               ],
               "title": "Actor User Id"
             }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events at or after this time (with time zone).",
+              "title": "Since"
+            },
+            "description": "Events at or after this time (with time zone)."
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events before this time (with time zone).",
+              "title": "Until"
+            },
+            "description": "Events before this time (with time zone)."
           }
         ],
         "responses": {

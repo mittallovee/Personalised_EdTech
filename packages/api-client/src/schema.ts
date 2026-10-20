@@ -518,6 +518,10 @@ export interface operations {
                 entity_type?: string | null;
                 entity_id?: string | null;
                 actor_user_id?: string | null;
+                /** @description Events at or after this time (with time zone). */
+                since?: string | null;
+                /** @description Events before this time (with time zone). */
+                until?: string | null;
             };
             header?: never;
             path?: never;

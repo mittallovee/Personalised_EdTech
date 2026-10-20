@@ -5,12 +5,14 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
 from qbank.core.ids import new_id
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
+from qbank.modules.audit.models import AuditEvent
 from qbank.modules.audit.public import record_event
 from qbank.modules.identity.service import create_platform_admin
 from tests.integration.conftest import MEMBER_PASSWORD, PLATFORM, MigratedDatabase, make_member
@@ -158,3 +160,33 @@ def test_platform_admin_not_acting_sees_only_platform_level_events(
 
     assert str(platform_entity) in seen
     assert seen.isdisjoint(coaching_ids)
+
+
+def test_time_window_filter(client: TestClient, owner_db: Database) -> None:
+    owner = make_member(owner_db, "OWNER")
+    ids = add_events(owner_db, owner.org_id, 3)
+    with owner_db.transaction(TenantContext(organization_id=owner.org_id)) as session:
+        times = {
+            str(event.entity_id): event.created_at
+            for event in session.scalars(select(AuditEvent).where(AuditEvent.entity_type == "test"))
+        }
+    sign_in(client, owner.email)
+
+    window = {"entity_type": "test", "since": times[ids[1]].isoformat()}
+    window["until"] = times[ids[2]].isoformat()
+    seen = [
+        event["entity_id"]
+        for event in client.get("/api/v1/audit-events", params=window).json()["data"]
+    ]
+
+    assert seen == [ids[1]]  # since is inclusive, until is exclusive
+
+
+def test_time_filter_needs_a_time_zone(client: TestClient, owner_db: Database) -> None:
+    owner = make_member(owner_db, "OWNER")
+    sign_in(client, owner.email)
+
+    response = client.get("/api/v1/audit-events", params={"since": "2026-10-21T09:30:00"})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "MALFORMED_REQUEST"

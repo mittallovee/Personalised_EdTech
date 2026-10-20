@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import AwareDatetime
 
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
@@ -31,6 +32,12 @@ def list_audit_events(
     entity_type: Annotated[str | None, Query(max_length=100)] = None,
     entity_id: UUID | None = None,
     actor_user_id: UUID | None = None,
+    since: Annotated[
+        AwareDatetime | None, Query(description="Events at or after this time (with time zone).")
+    ] = None,
+    until: Annotated[
+        AwareDatetime | None, Query(description="Events before this time (with time zone).")
+    ] = None,
 ) -> AuditEventPage:
     require(principal, Action.VIEW_AUDIT_LOG)
     after = decode_cursor(cursor) if cursor is not None else None
@@ -43,6 +50,8 @@ def list_audit_events(
             entity_type=entity_type,
             entity_id=entity_id,
             actor_user_id=actor_user_id,
+            since=since,
+            until=until,
         )
         names = display_names(session, {row.actor_user_id for row in rows if row.actor_user_id})
         events = [

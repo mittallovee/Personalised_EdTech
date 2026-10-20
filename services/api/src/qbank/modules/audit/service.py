@@ -16,6 +16,8 @@ def list_events(
     entity_type: str | None,
     entity_id: UUID | None,
     actor_user_id: UUID | None,
+    since: datetime | None = None,
+    until: datetime | None = None,
 ) -> tuple[list[AuditEvent], bool]:
     """Newest first: one coaching's events, or platform-level ones if ``organization_id`` is None.
 
@@ -36,5 +38,9 @@ def list_events(
         query = query.where(AuditEvent.entity_id == entity_id)
     if actor_user_id is not None:
         query = query.where(AuditEvent.actor_user_id == actor_user_id)
+    if since is not None:
+        query = query.where(AuditEvent.created_at >= since)
+    if until is not None:
+        query = query.where(AuditEvent.created_at < until)
     rows = list(session.scalars(query.limit(limit + 1)))
     return rows[:limit], len(rows) > limit
