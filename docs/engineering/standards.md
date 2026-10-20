@@ -40,7 +40,7 @@
 ├── packages/
 │   ├── api-client/           TypeScript client generated from api/openapi.json
 │   └── content-renderer/     shared question renderer (KaTeX), reused by future student apps
-├── infra/                    Dockerfiles; later Terraform for cloud
+├── infra/                    Dockerfiles, DB role setup, operational scripts; later Terraform for cloud
 ├── docs/                     product, architecture, engineering, operations
 └── .github/                  CI workflows, PR template, CODEOWNERS
 ```

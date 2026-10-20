@@ -169,7 +169,7 @@ web lint/typecheck/test/build; secret scan; dependency audit. (Details: [standar
 | T7 | `/me` returns principal; unauthenticated → 401 with error envelope and request ID | api |
 | T8 | Migrations: upgrade head → downgrade base → upgrade head on empty DB | integration |
 | T9 | Job: enqueued in a rolled-back transaction never runs; committed job runs once; retry with backoff; duplicate idempotency key runs once | integration |
-| T10 | Restart `docker compose` → data still present, health ready | manual check (documented) |
+| T10 | Restart `docker compose` → data still present, health ready | manual, scripted: `make restart-check` |
 | T11 | Code generator: 8 chars, Crockford alphabet, normalisation of O/I/L, collision retry | unit |
 | T12 | OpenAPI committed file matches generated | CI |
 
@@ -185,10 +185,10 @@ uploads (M6); cloud deployment (M7).
 | 1 | Repo skeleton, tooling configs, compose, Dockerfiles, CI with lint/format only | Merged (#2) |
 | 2 | Backend core: config, logging, errors, request ID, health endpoints, DB session, migration 0001, RLS + tests T1–T4, T8 | Merged (#3) |
 | 3 | Identity: migration 0002, password hashing, sessions, login/logout/me, CLI, tests T5–T7 | Merged (#4) |
-| 4 | Jobs core + worker + T9; ID/code generator + T11 (migration 0003) | In review |
+| 4 | Jobs core + worker + T9; ID/code generator + T11 (migration 0003) | Merged (#5) |
 | 5a | API contract export `api/openapi.json` + CI check T12; Origin allow-list on unsafe API requests (owner decision, 19 Oct) | Merged (#6) |
-| 5b | Web: app shell, login, home, generated client (split from 5 to keep PRs small); same-origin proxy (ADR-0014) | In review |
-| 6 | README run instructions, restart check T10, M1 demo notes | |
+| 5b | Web: app shell, login, home, generated client (split from 5 to keep PRs small); same-origin proxy (ADR-0014) | Merged (#8) |
+| 6 | README run instructions, restart check T10 (`make restart-check`), [M1 demo notes](../operations/m1-demo.md) | In review |
 
 ## 15. Decisions for the owner
 
