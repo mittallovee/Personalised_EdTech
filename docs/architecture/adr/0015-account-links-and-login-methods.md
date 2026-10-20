@@ -22,7 +22,10 @@ Google login (B-02) must never take over an account just because the email addre
   - Accounts are matched only by `(provider, subject)` in `external_identities`. A sign-in with no linked
     account fails; it never creates or merges an account.
   - Google is linked only by someone who already proves control of the account: while redeeming an
-    activation link, or while signed in after re-entering their password.
+    activation link, or while signed in by typing their current password into the link request itself
+    (session age is never proof).
+  - Each account has at most one Google account (unique `(user_id, provider)` as well as
+    `(provider, subject)`).
   - A login method can be removed only if another one remains.
   - The flow starts with a POST, and the pending flow is stored server-side and used once. For an
     activation, the link token is checked before leaving for Google, and the link's ID travels inside
