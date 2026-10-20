@@ -72,6 +72,19 @@ Rules that hold everywhere:
   - Same key + different body: `409 IDEMPOTENCY_KEY_REUSED`.
   - "New link" actions need no key: any retry leaves exactly one valid link, the last one shown.
 - An invited person who has not activated has no way to sign in and sees no data.
+- **One email, one person, everywhere (B-07).** Each email address is reserved once, platform-wide, in
+  `account_emails (email PRIMARY KEY, user_id UNIQUE)`.
+  - The reservation is made inside the invitation (or coaching-creation) transaction, by a narrow
+    function, before the user and membership rows are written.
+  - The email is normalised first (trimmed, lower-case). A second invitation for the same email, in any
+    coaching and even at the same moment, hits the primary key and gets `409 EMAIL_IN_USE`; its
+    transaction leaves nothing behind.
+  - Activation reuses the reserved email, whether by password or by Google, so it can never create a
+    second account for it.
+  - Migration 0005 fills the table from existing password logins.
+  - Removing a member who **never activated** releases their reservation, so a mistyped or abandoned
+    invite can be redone. An activated account keeps its email, because its history stays with the
+    coaching.
 
 ## 5. Google login (B-02, B-04, ADR-0015)
 
@@ -116,7 +129,7 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 | Migration | Change |
 |---|---|
 | 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant)`; `idempotency_keys (organization_id, key, request_hash, resource_id, created_at)`, kept 24 h |
-| 0005 | `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, email, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: check email free, redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
+| 0005 | `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, email, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
 | 0006 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
@@ -176,7 +189,7 @@ available, so the screens only show or hide buttons.
 | T13 | Permission table (§3): every action × Faculty/Admin/Owner/Platform/another coaching's admin → allowed or 403/404 | api |
 | T14 | **Removed user loses access immediately**: their existing session gets 401 on the next request; links revoked; their audit history and memberships stay | api + integration |
 | T15 | Ownership transfer: two concurrent transfers or replays leave exactly one Owner; old Owner becomes admin; Owner can't be removed/demoted | integration |
-| T16 | Links: single use, expiry (24 h / 1 h), new link revokes old, no use after removal or suspension, reset ends sessions, token never stored/logged | integration + api |
+| T16 | Emails: two concurrent invitations for the same email (same or different coachings, different case/spaces) → exactly one member, the other `EMAIL_IN_USE` and nothing left behind; Google activation can't create a second account for a reserved email; removing a never-activated invitee frees the email. Links: single use, expiry (24 h / 1 h), new link revokes old, no use after removal or suspension, reset ends sessions, token never stored/logged | integration + api |
 | T17 | Stale changes: `If-Match` missing → 428, stale → 412; wrong expected role → 409 | api |
 | T18 | Isolation (T1–T4 pattern) for `membership_grants`, `account_links`, `external_identities` | integration |
 | T19 | Google: match by subject only (same email, different subject → no access); state/nonce/PKCE checked; pending flow single-use and expiring; **activation + Google** binds only the invited user and fails once the link is used, revoked or the member removed; `LINK` needs the correct password in the same request (a fresh session alone is refused; wrong passwords count towards lockout); linking a second Google account, or two links racing, leaves exactly one (`ALREADY_LINKED` 409); unlink needs another method (Google simulated; no real Google call in CI) | api |

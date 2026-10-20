@@ -35,6 +35,9 @@ Google login (B-02) must never take over an account just because the email addre
   it. Instead it returns the same member with a fresh link and revokes the unseen one. Link redemption is
   for signed-out people: no session or CSRF token, but the Origin allow-list, rate limits and the one-time
   token apply.
+- **Emails.** Each normalised email is reserved once platform-wide (`account_emails`, primary key) in the
+  same transaction that creates the invitation, so concurrent invitations can't create two accounts for
+  one person (B-07), whichever login method activates them.
 - No new authority comes from a link or from Google: both end in the same session and Principal as a
   password login (ADR-0006), with membership and grants loaded from the database on every request.
 
