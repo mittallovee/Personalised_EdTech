@@ -17,7 +17,8 @@
 4. [Phase 1 scope](./product/04-phase-1-scope.md): **what we build first**: screens, journeys, in/out of scope.
 5. [Engineering standards](./engineering/standards.md) and [`AGENTS.md`](../AGENTS.md): how code is written and checked.
 6. [API style guide](./architecture/api-style-guide.md) and [ADRs](./architecture/adr/README.md): API rules and technical decisions.
-7. [M1 design note](./architecture/m1-design-note.md): approved; the foundation milestone in progress.
+7. [M1 design note](./architecture/m1-design-note.md): approved; the foundation milestone.
+8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [remote access](./operations/remote-access.md) on your own domain.
 
 ## Review reading order (history)
 
