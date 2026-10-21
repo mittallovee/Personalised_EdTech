@@ -31,3 +31,10 @@ class Me(BaseModel):
 class LoginResponse(BaseModel):
     user: Me
     csrf_token: str = Field(description="Send back in the X-CSRF-Token header on changes.")
+
+
+class RedeemLinkRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=100, description="The part after # in the link.")
+    password: str = Field(
+        min_length=12, max_length=128, description="The new password (at least 12 characters)."
+    )

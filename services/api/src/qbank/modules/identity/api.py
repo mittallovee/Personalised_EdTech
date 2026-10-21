@@ -9,9 +9,16 @@ from qbank.core.db import Database, get_database
 from qbank.core.errors import TooManyRequests
 from qbank.core.permissions import Grant, has_grant
 from qbank.core.ratelimit import LoginRateLimiter
+from qbank.core.security import hash_token
 from qbank.modules.identity import service
 from qbank.modules.identity.authenticator import CSRF_COOKIE
-from qbank.modules.identity.schemas import LoginRequest, LoginResponse, Me, MyOrganization
+from qbank.modules.identity.schemas import (
+    LoginRequest,
+    LoginResponse,
+    Me,
+    MyOrganization,
+    RedeemLinkRequest,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
 
@@ -85,6 +92,43 @@ def login(
             "Too many sign-in attempts. Please wait and try again.", retry_after_seconds=wait
         )
     result = service.login(database, settings, body.email, body.password, request.state.request_id)
+    _set_auth_cookies(response, settings, result)
+    return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
+
+
+@router.post(
+    "/auth/links/redeem",
+    summary="Activate an account or reset its password with a one-time link",
+    description=(
+        "For people who are not signed in (no session or CSRF token needed): the token from the"
+        " link and a new password. On success the person is signed in, exactly as after"
+        " `POST /auth/login`. A reset ends all their other sessions. Rate-limited like sign-in."
+    ),
+    responses={
+        401: {
+            "description": "The link is unknown, used, replaced, expired, or its membership or"
+            " coaching is no longer active (`LINK_INVALID`, one message for all cases)"
+        },
+        429: {"description": "Too many attempts; see the Retry-After header"},
+    },
+)
+def redeem_link(
+    body: RedeemLinkRequest,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    settings: Annotated[Settings, Depends(get_settings_from_app)],
+) -> LoginResponse:
+    limiter: LoginRateLimiter = request.app.state.login_limiter
+    # Counted per client address and per link, like sign-in counts per address and per email.
+    wait = limiter.check(client_address(request), f"link:{hash_token(body.token)}")
+    if wait:
+        raise TooManyRequests(
+            "Too many attempts. Please wait and try again.", retry_after_seconds=wait
+        )
+    result = service.redeem_link(
+        database, settings, body.token, body.password, request.state.request_id
+    )
     _set_auth_cookies(response, settings, result)
     return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
 
