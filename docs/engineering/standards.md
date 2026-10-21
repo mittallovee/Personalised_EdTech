@@ -36,7 +36,8 @@
 │       ├── migrations/       Alembic
 │       └── tests/            unit/, integration/, api/
 ├── apps/
-│   └── web/                  Next.js + TypeScript faculty/admin app
+│   ├── web/                  Next.js + TypeScript faculty/admin app
+│   └── e2e/                  browser tests (Playwright) against the running stack
 ├── packages/
 │   ├── api-client/           TypeScript client generated from api/openapi.json
 │   └── content-renderer/     shared question renderer (KaTeX), reused by future student apps
@@ -123,11 +124,22 @@ modules/questions/
 | API | pytest + httpx | Endpoints: auth, status codes, error envelope, ETag/idempotency, permission denials | `tests/api` |
 | Contract | OpenAPI diff | No unintended breaking API change | CI |
 | Web unit | Vitest + Testing Library | Components, form logic | `apps/web` |
-| End-to-end | Playwright | User journeys J1–J7 (from M4 onward) | `apps/web/e2e` |
+| End-to-end (browser) | Playwright + Chromium | What a person does in the browser, against the whole stack (`docker compose`): sign-in, account activation now; user journeys J1–J7 as they are built | `apps/e2e` |
+| Security | ruff `S` (bandit), pip-audit, pnpm audit, gitleaks | Risky Python code; libraries with known vulnerabilities; committed secrets | CI (`ci.yml`, `security.yml`, weekly too) |
 | AI evaluation | pytest-based eval harness | Extraction/verification/translation quality on the golden set | `tests/eval` (not in normal CI; run on demand) |
+
+When each runs:
+1. **While writing code** (developer or agent, on their machine): unit, API and integration tests for the
+   code being changed; the browser tests when a screen changes.
+2. **On every pull request** (CI, automatically): everything in §10, including the browser tests and the
+   security scans; Codex reviews the diff. A red check blocks the merge.
+3. **After merging, at the end of a milestone** (the owner, by hand): the milestone demo script in
+   `docs/operations/` on their own PC, checking it does what the requirements say.
+4. **Weekly** (CI schedule): the dependency audits again, because new advisories appear for unchanged code.
 
 Rules:
 - **Every bug fix starts with a failing test.**
+- A new or changed screen gets a browser test for its main path and its most likely mistake.
 - Tenant isolation tests exist for every tenant-owned table (two-coaching fixture).
 - No mocks for PostgreSQL behaviour (RLS, constraints). Mock only external services (AI providers, Google OAuth).
 - Coverage: domain code ≥ 90%; overall is a signal, not a target.
@@ -161,7 +173,9 @@ backend:  ruff check · ruff format --check · mypy · import-linter
           alembic upgrade head → downgrade base → upgrade head (empty DB)
           export OpenAPI → must equal committed api/openapi.json · oasdiff breaking-change check
 web:      pnpm lint · typecheck · vitest · build · api-client regenerated == committed
-security: secret scan (gitleaks) · dependency audit (pip-audit, pnpm audit)
+e2e:      docker compose up --build → Playwright (Chromium) browser tests; report kept on failure
+security: secret scan (gitleaks) · ruff S rules (in backend) · dependency audit (pip-audit on uv.lock,
+          pnpm audit --prod), also weekly. CodeQL needs a paid plan for private repos: not used.
 ```
 
 ## 11. Definition of Done (per story / PR)

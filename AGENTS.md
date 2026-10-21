@@ -40,6 +40,8 @@ uv run pytest
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 # contract
 make openapi-check
+# browser tests (stack running: docker compose up --build -d; see apps/e2e/README.md)
+pnpm --filter @qbank/e2e e2e
 ```
 (Exact commands are kept current in `README.md` once code exists.)
 

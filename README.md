@@ -17,6 +17,7 @@ Next: M2 (identity and coaching admin), [design note](docs/architecture/m2-desig
 |---|---|
 | `services/api/` | Python backend: FastAPI API and background worker (`python -m qbank.worker`) |
 | `apps/web/` | Next.js + TypeScript web app for faculty and admins |
+| `apps/e2e/` | Browser tests (Playwright): a real Chromium drives the running app |
 | `infra/docker/` | Dockerfiles |
 | `infra/scripts/` | Operational scripts, e.g. the restart check (`make restart-check`) |
 | `infra/db/` | Script that creates/updates the restricted database roles `qbank_app` and `qbank_worker` (`db-init` service) |
@@ -73,3 +74,10 @@ make format                   # auto-fix formatting
 
 Backend tests are in `services/api/tests/`: `unit/` and `api/` need nothing; `integration/` creates and
 drops its own temporary database on the PostgreSQL server named by `QBANK_TEST_ADMIN_URL`.
+
+Browser tests (need the stack running and a platform admin, see [`apps/e2e/README.md`](apps/e2e/README.md)):
+
+```bash
+pnpm --filter @qbank/e2e exec playwright install chromium   # once
+E2E_ADMIN_EMAIL=you@example.com E2E_ADMIN_PASSWORD='…' pnpm --filter @qbank/e2e e2e
+```
