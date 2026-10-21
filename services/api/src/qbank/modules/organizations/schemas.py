@@ -153,7 +153,7 @@ class AccountLinkOut(BaseModel):
 
 
 def _without_repeats(value: object) -> object:
-    """Repeats count once, so the length limit applies to the distinct grants."""
+    """Repeats count once, so a client may send a name more than once."""
     if isinstance(value, list):
         try:
             return list(dict.fromkeys(value))
@@ -163,8 +163,8 @@ def _without_repeats(value: object) -> object:
 
 
 class SetGrants(BaseModel):
+    # No length limit: once repeats are dropped, at most len(Grant) valid names remain.
     grants: Annotated[list[Grant], BeforeValidator(_without_repeats)] = Field(
-        max_length=len(Grant),
         description="The complete new set (an empty list removes all); repeats count once.",
         examples=[["QC", "APPROVE"]],
     )

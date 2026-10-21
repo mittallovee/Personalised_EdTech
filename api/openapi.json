@@ -2863,7 +2863,6 @@
               "$ref": "#/components/schemas/Grant"
             },
             "type": "array",
-            "maxItems": 5,
             "title": "Grants",
             "description": "The complete new set (an empty list removes all); repeats count once.",
             "examples": [
