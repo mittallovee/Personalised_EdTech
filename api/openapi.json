@@ -886,7 +886,7 @@
           "platform"
         ],
         "summary": "Suspend a coaching (A-07)",
-        "description": "Its members are signed out on their next request and cannot sign in; its data is kept. Suspending a suspended coaching changes nothing.",
+        "description": "Ends its members' sign-in sessions; they cannot sign in until it is reactivated, and its data is kept. Send the ETag in `If-Match`. Suspending a suspended coaching changes nothing.",
         "operationId": "suspend_organization_api_v1_platform_organizations__organization_id__suspend_post",
         "security": [
           {
@@ -904,6 +904,25 @@
               "format": "uuid",
               "title": "Organization Id"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
           }
         ],
         "responses": {
@@ -949,6 +968,26 @@
           },
           "404": {
             "description": "No such coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed by someone else since your read (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -976,6 +1015,7 @@
           "platform"
         ],
         "summary": "Reactivate a suspended coaching",
+        "description": "Members sign in again. Send the ETag in `If-Match`.",
         "operationId": "reactivate_organization_api_v1_platform_organizations__organization_id__reactivate_post",
         "security": [
           {
@@ -993,6 +1033,25 @@
               "format": "uuid",
               "title": "Organization Id"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
           }
         ],
         "responses": {
@@ -1038,6 +1097,26 @@
           },
           "404": {
             "description": "No such coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed by someone else since your read (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)",
             "content": {
               "application/json": {
                 "schema": {

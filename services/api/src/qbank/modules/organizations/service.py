@@ -20,6 +20,7 @@ from qbank.modules.identity.public import (
     create_invited_user,
     issue_account_link,
     reserve_email,
+    revoke_coaching_sessions,
     set_acting_organization,
     user_status,
 )
@@ -224,15 +225,23 @@ def set_status(
     organization_id: UUID,
     status: str,
     *,
+    if_match: str | None,
     request_id: str | None,
 ) -> Organization:
-    """Suspend or reactivate (A-07). Asking for the current status changes nothing."""
+    """Suspend or reactivate (A-07), refusing stale requests (If-Match).
+
+    Asking for the current status changes nothing. Suspending also ends the members' sessions,
+    so after a reactivation everyone signs in again.
+    """
     apply_tenant_context(session, creation_context(principal, organization_id))
     organization = _locked_organization(session, organization_id)
+    require_if_match(if_match, organization.revision)
     if organization.status != status:
         before = _snapshot(organization)
         organization.status = status
         action = "COACHING_SUSPENDED" if status == "SUSPENDED" else "COACHING_REACTIVATED"
+        if status == "SUSPENDED":
+            revoke_coaching_sessions(session, organization_id)
         _record_change(session, principal, organization, action, before, request_id)
     return organization
 
@@ -254,8 +263,7 @@ def act_in(
         apply_tenant_context(session, creation_context(principal, organization_id))
         if session.get(Organization, organization_id) is None:
             raise NotFound("No such coaching.")
-    previous = principal.acting_organization_id
-    set_acting_organization(session, principal.session_id, organization_id)
+    previous = set_acting_organization(session, principal.session_id, organization_id)
     for org_id, action in (
         (previous, "PLATFORM_ACTING_STOPPED"),
         (organization_id, "PLATFORM_ACTING_STARTED"),

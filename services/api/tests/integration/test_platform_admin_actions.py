@@ -6,13 +6,17 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 
+from qbank.core.auth import Principal
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
+from qbank.modules.identity.models import UserSession
+from qbank.modules.organizations.service import act_in
 from tests.integration.conftest import (
     MigratedDatabase,
     make_member,
@@ -129,6 +133,7 @@ def test_invalid_change_is_400(
 
 def test_unknown_coaching_is_404(client: TestClient, admin_headers: dict[str, str]) -> None:
     unknown = f"{COACHINGS}/019a0000-0000-7000-8000-000000000000"
+    admin_headers = {**admin_headers, "If-Match": '"rev-1"'}
     patched = client.patch(
         unknown, json={"display_name": "X"}, headers={**admin_headers, "If-Match": '"rev-1"'}
     )
@@ -163,16 +168,20 @@ def test_coaching_members_cannot_rename_or_suspend(
 # --- Suspend / reactivate (A-07, T21) -----------------------------------------------------------
 
 
-def test_suspension_signs_members_out_and_reactivation_lets_them_back(
+def test_suspension_ends_sessions_and_reactivation_needs_a_new_sign_in(
     settings: Settings, client: TestClient, admin_headers: dict[str, str], owner_db: Database
 ) -> None:
     member = make_member(owner_db, "FACULTY")
+    coaching = f"{COACHINGS}/{member.org_id}"
     with TestClient(create_app(settings)) as faculty:
         sign_in(faculty, member.email)
         assert faculty.get("/api/v1/me").status_code == 200
+        etag = client.get(coaching).headers["ETag"]
 
-        suspended = client.post(f"{COACHINGS}/{member.org_id}/suspend", headers=admin_headers)
-        again = client.post(f"{COACHINGS}/{member.org_id}/suspend", headers=admin_headers)
+        suspended = client.post(f"{coaching}/suspend", headers={**admin_headers, "If-Match": etag})
+        again = client.post(
+            f"{coaching}/suspend", headers={**admin_headers, "If-Match": suspended.headers["ETag"]}
+        )
 
         assert suspended.json()["status"] == "SUSPENDED"
         assert again.json()["revision"] == suspended.json()["revision"]  # no second change
@@ -184,9 +193,13 @@ def test_suspension_signs_members_out_and_reactivation_lets_them_back(
         )
         assert login.status_code == 401
 
-        reactivated = client.post(f"{COACHINGS}/{member.org_id}/reactivate", headers=admin_headers)
+        reactivated = client.post(
+            f"{coaching}/reactivate", headers={**admin_headers, "If-Match": again.headers["ETag"]}
+        )
 
         assert reactivated.json()["status"] == "ACTIVE"
+        # The session from before the suspension stays ended: signing in again is needed.
+        assert faculty.get("/api/v1/me").status_code == 401
         sign_in(faculty, member.email)
         assert faculty.get("/api/v1/me").status_code == 200
     status_events = [
@@ -198,6 +211,26 @@ def test_suspension_signs_members_out_and_reactivation_lets_them_back(
         ("COACHING_SUSPENDED", "ACTIVE", "SUSPENDED"),
         ("COACHING_REACTIVATED", "SUSPENDED", "ACTIVE"),
     ]
+
+
+@pytest.mark.parametrize("action", ["suspend", "reactivate"])
+def test_status_changes_need_the_current_etag(
+    client: TestClient, admin_headers: dict[str, str], action: str
+) -> None:
+    org_id = create(client, admin_headers)
+    client.patch(
+        f"{COACHINGS}/{org_id}",
+        json={"display_name": "Renamed"},
+        headers={**admin_headers, "If-Match": '"rev-1"'},
+    )
+
+    missing = client.post(f"{COACHINGS}/{org_id}/{action}", headers=admin_headers)
+    stale = client.post(
+        f"{COACHINGS}/{org_id}/{action}", headers={**admin_headers, "If-Match": '"rev-1"'}
+    )
+
+    assert (missing.status_code, stale.status_code) == (428, 412)
+    assert client.get(f"{COACHINGS}/{org_id}").json()["status"] == "ACTIVE"
 
 
 # --- Acting in a coaching (A-06) ----------------------------------------------------------------
@@ -278,3 +311,53 @@ def test_acting_in_an_unknown_coaching_is_404(
 
     assert response.status_code == 404
     assert client.get("/api/v1/me").json()["acting_organization_id"] is None
+
+
+def test_switching_audits_the_stored_target_even_from_a_stale_request(
+    client: TestClient, admin_headers: dict[str, str], owner_db: Database, db: Database
+) -> None:
+    """Two tabs: the second request was authenticated before the first switched. The stop must be
+    recorded for the coaching the session really was in, read under a lock, not the stale one."""
+    first, second = create(client, admin_headers, "First"), create(client, admin_headers, "Second")
+    client.post(
+        "/api/v1/platform/acting-organization",
+        json={"organization_id": first},
+        headers=admin_headers,
+    )
+    me = client.get("/api/v1/me").json()
+    with db.transaction(TenantContext(user_id=UUID(me["id"]), is_platform=True)) as session:
+        session_id = session.scalar(select(UserSession.id).where(UserSession.revoked_at.is_(None)))
+    stale = Principal(
+        user_id=UUID(me["id"]),
+        display_name=me["display_name"],
+        is_platform_admin=True,
+        organization_id=None,
+        role=None,
+        session_id=session_id,
+        acting_organization_id=None,  # as seen before the first switch
+    )
+
+    with db.transaction(TenantContext(user_id=stale.user_id, is_platform=True)) as session:
+        act_in(session, stale, UUID(second), request_id=None)
+
+    assert [event[0] for event in actions(owner_db, first)][-1] == "PLATFORM_ACTING_STOPPED"
+    assert [event[0] for event in actions(owner_db, second)][-1] == "PLATFORM_ACTING_STARTED"
+
+
+def test_only_platform_authority_inside_the_coaching_can_end_its_sessions(
+    db: Database, owner_db: Database
+) -> None:
+    member = make_member(owner_db, "OWNER")
+    other = make_member(owner_db, "OWNER")
+    refused = [
+        TenantContext(organization_id=member.org_id, user_id=member.user_id),  # its own Owner
+        TenantContext(organization_id=other.org_id, user_id=other.user_id, is_platform=True),
+    ]
+    for context in refused:
+        with (
+            pytest.raises(DBAPIError, match="needs platform authority"),
+            db.transaction(context) as session,
+        ):
+            session.execute(
+                text("SELECT auth_revoke_coaching_sessions(:org)"), {"org": member.org_id}
+            )

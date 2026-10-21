@@ -182,11 +182,17 @@ def _set_status(
     request: Request,
     response: Response,
     database: Database,
+    if_match: str | None,
 ) -> OrganizationOut:
     require(principal, Action.MANAGE_COACHINGS)
     with database.transaction(_platform(principal)) as session:
         organization = service.set_status(
-            session, principal, organization_id, new_status, request_id=request.state.request_id
+            session,
+            principal,
+            organization_id,
+            new_status,
+            if_match=if_match,
+            request_id=request.state.request_id,
         )
         response.headers["ETag"] = etag(organization.revision)
         return to_out(organization)
@@ -195,11 +201,12 @@ def _set_status(
 @router.post(
     "/organizations/{organization_id}/suspend",
     summary="Suspend a coaching (A-07)",
+    responses={**_PLATFORM_ONLY, **_NOT_FOUND, **_STALE},
     description=(
-        "Its members are signed out on their next request and cannot sign in; its data is kept."
-        " Suspending a suspended coaching changes nothing."
+        "Ends its members' sign-in sessions; they cannot sign in until it is reactivated, and"
+        " its data is kept. Send the ETag in `If-Match`. Suspending a suspended coaching changes"
+        " nothing."
     ),
-    responses={**_PLATFORM_ONLY, **_NOT_FOUND},
 )
 def suspend_organization(
     organization_id: UUID,
@@ -207,14 +214,18 @@ def suspend_organization(
     request: Request,
     response: Response,
     database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
 ) -> OrganizationOut:
-    return _set_status(organization_id, "SUSPENDED", principal, request, response, database)
+    return _set_status(
+        organization_id, "SUSPENDED", principal, request, response, database, if_match
+    )
 
 
 @router.post(
     "/organizations/{organization_id}/reactivate",
     summary="Reactivate a suspended coaching",
-    responses={**_PLATFORM_ONLY, **_NOT_FOUND},
+    description="Members sign in again. Send the ETag in `If-Match`.",
+    responses={**_PLATFORM_ONLY, **_NOT_FOUND, **_STALE},
 )
 def reactivate_organization(
     organization_id: UUID,
@@ -222,8 +233,9 @@ def reactivate_organization(
     request: Request,
     response: Response,
     database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
 ) -> OrganizationOut:
-    return _set_status(organization_id, "ACTIVE", principal, request, response, database)
+    return _set_status(organization_id, "ACTIVE", principal, request, response, database, if_match)
 
 
 @router.post(

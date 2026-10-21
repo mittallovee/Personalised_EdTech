@@ -159,7 +159,7 @@ export interface paths {
         put?: never;
         /**
          * Suspend a coaching (A-07)
-         * @description Its members are signed out on their next request and cannot sign in; its data is kept. Suspending a suspended coaching changes nothing.
+         * @description Ends its members' sign-in sessions; they cannot sign in until it is reactivated, and its data is kept. Send the ETag in `If-Match`. Suspending a suspended coaching changes nothing.
          */
         post: operations["suspend_organization_api_v1_platform_organizations__organization_id__suspend_post"];
         delete?: never;
@@ -177,7 +177,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reactivate a suspended coaching */
+        /**
+         * Reactivate a suspended coaching
+         * @description Members sign in again. Send the ETag in `If-Match`.
+         */
         post: operations["reactivate_organization_api_v1_platform_organizations__organization_id__reactivate_post"];
         delete?: never;
         options?: never;
@@ -1083,7 +1086,10 @@ export interface operations {
     suspend_organization_api_v1_platform_organizations__organization_id__suspend_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
             path: {
                 organization_id: string;
             };
@@ -1129,6 +1135,24 @@ export interface operations {
             };
             /** @description No such coaching (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since your read (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The If-Match header is missing (`IF_MATCH_REQUIRED`) */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1150,7 +1174,10 @@ export interface operations {
     reactivate_organization_api_v1_platform_organizations__organization_id__reactivate_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
             path: {
                 organization_id: string;
             };
@@ -1196,6 +1223,24 @@ export interface operations {
             };
             /** @description No such coaching (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since your read (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The If-Match header is missing (`IF_MATCH_REQUIRED`) */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -25,6 +25,7 @@ __all__ = [
     "display_names",
     "issue_account_link",
     "reserve_email",
+    "revoke_coaching_sessions",
     "set_acting_organization",
     "user_status",
 ]
@@ -137,13 +138,32 @@ def user_status(session: Session, user_id: UUID) -> str | None:
 
 def set_acting_organization(
     session: Session, session_id: UUID, organization_id: UUID | None
-) -> None:
+) -> UUID | None:
     """Record which coaching a platform admin's sign-in session acts in (None: none). A-06.
 
+    Returns the coaching it acted in before, read from the session row under a lock, so two
+    requests changing it at once (e.g. two tabs) take turns and each sees the other's result.
     Only the session's own user can change it (row-level security on sessions).
     """
+    previous = session.scalar(
+        select(UserSession.acting_organization_id)
+        .where(UserSession.id == session_id)
+        .with_for_update()
+    )
     session.execute(
         update(UserSession)
         .where(UserSession.id == session_id)
         .values(acting_organization_id=organization_id)
     )
+    return previous
+
+
+def revoke_coaching_sessions(session: Session, organization_id: UUID) -> int:
+    """End the sign-in sessions of a coaching's members (not the caller's). Returns how many.
+
+    Needs platform authority inside that coaching (see migration 0006).
+    """
+    revoked: int = session.scalar(
+        text("SELECT auth_revoke_coaching_sessions(:org)"), {"org": organization_id}
+    )
+    return revoked
