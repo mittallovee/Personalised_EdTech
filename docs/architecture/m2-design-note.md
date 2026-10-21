@@ -74,8 +74,10 @@ Rules that hold everywhere:
 - An invited person who has not activated has no way to sign in and sees no data.
 - **One email, one person, everywhere (B-07).** Each email address is reserved once, platform-wide, in
   `account_emails (email PRIMARY KEY, user_id UNIQUE)`.
-  - The reservation is made inside the invitation (or coaching-creation) transaction, by a narrow
-    function, before the user and membership rows are written.
+  - The reservation is made by a narrow function (`auth_reserve_email`) in the same transaction
+    that writes the invited user and their membership, so all of them exist or none do. It only
+    accepts a never-activated account that is an active member of the caller's own coaching, so
+    no coaching can attach an email to another coaching's account.
   - The email is normalised first (trimmed, lower-case). A second invitation for the same email, in any
     coaching and even at the same moment, hits the primary key and gets `409 EMAIL_TAKEN`; its
     transaction leaves nothing behind.
@@ -139,7 +141,7 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 | Migration | Change |
 |---|---|
 | 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant_name)` |
-| 0005 | `idempotency_keys (organization_id, key, request_hash, resource_id, created_at)`, kept 24 h (moved here from 0004 in PR 2: first used by coaching creation); `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, email, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
+| 0005 | `idempotency_keys (actor_user_id, operation, key, request_hash, resource_id, created_at)`: a key belongs to the person who sent it, honoured for 24 h (moved here from 0004 in PR 2: first used by coaching creation); `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
 | 0006 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
@@ -223,7 +225,8 @@ available, so the screens only show or hide buttons.
 |---|---|
 | 1 | This design note + ADR-0015 (docs only) |
 | 2 | Permissions core, Principal grants, `GET /audit-events` (recording exists since M1), `/me` additions; migration 0004 |
-| 3 | Platform: create coaching + Owner, list, rename, suspend/reactivate, acting-organization; migration 0005 (links) |
+| 3 | Platform: create coaching + Owner (with `Idempotency-Key`), list, get; migration 0005 (emails, links, idempotency keys) |
+| 3b | Platform: rename/time zone (`If-Match`), suspend/reactivate, acting-organization (split from 3 to keep PRs small) |
 | 4 | Link redemption (activation + reset) API and `/activate` page |
 | 5 | Members: list, invite, new links, grants; web Users & grants |
 | 6 | Change role, remove (T14), transfer ownership (T15); web |

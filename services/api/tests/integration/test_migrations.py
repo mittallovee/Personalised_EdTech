@@ -6,8 +6,9 @@ from collections.abc import Iterator
 import pytest
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
+from qbank.core.ids import new_id
 from qbank.main import create_app
 from tests.conftest import make_settings
 from tests.integration.conftest import (
@@ -52,6 +53,9 @@ def test_upgrade_downgrade_upgrade(empty_database: tuple[str, str]) -> None:
         "jobs",
         "public_codes",
         "membership_grants",
+        "account_emails",
+        "account_links",
+        "idempotency_keys",
     } <= table_names(owner_url)
 
     command.downgrade(config, "base")
@@ -79,3 +83,38 @@ def test_not_ready_when_migrations_are_pending(empty_database: tuple[str, str]) 
         response = client.get("/health/ready")
 
     assert response.status_code == 503
+
+
+def test_existing_password_logins_get_their_email_reserved(
+    empty_database: tuple[str, str],
+) -> None:
+    """Migration 0005 fills account_emails from the logins that already exist (B-07)."""
+    owner_url, _ = empty_database
+    config = alembic_config(owner_url)
+    command.upgrade(config, "0004")
+    user_id = new_id()
+    engine = create_engine(owner_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SELECT set_config('app.is_platform', 'true', true)"))
+            conn.execute(
+                text("INSERT INTO users (id, display_name) VALUES (:id, 'Existing')"),
+                {"id": user_id},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO password_credentials (user_id, email, password_hash)"
+                    " VALUES (:id, 'existing@example.com', 'not-a-real-hash')"
+                ),
+                {"id": user_id},
+            )
+
+        command.upgrade(config, "head")
+
+        with engine.connect() as conn:
+            reserved = conn.execute(
+                text("SELECT user_id FROM account_emails WHERE email = 'existing@example.com'")
+            ).scalar()
+    finally:
+        engine.dispose()
+    assert reserved == user_id
