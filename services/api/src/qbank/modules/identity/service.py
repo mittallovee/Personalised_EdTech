@@ -277,3 +277,42 @@ def create_platform_admin(owner_database: Database, email: str, name: str, passw
             after={"email": normalized, "display_name": name},
         )
     return user.id
+
+
+LINK_INVALID = "This link is not valid any more. Ask your coaching admin for a new one."
+
+
+def redeem_link(
+    database: Database, settings: Settings, token: str, password: str, request_id: str | None
+) -> LoginResult:
+    """Activate an account or reset its password with a one-time link, then sign the person in.
+
+    Every failure (unknown, used, revoked or expired link; removed member; suspended coaching)
+    raises the same ``401 LINK_INVALID``. A reset also ends all of the person's other sessions.
+    """
+    password_hash = hash_password(password)
+    with database.transaction(NO_CONTEXT) as session:
+        redeemed = session.execute(
+            text("SELECT * FROM auth_redeem_link(:token_hash, :password_hash)"),
+            {"token_hash": hash_token(token), "password_hash": password_hash},
+        ).first()
+        result, purpose = None, None
+        if redeemed is not None:
+            purpose = redeemed.purpose
+            result = _start_session(session, settings, redeemed.user_id, request_id)
+            record_event(
+                session,
+                action="ACCOUNT_ACTIVATED"
+                if redeemed.purpose == "ACTIVATION"
+                else "PASSWORD_RESET",
+                entity_type="user",
+                entity_id=redeemed.user_id,
+                organization_id=redeemed.organization_id,
+                actor_user_id=redeemed.user_id,
+                request_id=request_id,
+            )
+    if result is None:
+        log.info("link_redeem_failed")
+        raise Unauthenticated(LINK_INVALID, code="LINK_INVALID")
+    log.info("link_redeemed", user_id=str(result.principal.user_id), purpose=purpose)
+    return result
