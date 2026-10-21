@@ -132,7 +132,7 @@ Rules that hold everywhere:
 - The feature is off until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set in `.env`. Both stay out of
   git, and the button is hidden while they are unset.
 
-## 6. Database (migrations 0004–0009)
+## 6. Database (migrations 0004–0010)
 
 All new coaching-owned tables have `organization_id`, `FORCE ROW LEVEL SECURITY` with the tenant policy, and
 composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role still never touches
@@ -145,7 +145,8 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 | 0006 | `auth_revoke_coaching_sessions(org)`: suspending a coaching ends its members' sessions (added in PR 3b after review) |
 | 0007 | `auth_redeem_link(token_hash, password_hash)`: the whole redemption in one step, plus a policy that finds a link only by its token hash (PR 4) |
 | 0008 | `auth_member_emails(user_ids)`: the sign-in emails of members of the current coaching only, for the member list (PR 5a) |
-| 0009 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
+| 0009 | `auth_revoke_member_sessions(user_id)` and `auth_release_email(user_id)`: ending a removed member's sessions, and freeing the email of one who never activated (PR 6a) |
+| 0010 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
 action (e.g. `MEMBER_ROLE_CHANGED`, same style as M1's `USER_SIGNED_OUT`), target, before and after. Tokens, hashes and passwords are never
@@ -234,9 +235,11 @@ available, so the screens only show or hide buttons.
 | 5a | Members API: list, get, invite (`Idempotency-Key`), new activation/reset links; migration 0008 |
 | 5b | Members API: set faculty grants (`If-Match`) |
 | 5c | Web: Users & grants screen, with a browser test (split from 5 to keep PRs small) |
-| 6 | Change role, remove (T14), transfer ownership (T15); web |
+| 6a | Members API: change role, remove (T14, T17); migration 0009 |
+| 6b | Transfer ownership (T15) |
+| 6c | Web: role, remove and transfer on the Users & grants screen, with browser tests |
 | 7 | Web: platform console, acting banner, audit log page |
-| 8 | Google login + linking (migration 0009) + `docs/operations/google-login.md` setup guide |
+| 8 | Google login + linking (migration 0010) + `docs/operations/google-login.md` setup guide |
 | 9 | M2 demo notes and exit checks |
 
 ## 12. Decisions for the owner

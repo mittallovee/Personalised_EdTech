@@ -94,7 +94,8 @@ def test_admin_sees_each_member_with_email_role_grants_and_allowed_actions(
     assert faculty["role"] == "FACULTY"
     assert faculty["grants"] == ["QC"]
     assert faculty["account_status"] == "ACTIVE"
-    assert faculty["actions"] == ["NEW_RESET_LINK", "SET_GRANTS"]  # admins manage faculty...
+    # Admins manage faculty (but only the Owner changes roles)...
+    assert faculty["actions"] == ["NEW_RESET_LINK", "SET_GRANTS", "REMOVE"]
     assert by_email[team["admin"].email]["actions"] == []  # ...but not admins (themselves too)
     assert by_email[team["owner"].email]["actions"] == []
 
@@ -162,7 +163,7 @@ def test_one_member_carries_its_revision_as_etag(
 
     assert response.status_code == 200
     assert response.headers["ETag"] == '"rev-1"'
-    assert response.json()["actions"] == ["NEW_RESET_LINK", "SET_GRANTS"]
+    assert response.json()["actions"] == ["NEW_RESET_LINK", "SET_GRANTS", "CHANGE_ROLE", "REMOVE"]
 
 
 def test_platform_admin_sees_members_only_while_acting_in_the_coaching(
@@ -198,7 +199,7 @@ def test_admin_invites_faculty_who_activates_with_the_link(
     member = created["member"]
     assert member["email"] == body["email"].strip().lower()
     assert (member["role"], member["account_status"]) == ("FACULTY", "INVITED")
-    assert member["actions"] == ["NEW_ACTIVATION_LINK", "SET_GRANTS"]
+    assert member["actions"] == ["NEW_ACTIVATION_LINK", "SET_GRANTS", "REMOVE"]
     assert response.headers["Location"] == f"{MEMBERS}/{member['membership_id']}"
     assert redeem(settings, created["activation"]["token"]) == 200
     activated = client.get(f"{MEMBERS}/{member['membership_id']}").json()
@@ -442,7 +443,8 @@ def test_a_disabled_account_gets_no_link(
 
     assert (reset.status_code, reset.json()["error"]["code"]) == (409, "ACCOUNT_DISABLED")
     assert (activation.status_code, activation.json()["error"]["code"]) == (409, "ACCOUNT_DISABLED")
-    assert client.get(f"{MEMBERS}/{target}").json()["actions"] == ["SET_GRANTS"]  # no links
+    actions = client.get(f"{MEMBERS}/{target}").json()["actions"]
+    assert actions == ["SET_GRANTS", "CHANGE_ROLE", "REMOVE"]  # but no links
 
 
 # --- Grants (M2 PR 5b) ---------------------------------------------------------------------------

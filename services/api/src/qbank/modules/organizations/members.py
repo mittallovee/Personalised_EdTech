@@ -35,14 +35,17 @@ from qbank.modules.identity.public import (
     issue_account_link,
     member_accounts,
     reserve_email,
+    revoke_member_access,
     user_status,
 )
 from qbank.modules.organizations.models import Membership, MembershipGrant
-from qbank.modules.organizations.schemas import InviteMember, MemberOut
+from qbank.modules.organizations.schemas import ChangeRole, InviteMember, MemberOut, RemoveMember
 
 NEW_ACTIVATION_LINK = "NEW_ACTIVATION_LINK"
 NEW_RESET_LINK = "NEW_RESET_LINK"
 SET_GRANTS = "SET_GRANTS"
+CHANGE_ROLE = "CHANGE_ROLE"
+REMOVE = "REMOVE"
 # The link each account status can use; a disabled account gets none (redeeming would fail).
 _LINK_FOR_STATUS = {INVITED: NEW_ACTIVATION_LINK, "ACTIVE": NEW_RESET_LINK}
 
@@ -78,6 +81,11 @@ def describe(session: Session, principal: Principal, rows: Sequence[Membership])
         faculty = row.role == "FACULTY" and row.status == "ACTIVE"
         if faculty and is_allowed(principal, Action.MANAGE_FACULTY):
             actions.append(SET_GRANTS)
+        if row.status == "ACTIVE" and row.role != "OWNER":  # the Owner changes only by transfer
+            if is_allowed(principal, Action.MANAGE_ADMINS):
+                actions.append(CHANGE_ROLE)
+            if may_manage_member(principal, row.role):
+                actions.append(REMOVE)
         members.append(
             MemberOut(
                 membership_id=row.id,
@@ -329,5 +337,120 @@ def set_grants(
         request_id=request_id,
         before={"grants": sorted(current)},
         after={"grants": sorted(grants)},
+    )
+    return member
+
+
+def _guard_change(
+    session: Session,
+    membership_id: UUID,
+    expected_role: str,
+    if_match: str | None,
+) -> Membership:
+    """The member, locked, once the caller's view of them is known to be current.
+
+    Checks in this order: a current revision (If-Match), still a member, the role the screen
+    showed. Changes to one member run one after another because the row is locked.
+    """
+    member = get_member(session, membership_id, lock=True)
+    require_if_match(if_match, member.revision)
+    if member.status != "ACTIVE":
+        raise Conflict("This person is no longer a member.", code="MEMBER_REMOVED")
+    if member.role != expected_role:
+        raise Conflict(
+            "Their role changed in the meantime. Reload and check before you change it.",
+            code="ROLE_CHANGED",
+            details={"current_role": member.role},
+        )
+    return member
+
+
+def _refuse_owner(member: Membership) -> None:
+    if member.role == "OWNER":
+        raise Conflict(
+            "The Owner can't be removed or demoted. Transfer ownership to an admin first.",
+            code="LAST_OWNER",
+        )
+
+
+def change_role(
+    session: Session,
+    principal: Principal,
+    membership_id: UUID,
+    body: ChangeRole,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+) -> Membership:
+    """Promote faculty to admin or demote an admin to faculty (B-08). Owner only.
+
+    A demoted admin starts with no grants, and a promoted member's grants are cleared too:
+    admins hold every grant implicitly, so keeping old rows would resurface on a later demotion.
+    """
+    require(principal, Action.MANAGE_ADMINS)
+    member = _guard_change(session, membership_id, body.expected_role, if_match)
+    _refuse_owner(member)
+    if body.new_role == member.role:
+        return member
+    grants = sorted(
+        session.scalars(
+            select(MembershipGrant.grant_name).where(MembershipGrant.membership_id == member.id)
+        )
+    )
+    session.execute(delete(MembershipGrant).where(MembershipGrant.membership_id == member.id))
+    before = {"role": member.role, "grants": grants}
+    member.role = body.new_role
+    member.revision += 1
+    member.updated_at = datetime.now(UTC)
+    session.flush()
+    record_event(
+        session,
+        action="MEMBER_ROLE_CHANGED",
+        entity_type="membership",
+        entity_id=member.id,
+        organization_id=member.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=_is_platform(principal),
+        request_id=request_id,
+        before=before,
+        after={"role": member.role, "grants": []},
+    )
+    return member
+
+
+def remove_member(
+    session: Session,
+    principal: Principal,
+    membership_id: UUID,
+    body: RemoveMember,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+) -> Membership:
+    """Remove someone from the coaching (B-08, B-09, B-10). Their access ends at once.
+
+    Their content and history stay with the coaching. The Owner can't be removed.
+    """
+    require(principal, Action.MANAGE_FACULTY)
+    member = _guard_change(session, membership_id, body.expected_role, if_match)
+    _refuse_owner(member)  # before the role rule: nobody can remove the Owner, so say why
+    require_may_manage_member(principal, member.role)
+    before = {"role": member.role, "status": member.status}
+    member.status = "REMOVED"
+    member.revision += 1
+    member.updated_at = datetime.now(UTC)
+    session.flush()
+    revoke_member_access(session, member.user_id)
+    record_event(
+        session,
+        action="MEMBER_REMOVED",
+        entity_type="membership",
+        entity_id=member.id,
+        organization_id=member.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=_is_platform(principal),
+        request_id=request_id,
+        before=before,
+        after={"role": member.role, "status": member.status},
     )
     return member
