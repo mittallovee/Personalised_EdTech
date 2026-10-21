@@ -149,3 +149,10 @@ def test_every_operation_documents_the_internal_error_response() -> None:
         for op in item.values():
             assert error_schema(op, "500") == ERROR_REF
             assert "INTERNAL_ERROR" in op["responses"]["500"]["description"]
+
+
+def test_set_grants_contract_does_not_cap_the_raw_list() -> None:
+    """Repeats count once, so a cap on the raw list would promise less than the API accepts."""
+    from qbank.modules.organizations.schemas import SetGrants
+
+    assert "maxItems" not in SetGrants.model_json_schema()["properties"]["grants"]

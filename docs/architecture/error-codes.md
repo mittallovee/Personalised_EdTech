@@ -22,6 +22,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `ALREADY_ACTIVATED` | 409 | An activation link was asked for an account that is already active: make a reset link instead | M2 |
 | `NOT_ACTIVATED` | 409 | A reset link was asked for an account that was never activated: make a new activation link instead | M2 |
 | `ACCOUNT_DISABLED` | 409 | The account is disabled, so no activation or reset link can be made for it | M2 |
+| `NOT_FACULTY` | 409 | Grants were set for an Owner or admin, who already hold every grant | M2 |
 | `MEMBER_REMOVED` | 409 | The person is no longer a member of the coaching | M2 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |

@@ -3,9 +3,18 @@ from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    EmailStr,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from qbank.core.pagination import PageInfo
+from qbank.core.permissions import Grant
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
@@ -104,8 +113,8 @@ class MemberOut(BaseModel):
     joined_at: datetime
     actions: list[str] = Field(
         description=(
-            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK. The web app"
-            " shows only these buttons; the API checks again on every request."
+            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS."
+            " The web app shows only these buttons; the API checks again on every request."
         )
     )
 
@@ -141,3 +150,21 @@ class AccountLinkOut(BaseModel):
         )
     )
     expires_at: datetime
+
+
+def _without_repeats(value: object) -> object:
+    """Repeats count once, so a client may send a name more than once."""
+    if isinstance(value, list):
+        try:
+            return list(dict.fromkeys(value))
+        except TypeError:  # an unhashable entry: leave it for the type check to refuse
+            return value
+    return value
+
+
+class SetGrants(BaseModel):
+    # No length limit: once repeats are dropped, at most len(Grant) valid names remain.
+    grants: Annotated[list[Grant], BeforeValidator(_without_repeats)] = Field(
+        description="The complete new set (an empty list removes all); repeats count once.",
+        examples=[["QC", "APPROVE"]],
+    )

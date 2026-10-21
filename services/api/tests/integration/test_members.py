@@ -94,7 +94,7 @@ def test_admin_sees_each_member_with_email_role_grants_and_allowed_actions(
     assert faculty["role"] == "FACULTY"
     assert faculty["grants"] == ["QC"]
     assert faculty["account_status"] == "ACTIVE"
-    assert faculty["actions"] == ["NEW_RESET_LINK"]  # admins manage faculty...
+    assert faculty["actions"] == ["NEW_RESET_LINK", "SET_GRANTS"]  # admins manage faculty...
     assert by_email[team["admin"].email]["actions"] == []  # ...but not admins (themselves too)
     assert by_email[team["owner"].email]["actions"] == []
 
@@ -162,7 +162,7 @@ def test_one_member_carries_its_revision_as_etag(
 
     assert response.status_code == 200
     assert response.headers["ETag"] == '"rev-1"'
-    assert response.json()["actions"] == ["NEW_RESET_LINK"]
+    assert response.json()["actions"] == ["NEW_RESET_LINK", "SET_GRANTS"]
 
 
 def test_platform_admin_sees_members_only_while_acting_in_the_coaching(
@@ -198,7 +198,7 @@ def test_admin_invites_faculty_who_activates_with_the_link(
     member = created["member"]
     assert member["email"] == body["email"].strip().lower()
     assert (member["role"], member["account_status"]) == ("FACULTY", "INVITED")
-    assert member["actions"] == ["NEW_ACTIVATION_LINK"]
+    assert member["actions"] == ["NEW_ACTIVATION_LINK", "SET_GRANTS"]
     assert response.headers["Location"] == f"{MEMBERS}/{member['membership_id']}"
     assert redeem(settings, created["activation"]["token"]) == 200
     activated = client.get(f"{MEMBERS}/{member['membership_id']}").json()
@@ -442,4 +442,132 @@ def test_a_disabled_account_gets_no_link(
 
     assert (reset.status_code, reset.json()["error"]["code"]) == (409, "ACCOUNT_DISABLED")
     assert (activation.status_code, activation.json()["error"]["code"]) == (409, "ACCOUNT_DISABLED")
-    assert client.get(f"{MEMBERS}/{target}").json()["actions"] == []
+    assert client.get(f"{MEMBERS}/{target}").json()["actions"] == ["SET_GRANTS"]  # no links
+
+
+# --- Grants (M2 PR 5b) ---------------------------------------------------------------------------
+
+
+def put_grants(
+    client: TestClient, headers: dict[str, str], member: Member, grants: list[str], etag: str
+) -> Any:
+    return client.put(
+        f"{MEMBERS}/{member.membership_id}/grants",
+        json={"grants": grants},
+        headers={**headers, "If-Match": etag},
+    )
+
+
+def test_admin_sets_faculty_grants_and_they_apply_at_once(
+    client: TestClient, settings: Settings, owner_db: Database, team: dict[str, Member]
+) -> None:
+    faculty = team["faculty"]
+    with TestClient(create_app(settings)) as faculty_browser:
+        sign_in(faculty_browser, faculty.email)
+        headers = sign_in(client, team["admin"].email)
+
+        response = put_grants(
+            client, headers, faculty, ["PUBLISH", "APPROVE", "APPROVE"], '"rev-1"'
+        )
+
+        assert response.status_code == 200, response.text
+        assert response.headers["ETag"] == '"rev-2"'
+        assert response.json()["grants"] == ["APPROVE", "PUBLISH"]  # QC removed; repeats once
+        # Permissions are reloaded on every request: the faculty member's open session sees it.
+        me = faculty_browser.get("/api/v1/me").json()
+        assert sorted(me["organization"]["grants"]) == ["APPROVE", "PUBLISH"]
+    [event] = events(owner_db, faculty.org_id, "MEMBER_GRANTS_CHANGED")
+    assert event.before == {"grants": ["QC"]}
+    assert event.after == {"grants": ["APPROVE", "PUBLISH"]}
+    assert event.actor_user_id == team["admin"].user_id
+
+
+def test_grant_changes_need_the_current_etag(client: TestClient, team: dict[str, Member]) -> None:
+    headers = sign_in(client, team["owner"].email)
+    target = f"{MEMBERS}/{team['faculty'].membership_id}/grants"
+
+    missing = client.put(target, json={"grants": []}, headers=headers)
+    assert (missing.status_code, missing.json()["error"]["code"]) == (428, "IF_MATCH_REQUIRED")
+    assert (
+        put_grants(client, headers, team["faculty"], ["QC", "APPROVE"], '"rev-1"').status_code
+        == 200
+    )
+    stale = put_grants(client, headers, team["faculty"], [], '"rev-1"')  # a screen read before that
+    assert (stale.status_code, stale.json()["error"]["code"]) == (412, "REVISION_STALE")
+    assert stale.json()["error"]["details"] == {"current_etag": '"rev-2"'}
+
+
+def test_sending_the_same_grants_changes_nothing(
+    client: TestClient, owner_db: Database, team: dict[str, Member]
+) -> None:
+    headers = sign_in(client, team["admin"].email)
+
+    response = put_grants(client, headers, team["faculty"], ["QC"], '"rev-1"')
+
+    assert response.status_code == 200
+    assert response.headers["ETag"] == '"rev-1"'
+    assert events(owner_db, team["faculty"].org_id, "MEMBER_GRANTS_CHANGED") == []
+
+
+@pytest.mark.parametrize("target", ["admin", "owner"])
+def test_only_faculty_have_grants(client: TestClient, team: dict[str, Member], target: str) -> None:
+    headers = sign_in(client, team["owner"].email)
+
+    response = put_grants(client, headers, team[target], ["QC"], '"rev-1"')
+
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "NOT_FACULTY")
+
+
+def test_faculty_cannot_set_grants_not_even_their_own(
+    client: TestClient, team: dict[str, Member]
+) -> None:
+    headers = sign_in(client, team["faculty"].email)
+
+    response = put_grants(client, headers, team["faculty"], ["QC", "PUBLISH"], '"rev-1"')
+
+    assert response.status_code == 403
+
+
+def test_grants_of_another_coachings_faculty_are_out_of_reach(
+    client: TestClient, owner_db: Database, team: dict[str, Member]
+) -> None:
+    stranger = make_member(owner_db, "FACULTY")
+    headers = sign_in(client, team["owner"].email)
+
+    response = put_grants(client, headers, stranger, ["PUBLISH"], '"rev-1"')
+
+    assert response.status_code == 404
+
+
+def test_unknown_grants_are_refused(client: TestClient, team: dict[str, Member]) -> None:
+    headers = sign_in(client, team["owner"].email)
+
+    response = put_grants(client, headers, team["faculty"], ["SUPERUSER"], '"rev-1"')
+
+    assert (response.status_code, response.json()["error"]["code"]) == (400, "MALFORMED_REQUEST")
+
+
+def test_no_grants_for_someone_who_is_no_longer_a_member(
+    client: TestClient, owner_db: Database, team: dict[str, Member]
+) -> None:
+    with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
+        session.execute(
+            text("UPDATE memberships SET status = 'REMOVED' WHERE id = :id"),
+            {"id": team["faculty"].membership_id},
+        )
+    headers = sign_in(client, team["owner"].email)
+
+    response = put_grants(client, headers, team["faculty"], ["QC"], '"rev-1"')
+
+    assert (response.status_code, response.json()["error"]["code"]) == (409, "MEMBER_REMOVED")
+
+
+def test_repeated_grants_count_once_however_many_are_sent(
+    client: TestClient, team: dict[str, Member]
+) -> None:
+    headers = sign_in(client, team["owner"].email)
+
+    response = put_grants(client, headers, team["faculty"], ["QC"] * 8 + ["PUBLISH"], '"rev-1"')
+
+    assert response.status_code == 200, response.text
+    assert response.json()["grants"] == ["PUBLISH", "QC"]

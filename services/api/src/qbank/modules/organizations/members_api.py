@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
-from qbank.core.etag import etag
+from qbank.core.etag import IfMatchHeader, etag
 from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo, decode_cursor, encode_cursor
 from qbank.core.permissions import Action, require
@@ -18,6 +18,7 @@ from qbank.modules.organizations.schemas import (
     InviteMember,
     MemberOut,
     MemberPage,
+    SetGrants,
 )
 
 router = APIRouter(prefix="/api/v1/members", tags=["members"])
@@ -175,3 +176,44 @@ def new_reset_link(
     database: Annotated[Database, Depends(get_database)],
 ) -> AccountLinkOut:
     return _new_link(membership_id, LinkPurpose.RESET, principal, request, response, database)
+
+
+@router.put(
+    "/{membership_id}/grants",
+    summary="Set a faculty member's grants (B-09)",
+    description=(
+        "Replaces their grants with the list sent (QC, APPROVE, PUBLISH, EDIT_OTHERS,"
+        " MANAGE_AI_PROMPTS). Owner and admins may do this. Send the ETag from your last read"
+        " in `If-Match`. The change applies from the member's next request."
+    ),
+    responses={
+        **_DENIED,
+        **_NOT_FOUND,
+        409: {
+            "description": "The member is not faculty (`NOT_FACULTY`), or no longer a member"
+            " (`MEMBER_REMOVED`)"
+        },
+        412: {"description": "Changed by someone else since your read (`REVISION_STALE`)"},
+        428: {"description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)"},
+    },
+)
+def set_grants(
+    membership_id: UUID,
+    body: SetGrants,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> MemberOut:
+    with database.transaction(principal.tenant_context) as session:
+        member = members.set_grants(
+            session,
+            principal,
+            membership_id,
+            set(body.grants),
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        response.headers["ETag"] = etag(member.revision)
+        return members.describe(session, principal, [member])[0]

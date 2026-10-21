@@ -1854,6 +1854,155 @@
           }
         }
       }
+    },
+    "/api/v1/members/{membership_id}/grants": {
+      "put": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Set a faculty member's grants (B-09)",
+        "description": "Replaces their grants with the list sent (QC, APPROVE, PUBLISH, EDIT_OTHERS, MANAGE_AI_PROMPTS). Owner and admins may do this. Send the ETag from your last read in `If-Match`. The change applies from the member's next request.",
+        "operationId": "set_grants_api_v1_members__membership_id__grants_put",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "membership_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Membership Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetGrants"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member in your coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The member is not faculty (`NOT_FACULTY`), or no longer a member (`MEMBER_REMOVED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed by someone else since your read (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2191,6 +2340,18 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "Grant": {
+        "type": "string",
+        "enum": [
+          "QC",
+          "APPROVE",
+          "PUBLISH",
+          "EDIT_OTHERS",
+          "MANAGE_AI_PROMPTS"
+        ],
+        "title": "Grant",
+        "description": "Extra rights for faculty. Owner and admins hold all of them implicitly."
+      },
       "InviteMember": {
         "properties": {
           "email": {
@@ -2455,7 +2616,7 @@
             },
             "type": "array",
             "title": "Actions",
-            "description": "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK. The web app shows only these buttons; the API checks again on every request."
+            "description": "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS. The web app shows only these buttons; the API checks again on every request."
           }
         },
         "type": "object",
@@ -2694,6 +2855,29 @@
           "password"
         ],
         "title": "RedeemLinkRequest"
+      },
+      "SetGrants": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/Grant"
+            },
+            "type": "array",
+            "title": "Grants",
+            "description": "The complete new set (an empty list removes all); repeats count once.",
+            "examples": [
+              [
+                "QC",
+                "APPROVE"
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "grants"
+        ],
+        "title": "SetGrants"
       },
       "UpdateOrganization": {
         "properties": {
