@@ -75,7 +75,9 @@ Rules that hold everywhere:
 - **One email, one person, everywhere (B-07).** Each email address is reserved once, platform-wide, in
   `account_emails (email PRIMARY KEY, user_id UNIQUE)`.
   - The reservation is made by a narrow function (`auth_reserve_email`) in the same transaction
-    that writes the invited user and their membership, so all of them exist or none do.
+    that writes the invited user and their membership, so all of them exist or none do. It only
+    accepts a never-activated account that is an active member of the caller's own coaching, so
+    no coaching can attach an email to another coaching's account.
   - The email is normalised first (trimmed, lower-case). A second invitation for the same email, in any
     coaching and even at the same moment, hits the primary key and gets `409 EMAIL_TAKEN`; its
     transaction leaves nothing behind.

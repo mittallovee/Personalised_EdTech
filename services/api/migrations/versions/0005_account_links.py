@@ -82,7 +82,9 @@ def upgrade() -> None:
     # Reserve the email of an account being invited. Returns false if the email is already taken
     # (by anyone, in any coaching). The row is written in the caller's transaction, so it vanishes
     # if the invitation fails; a concurrent second reservation waits for the first and then fails.
-    # Only for brand-new invited accounts, and only by a caller acting in a coaching or as platform.
+    # Only for a brand-new invited account that is an active member of the caller's current
+    # coaching (the invitation writes the membership first), so no caller can attach an email to
+    # another coaching's account, or to an invitee that was removed.
     op.execute("""
         CREATE FUNCTION auth_reserve_email(p_email text, p_user_id uuid)
         RETURNS boolean
@@ -90,12 +92,13 @@ def upgrade() -> None:
         DECLARE
             reserved integer;
         BEGIN
-            IF app_current_org() IS NULL AND NOT app_is_platform() THEN
-                RAISE EXCEPTION 'auth_reserve_email needs a coaching or platform context';
-            END IF;
-            IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_user_id AND status = 'INVITED')
-               OR EXISTS (SELECT 1 FROM account_emails WHERE user_id = p_user_id) THEN
-                RAISE EXCEPTION 'auth_reserve_email is only for a new invited account';
+            IF NOT EXISTS (
+                SELECT 1 FROM users u JOIN memberships m ON m.user_id = u.id
+                WHERE u.id = p_user_id AND u.status = 'INVITED'
+                  AND m.organization_id = app_current_org() AND m.status = 'ACTIVE'
+            ) OR EXISTS (SELECT 1 FROM account_emails WHERE user_id = p_user_id) THEN
+                RAISE EXCEPTION 'auth_reserve_email is only for a new invited member %',
+                    'of this coaching';
             END IF;
             INSERT INTO account_emails (email, user_id)
                 VALUES (lower(btrim(p_email)), p_user_id)

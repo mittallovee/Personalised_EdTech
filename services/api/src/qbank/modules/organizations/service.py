@@ -67,10 +67,10 @@ def create_organization(
     session.add(organization)
     session.flush()
     owner_id = create_invited_user(session, body.owner.display_name)
-    reserve_email(session, owner_id, body.owner.email)
     owner = Membership(organization_id=organization_id, user_id=owner_id, role="OWNER")
     session.add(owner)
     session.flush()
+    reserve_email(session, owner_id, body.owner.email)  # needs the membership to exist
     link = issue_account_link(
         session,
         organization_id=organization_id,

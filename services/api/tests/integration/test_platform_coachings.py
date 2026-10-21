@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -309,26 +310,66 @@ def test_runtime_role_cannot_read_token_hashes_or_emails(db: Database) -> None:
             s.execute(text(query))
 
 
-def test_email_can_only_be_reserved_for_a_new_invited_account(
+RESERVE_REFUSED = "only for a new invited member of this coaching"
+
+
+def invited_member(owner_db: Database, *, status: str = "ACTIVE") -> tuple[UUID, UUID]:
+    """An invited account with a membership (in a new coaching); returns (org_id, user_id)."""
+    member = make_member(owner_db, "FACULTY")
+    with owner_db.transaction(TenantContext(organization_id=member.org_id)) as session:
+        session.execute(
+            text("DELETE FROM account_emails WHERE user_id = :u"), {"u": member.user_id}
+        )
+        session.execute(
+            text("UPDATE users SET status = 'INVITED' WHERE id = :u"), {"u": member.user_id}
+        )
+        session.execute(
+            text("UPDATE memberships SET status = :s WHERE id = :m"),
+            {"s": status, "m": member.membership_id},
+        )
+    return member.org_id, member.user_id
+
+
+def reserve(db: Database, context: TenantContext, user_id: UUID) -> bool:
+    with db.transaction(context) as session:
+        reserved: bool = session.scalar(
+            text("SELECT auth_reserve_email(:e, :u)"),
+            {"e": f"new-{secrets.token_hex(5)}@example.com", "u": user_id},
+        )
+    return reserved
+
+
+def test_email_is_reserved_for_an_invited_member_of_the_current_coaching(
     db: Database, owner_db: Database
 ) -> None:
+    org_id, user_id = invited_member(owner_db)
+    assert reserve(db, TenantContext(organization_id=org_id), user_id) is True
+
+
+def test_email_cannot_be_reserved_for_an_active_account(db: Database, owner_db: Database) -> None:
     active = make_member(owner_db, "FACULTY")
-    with (
-        pytest.raises(DBAPIError, match="only for a new invited account"),
-        db.transaction(TenantContext(organization_id=active.org_id, user_id=active.user_id)) as s,
-    ):
-        s.execute(
-            text("SELECT auth_reserve_email('someone-else@example.com', :u)"),
-            {"u": active.user_id},
-        )
+    with pytest.raises(DBAPIError, match=RESERVE_REFUSED):
+        reserve(db, TenantContext(organization_id=active.org_id), active.user_id)
 
 
-def test_email_cannot_be_reserved_without_a_coaching_or_platform_context(db: Database) -> None:
-    with (
-        pytest.raises(DBAPIError, match="needs a coaching or platform context"),
-        db.transaction(TenantContext()) as session,
-    ):
-        session.execute(text("SELECT auth_reserve_email('x@example.com', gen_random_uuid())"))
+def test_email_cannot_be_reserved_for_another_coachings_invitee(
+    db: Database, owner_db: Database, coaching_a: Coaching
+) -> None:
+    _, foreign_user = invited_member(owner_db)
+    with pytest.raises(DBAPIError, match=RESERVE_REFUSED):
+        reserve(db, coaching_a.context, foreign_user)
+
+
+def test_email_cannot_be_reserved_for_a_removed_invitee(db: Database, owner_db: Database) -> None:
+    org_id, user_id = invited_member(owner_db, status="REMOVED")
+    with pytest.raises(DBAPIError, match=RESERVE_REFUSED):
+        reserve(db, TenantContext(organization_id=org_id), user_id)
+
+
+def test_email_cannot_be_reserved_without_a_coaching(db: Database, owner_db: Database) -> None:
+    _, user_id = invited_member(owner_db)
+    with pytest.raises(DBAPIError, match=RESERVE_REFUSED):
+        reserve(db, PLATFORM, user_id)
 
 
 def test_retry_after_ownership_moved_returns_the_original_owner(

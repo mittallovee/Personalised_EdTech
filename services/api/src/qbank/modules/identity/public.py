@@ -66,8 +66,8 @@ def create_invited_user(session: Session, display_name: str) -> UUID:
 def reserve_email(session: Session, user_id: UUID, email: str) -> None:
     """Give ``email`` to a new invited account, or fail with ``409 EMAIL_TAKEN`` (B-07).
 
-    Needs the account to be visible in the tenant context (platform, or a membership in the
-    current coaching). The reservation is part of the caller's transaction.
+    The account must already be an active member of the current coaching (write the membership
+    first). The reservation is part of the caller's transaction.
     """
     reserved = session.scalar(
         text("SELECT auth_reserve_email(:email, :user_id)"), {"email": email, "user_id": user_id}
