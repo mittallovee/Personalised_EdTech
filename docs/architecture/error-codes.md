@@ -16,6 +16,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `CSRF_TOKEN_INVALID` | 403 | A change was sent without the `X-CSRF-Token` header from sign-in | M1 |
 | `EMAIL_TAKEN` | 409 | An account with this email already exists | M1 |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The `Idempotency-Key` was already used with a different request body | M1 |
+| `REVISION_STALE` | 412 | `If-Match` names an older revision: someone else changed it since your read; `details.current_etag` has the current one | M2 |
+| `IF_MATCH_REQUIRED` | 428 | A change to an editable resource was sent without `If-Match` (the ETag from your last read) | M2 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 

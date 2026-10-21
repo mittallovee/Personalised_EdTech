@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
 from qbank.core.errors import NotFound
+from qbank.core.etag import IfMatchHeader, etag
 from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo, decode_cursor, encode_cursor
 from qbank.core.permissions import Action, require
@@ -13,12 +14,14 @@ from qbank.core.tenancy import TenantContext
 from qbank.modules.organizations import service
 from qbank.modules.organizations.models import Organization
 from qbank.modules.organizations.schemas import (
+    ActIn,
     ActivationLink,
     CreatedOrganization,
     CreateOrganization,
     InvitedOwner,
     OrganizationOut,
     OrganizationPage,
+    UpdateOrganization,
 )
 
 router = APIRouter(prefix="/api/v1/platform", tags=["platform"])
@@ -122,13 +125,158 @@ def list_organizations(
 def get_organization(
     organization_id: UUID,
     principal: CurrentPrincipal,
+    response: Response,
     database: Annotated[Database, Depends(get_database)],
 ) -> OrganizationOut:
     require(principal, Action.MANAGE_COACHINGS)
-    with database.transaction(
-        TenantContext(user_id=principal.user_id, is_platform=True)
-    ) as session:
+    with database.transaction(_platform(principal)) as session:
         organization = session.get(Organization, organization_id)
         if organization is None:
             raise NotFound("No such coaching.")
+        response.headers["ETag"] = etag(organization.revision)
         return to_out(organization)
+
+
+_NOT_FOUND: dict[int | str, dict[str, Any]] = {
+    404: {"description": "No such coaching (`NOT_FOUND`)"}
+}
+_STALE: dict[int | str, dict[str, Any]] = {
+    412: {"description": "Changed by someone else since your read (`REVISION_STALE`)"},
+    428: {"description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)"},
+}
+
+
+@router.patch(
+    "/organizations/{organization_id}",
+    summary="Rename a coaching or change its time zone",
+    description="Send the ETag from your last read in `If-Match`. Only the fields sent change.",
+    responses={**_PLATFORM_ONLY, **_NOT_FOUND, **_STALE},
+)
+def update_organization(
+    organization_id: UUID,
+    body: UpdateOrganization,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> OrganizationOut:
+    require(principal, Action.MANAGE_COACHINGS)
+    with database.transaction(_platform(principal)) as session:
+        organization = service.update_organization(
+            session,
+            principal,
+            organization_id,
+            body,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        response.headers["ETag"] = etag(organization.revision)
+        return to_out(organization)
+
+
+def _set_status(
+    organization_id: UUID,
+    new_status: str,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Database,
+    if_match: str | None,
+) -> OrganizationOut:
+    require(principal, Action.MANAGE_COACHINGS)
+    with database.transaction(_platform(principal)) as session:
+        organization = service.set_status(
+            session,
+            principal,
+            organization_id,
+            new_status,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        response.headers["ETag"] = etag(organization.revision)
+        return to_out(organization)
+
+
+@router.post(
+    "/organizations/{organization_id}/suspend",
+    summary="Suspend a coaching (A-07)",
+    responses={**_PLATFORM_ONLY, **_NOT_FOUND, **_STALE},
+    description=(
+        "Ends its members' sign-in sessions; they cannot sign in until it is reactivated, and"
+        " its data is kept. Send the ETag in `If-Match`. Suspending a suspended coaching changes"
+        " nothing."
+    ),
+)
+def suspend_organization(
+    organization_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> OrganizationOut:
+    return _set_status(
+        organization_id, "SUSPENDED", principal, request, response, database, if_match
+    )
+
+
+@router.post(
+    "/organizations/{organization_id}/reactivate",
+    summary="Reactivate a suspended coaching",
+    description="Members sign in again. Send the ETag in `If-Match`.",
+    responses={**_PLATFORM_ONLY, **_NOT_FOUND, **_STALE},
+)
+def reactivate_organization(
+    organization_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> OrganizationOut:
+    return _set_status(organization_id, "ACTIVE", principal, request, response, database, if_match)
+
+
+@router.post(
+    "/acting-organization",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Act inside a coaching (A-06)",
+    description=(
+        "Until stopped or signed out, this sign-in session works inside that coaching with full"
+        " authority. Changes are audited as made by a platform admin, and starting and stopping"
+        " appear in the coaching's audit log. `/me` shows the coaching acted in."
+    ),
+    responses={**_PLATFORM_ONLY, **_NOT_FOUND},
+)
+def start_acting(
+    body: ActIn,
+    principal: CurrentPrincipal,
+    request: Request,
+    database: Annotated[Database, Depends(get_database)],
+) -> None:
+    require(principal, Action.MANAGE_COACHINGS)
+    with database.transaction(_platform(principal)) as session:
+        service.act_in(
+            session, principal, body.organization_id, request_id=request.state.request_id
+        )
+
+
+@router.delete(
+    "/acting-organization",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Stop acting inside a coaching",
+    responses=_PLATFORM_ONLY,
+)
+def stop_acting(
+    principal: CurrentPrincipal,
+    request: Request,
+    database: Annotated[Database, Depends(get_database)],
+) -> None:
+    require(principal, Action.MANAGE_COACHINGS)
+    with database.transaction(_platform(principal)) as session:
+        service.act_in(session, principal, None, request_id=request.state.request_id)
+
+
+def _platform(principal: CurrentPrincipal) -> TenantContext:
+    return TenantContext(user_id=principal.user_id, is_platform=True)

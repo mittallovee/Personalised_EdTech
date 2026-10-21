@@ -45,10 +45,16 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _load_principal(session: Session, user_id: UUID, session_id: UUID | None) -> Principal | None:
+def _load_principal(
+    session: Session,
+    user_id: UUID,
+    session_id: UUID | None,
+    acting_organization_id: UUID | None = None,
+) -> Principal | None:
     """Build the principal for an active user, or None if they may not use the app.
 
-    Runs inside a transaction whose context already identifies ``user_id``.
+    Runs inside a transaction whose context already identifies ``user_id``. The session's
+    "acting in coaching X" choice (A-06) counts only while the user is still a platform admin.
     """
     user = session.get(User, user_id)
     if user is None or user.status != "ACTIVE":
@@ -72,6 +78,10 @@ def _load_principal(session: Session, user_id: UUID, session_id: UUID | None) ->
             membership = organization = None  # suspended coaching (A-07): no access through it
     if membership is None and not is_platform_admin:
         return None
+    acting = None
+    if is_platform_admin and acting_organization_id is not None:
+        apply_tenant_context(session, TenantContext(user_id=user_id, is_platform=True))
+        acting = get_organization(session, acting_organization_id)
     return Principal(
         user_id=user.id,
         display_name=user.display_name,
@@ -81,6 +91,8 @@ def _load_principal(session: Session, user_id: UUID, session_id: UUID | None) ->
         session_id=session_id,
         organization_name=organization.display_name if organization else None,
         grants=membership_grants(session, membership.membership_id) if membership else frozenset(),
+        acting_organization_id=acting.id if acting else None,
+        acting_organization_name=acting.display_name if acting else None,
     )
 
 
@@ -189,7 +201,12 @@ def resolve_session(database: Database, settings: Settings, token: str) -> Sessi
             return None
 
         apply_tenant_context(session, TenantContext(user_id=row.user_id))
-        principal = _load_principal(session, row.user_id, session_id=row.id)
+        principal = _load_principal(
+            session,
+            row.user_id,
+            session_id=row.id,
+            acting_organization_id=row.acting_organization_id,
+        )
         if principal is None:
             return None  # user disabled or removed from their coaching since signing in
 

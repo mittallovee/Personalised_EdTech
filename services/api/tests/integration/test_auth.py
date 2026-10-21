@@ -89,6 +89,7 @@ def test_platform_admin_signs_in_and_sees_themselves(
         "is_platform_admin": True,
         "organization": None,
         "acting_organization_id": None,
+        "acting_organization_name": None,
     }
 
 
