@@ -1,0 +1,18 @@
+{
+  "name": "@qbank/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser tests: real Chromium against the running app (docker compose).",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^20",
+    "prettier": "^3.9.10",
+    "typescript": "^5"
+  }
+}
