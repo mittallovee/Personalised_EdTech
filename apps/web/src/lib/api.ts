@@ -19,3 +19,11 @@ export function errorMessage(error: ErrorResponse | undefined, status: number): 
   if (error?.error.message) return error.error.message;
   return "Something went wrong. Please try again.";
 }
+
+/**
+ * The `If-Match` value for a change based on a revision read earlier: the API's ETag for a
+ * resource is its revision as `"rev-<number>"` (style guide §6).
+ */
+export function ifMatch(revision: number): string {
+  return `"rev-${revision}"`;
+}

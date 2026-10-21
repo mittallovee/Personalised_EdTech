@@ -63,6 +63,10 @@ services:
       # Believed only from the web container (Docker's private network ranges).
       CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-}
       TRUSTED_PROXIES: '["172.16.0.0/12", "192.168.0.0/16", "10.0.0.0/8"]'
+      # Sign-in and link attempts allowed per address / per email in 5 minutes. The browser tests
+      # (apps/e2e) make all their requests from one address, so CI raises these for them.
+      LOGIN_ATTEMPTS_PER_IP: ${LOGIN_ATTEMPTS_PER_IP:-20}
+      LOGIN_ATTEMPTS_PER_EMAIL: ${LOGIN_ATTEMPTS_PER_EMAIL:-10}
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
