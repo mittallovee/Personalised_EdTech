@@ -23,17 +23,16 @@ from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.identity.models import User
 from qbank.modules.identity.public import LinkPurpose, issue_account_link
-from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.organizations.models import Membership, Organization
 from tests.integration.conftest import (
-    MEMBER_PASSWORD,
     PLATFORM,
     Coaching,
     MigratedDatabase,
     make_member,
+    new_coaching,
+    platform_admin,
+    sign_in,
 )
-
-ORIGIN = {"Origin": "http://localhost:3000"}
 
 
 @pytest.fixture
@@ -47,30 +46,6 @@ def settings(migrated_database: MigratedDatabase) -> Settings:
 def client(settings: Settings) -> Iterator[TestClient]:
     with TestClient(create_app(settings)) as test_client:
         yield test_client
-
-
-def sign_in(client: TestClient, email: str) -> dict[str, str]:
-    """Sign in; return the headers a change needs (CSRF token and our web app's Origin)."""
-    response = client.post(
-        "/api/v1/auth/login", json={"email": email, "password": MEMBER_PASSWORD}, headers=ORIGIN
-    )
-    assert response.status_code == 200, response.text
-    return {**ORIGIN, "X-CSRF-Token": response.json()["csrf_token"]}
-
-
-def platform_admin(owner_db: Database) -> str:
-    email = f"platform-{secrets.token_hex(5)}@example.com"
-    create_platform_admin(owner_db, email, "Platform Admin", MEMBER_PASSWORD)
-    return email
-
-
-def new_coaching(name: str = "Sharma Classes", email: str | None = None) -> dict[str, Any]:
-    email = email or f"owner-{secrets.token_hex(5)}@example.com"
-    return {
-        "display_name": name,
-        "timezone": "Asia/Kolkata",
-        "owner": {"email": email, "display_name": "Priya Sharma"},
-    }
 
 
 def test_platform_admin_creates_a_coaching_with_an_invited_owner(

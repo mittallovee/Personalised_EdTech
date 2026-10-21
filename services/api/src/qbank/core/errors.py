@@ -73,6 +73,20 @@ class Conflict(AppError):
     code = "CONFLICT"
 
 
+class PreconditionFailed(AppError):
+    """The client's ``If-Match`` names an older revision: someone else changed it meanwhile."""
+
+    status_code = 412
+    code = "REVISION_STALE"
+
+
+class PreconditionRequired(AppError):
+    """A change to an editable resource must say which revision it is based on (``If-Match``)."""
+
+    status_code = 428
+    code = "IF_MATCH_REQUIRED"
+
+
 class ValidationFailed(AppError):
     status_code = 422
     code = "VALIDATION_FAILED"

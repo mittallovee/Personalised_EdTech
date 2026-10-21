@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from qbank.core.errors import Conflict
 from qbank.core.ids import new_id
 from qbank.core.security import hash_token, new_token
-from qbank.modules.identity.models import INVITED, AccountLink, User
+from qbank.modules.identity.models import INVITED, AccountLink, User, UserSession
 from qbank.modules.organizations.public import lock_membership
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "display_names",
     "issue_account_link",
     "reserve_email",
+    "set_acting_organization",
     "user_status",
 ]
 
@@ -132,3 +133,17 @@ def issue_account_link(
 def user_status(session: Session, user_id: UUID) -> str | None:
     """INVITED, ACTIVE or DISABLED; None if the account is not visible here."""
     return session.scalar(select(User.status).where(User.id == user_id))
+
+
+def set_acting_organization(
+    session: Session, session_id: UUID, organization_id: UUID | None
+) -> None:
+    """Record which coaching a platform admin's sign-in session acts in (None: none). A-06.
+
+    Only the session's own user can change it (row-level security on sessions).
+    """
+    session.execute(
+        update(UserSession)
+        .where(UserSession.id == session_id)
+        .values(acting_organization_id=organization_id)
+    )

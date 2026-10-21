@@ -1,12 +1,14 @@
 """Platform administration of coachings (A-04): create one with its first Owner, list them."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
+from qbank.core.errors import NotFound
+from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.tenancy import TenantContext, apply_tenant_context
@@ -18,10 +20,11 @@ from qbank.modules.identity.public import (
     create_invited_user,
     issue_account_link,
     reserve_email,
+    set_acting_organization,
     user_status,
 )
 from qbank.modules.organizations.models import Membership, Organization
-from qbank.modules.organizations.schemas import CreateOrganization
+from qbank.modules.organizations.schemas import CreateOrganization, UpdateOrganization
 
 
 def creation_context(principal: Principal, organization_id: UUID) -> TenantContext:
@@ -147,3 +150,126 @@ def list_organizations(
         query = query.where(tuple_(Organization.created_at, Organization.id) < after)
     rows = list(session.scalars(query.limit(limit + 1)))
     return rows[:limit], len(rows) > limit
+
+
+def _locked_organization(session: Session, organization_id: UUID) -> Organization:
+    """The coaching, locked until the transaction ends so changes to it run one after another."""
+    organization = session.scalars(
+        select(Organization).where(Organization.id == organization_id).with_for_update()
+    ).first()
+    if organization is None:
+        raise NotFound("No such coaching.")
+    return organization
+
+
+def _snapshot(organization: Organization) -> dict[str, object]:
+    return {
+        "display_name": organization.display_name,
+        "timezone": organization.timezone,
+        "status": organization.status,
+    }
+
+
+def _record_change(
+    session: Session,
+    principal: Principal,
+    organization: Organization,
+    action: str,
+    before: dict[str, object],
+    request_id: str | None,
+) -> None:
+    organization.revision += 1
+    organization.updated_at = datetime.now(UTC)
+    session.flush()
+    record_event(
+        session,
+        action=action,
+        entity_type="organization",
+        entity_id=organization.id,
+        organization_id=organization.id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=True,
+        request_id=request_id,
+        before=before,
+        after=_snapshot(organization),
+    )
+
+
+def update_organization(
+    session: Session,
+    principal: Principal,
+    organization_id: UUID,
+    body: UpdateOrganization,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+) -> Organization:
+    """Rename or change the time zone (platform only, A-04), refusing stale changes (If-Match)."""
+    apply_tenant_context(session, creation_context(principal, organization_id))
+    organization = _locked_organization(session, organization_id)
+    require_if_match(if_match, organization.revision)
+    before = _snapshot(organization)
+    if body.display_name is not None:
+        organization.display_name = body.display_name
+    if body.timezone is not None:
+        organization.timezone = body.timezone
+    if _snapshot(organization) != before:
+        _record_change(session, principal, organization, "COACHING_UPDATED", before, request_id)
+    return organization
+
+
+def set_status(
+    session: Session,
+    principal: Principal,
+    organization_id: UUID,
+    status: str,
+    *,
+    request_id: str | None,
+) -> Organization:
+    """Suspend or reactivate (A-07). Asking for the current status changes nothing."""
+    apply_tenant_context(session, creation_context(principal, organization_id))
+    organization = _locked_organization(session, organization_id)
+    if organization.status != status:
+        before = _snapshot(organization)
+        organization.status = status
+        action = "COACHING_SUSPENDED" if status == "SUSPENDED" else "COACHING_REACTIVATED"
+        _record_change(session, principal, organization, action, before, request_id)
+    return organization
+
+
+def act_in(
+    session: Session,
+    principal: Principal,
+    organization_id: UUID | None,
+    *,
+    request_id: str | None,
+) -> None:
+    """Start (or with None, stop) acting inside a coaching for this sign-in session (A-06).
+
+    Recorded in the coaching's audit log, so its admins can see when platform staff were in it.
+    """
+    if principal.session_id is None:
+        raise NotFound("Acting in a coaching needs a sign-in session.")
+    if organization_id is not None:
+        apply_tenant_context(session, creation_context(principal, organization_id))
+        if session.get(Organization, organization_id) is None:
+            raise NotFound("No such coaching.")
+    previous = principal.acting_organization_id
+    set_acting_organization(session, principal.session_id, organization_id)
+    for org_id, action in (
+        (previous, "PLATFORM_ACTING_STOPPED"),
+        (organization_id, "PLATFORM_ACTING_STARTED"),
+    ):
+        if org_id is None or previous == organization_id:
+            continue
+        apply_tenant_context(session, creation_context(principal, org_id))
+        record_event(
+            session,
+            action=action,
+            entity_type="organization",
+            entity_id=org_id,
+            organization_id=org_id,
+            actor_user_id=principal.user_id,
+            actor_is_platform=True,
+            request_id=request_id,
+        )

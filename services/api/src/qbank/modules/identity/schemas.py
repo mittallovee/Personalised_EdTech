@@ -23,6 +23,9 @@ class Me(BaseModel):
     is_platform_admin: bool
     organization: MyOrganization | None
     acting_organization_id: UUID | None
+    acting_organization_name: str | None = Field(
+        default=None, description="Name of the coaching a platform admin is acting in."
+    )
 
 
 class LoginResponse(BaseModel):

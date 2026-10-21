@@ -36,6 +36,7 @@ def to_me(principal: Principal) -> Me:
         is_platform_admin=principal.is_platform_admin,
         organization=organization,
         acting_organization_id=principal.acting_organization_id,
+        acting_organization_name=principal.acting_organization_name,
     )
 
 

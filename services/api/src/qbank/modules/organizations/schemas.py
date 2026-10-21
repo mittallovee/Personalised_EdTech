@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, StringConstraints, model_validator
 
 from qbank.core.pagination import PageInfo
 
@@ -69,3 +69,20 @@ class CreatedOrganization(BaseModel):
             " Owner has already activated their account."
         )
     )
+
+
+class UpdateOrganization(BaseModel):
+    """Only the fields sent are changed."""
+
+    display_name: Name | None = None
+    timezone: TimeZone | None = None
+
+    @model_validator(mode="after")
+    def _something_to_change(self) -> UpdateOrganization:
+        if self.display_name is None and self.timezone is None:
+            raise ValueError("Send display_name, timezone or both.")
+        return self
+
+
+class ActIn(BaseModel):
+    organization_id: UUID

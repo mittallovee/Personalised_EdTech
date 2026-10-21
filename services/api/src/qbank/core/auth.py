@@ -38,6 +38,7 @@ class Principal:
     role: str | None  # OWNER / ADMIN / FACULTY in that coaching
     session_id: UUID | None = None
     acting_organization_id: UUID | None = None  # platform admin working inside a coaching
+    acting_organization_name: str | None = None
     organization_name: str | None = None
     grants: frozenset[str] = frozenset()  # faculty grants in their coaching (see core/permissions)
 

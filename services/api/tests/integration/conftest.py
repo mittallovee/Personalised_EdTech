@@ -12,12 +12,14 @@ import os
 import secrets
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 import psycopg
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from psycopg import sql
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
@@ -29,6 +31,7 @@ from qbank.core.security import hash_password
 from qbank.core.tenancy import TenantContext
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.identity.models import PasswordCredential, User
+from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.organizations.models import Membership, MembershipGrant, Organization
 
 ADMIN_URL = os.environ.get(
@@ -236,3 +239,34 @@ def make_member(
                 )
             )
     return Member(email, user_id, org_id, membership_id)
+
+
+# --- Signing in through the API -----------------------------------------------------------------
+
+ORIGIN = {"Origin": "http://localhost:3000"}
+
+
+def sign_in(client: TestClient, email: str) -> dict[str, str]:
+    """Sign in; return the headers a change needs (CSRF token and our web app's Origin)."""
+    response = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": MEMBER_PASSWORD}, headers=ORIGIN
+    )
+    assert response.status_code == 200, response.text
+    return {**ORIGIN, "X-CSRF-Token": response.json()["csrf_token"]}
+
+
+def platform_admin(owner_db: Database) -> str:
+    """A new platform admin (password MEMBER_PASSWORD); returns their email."""
+    email = f"platform-{secrets.token_hex(5)}@example.com"
+    create_platform_admin(owner_db, email, "Platform Admin", MEMBER_PASSWORD)
+    return email
+
+
+def new_coaching(name: str = "Sharma Classes", email: str | None = None) -> dict[str, Any]:
+    """A body for POST /api/v1/platform/organizations."""
+    email = email or f"owner-{secrets.token_hex(5)}@example.com"
+    return {
+        "display_name": name,
+        "timezone": "Asia/Kolkata",
+        "owner": {"email": email, "display_name": "Priya Sharma"},
+    }
