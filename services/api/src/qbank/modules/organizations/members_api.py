@@ -119,7 +119,8 @@ def invite_member(
 _LINK_CONFLICTS: dict[int | str, dict[str, Any]] = {
     409: {
         "description": "Wrong kind of link for this account (`ALREADY_ACTIVATED` or"
-        " `NOT_ACTIVATED`), or they are no longer a member (`MEMBER_REMOVED`)"
+        " `NOT_ACTIVATED`), the account is disabled (`ACCOUNT_DISABLED`), or they are no longer"
+        " a member (`MEMBER_REMOVED`)"
     }
 }
 

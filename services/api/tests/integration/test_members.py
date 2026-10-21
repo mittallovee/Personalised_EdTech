@@ -406,3 +406,40 @@ def test_changes_need_a_session_and_the_csrf_token(
     sign_in(client, team["owner"].email)
     no_csrf = client.post(f"{MEMBERS}/invitations", json=invitation(), headers=ORIGIN)
     assert no_csrf.status_code == 403
+
+
+def test_a_retried_invitation_checks_the_members_current_role(
+    client: TestClient, owner_db: Database, team: dict[str, Member]
+) -> None:
+    """An admin's old Idempotency-Key must not yield a link for someone promoted to admin since."""
+    headers = {**sign_in(client, team["admin"].email), "Idempotency-Key": "invite-then-promote"}
+    body = invitation("FACULTY")
+    created = client.post(f"{MEMBERS}/invitations", json=body, headers=headers).json()
+    with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
+        session.execute(
+            text("UPDATE memberships SET role = 'ADMIN' WHERE id = :id"),
+            {"id": created["member"]["membership_id"]},
+        )
+
+    again = client.post(f"{MEMBERS}/invitations", json=body, headers=headers)
+
+    assert again.status_code == 403
+
+
+def test_a_disabled_account_gets_no_link(
+    client: TestClient, owner_db: Database, team: dict[str, Member]
+) -> None:
+    with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
+        session.execute(
+            text("UPDATE users SET status = 'DISABLED' WHERE id = :id"),
+            {"id": team["faculty"].user_id},
+        )
+    headers = sign_in(client, team["owner"].email)
+    target = team["faculty"].membership_id
+
+    reset = client.post(f"{MEMBERS}/{target}/reset-link", headers=headers)
+    activation = client.post(f"{MEMBERS}/{target}/activation-link", headers=headers)
+
+    assert (reset.status_code, reset.json()["error"]["code"]) == (409, "ACCOUNT_DISABLED")
+    assert (activation.status_code, activation.json()["error"]["code"]) == (409, "ACCOUNT_DISABLED")
+    assert client.get(f"{MEMBERS}/{target}").json()["actions"] == []

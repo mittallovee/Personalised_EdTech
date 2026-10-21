@@ -1922,7 +1922,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Wrong kind of link for this account (`ALREADY_ACTIVATED` or `NOT_ACTIVATED`), or they are no longer a member (`MEMBER_REMOVED`) */
+            /** @description Wrong kind of link for this account (`ALREADY_ACTIVATED` or `NOT_ACTIVATED`), the account is disabled (`ACCOUNT_DISABLED`), or they are no longer a member (`MEMBER_REMOVED`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1998,7 +1998,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Wrong kind of link for this account (`ALREADY_ACTIVATED` or `NOT_ACTIVATED`), or they are no longer a member (`MEMBER_REMOVED`) */
+            /** @description Wrong kind of link for this account (`ALREADY_ACTIVATED` or `NOT_ACTIVATED`), the account is disabled (`ACCOUNT_DISABLED`), or they are no longer a member (`MEMBER_REMOVED`) */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -34,6 +34,8 @@ from qbank.modules.organizations.schemas import InviteMember, MemberOut
 
 NEW_ACTIVATION_LINK = "NEW_ACTIVATION_LINK"
 NEW_RESET_LINK = "NEW_RESET_LINK"
+# The link each account status can use; a disabled account gets none (redeeming would fail).
+_LINK_FOR_STATUS = {INVITED: NEW_ACTIVATION_LINK, "ACTIVE": NEW_RESET_LINK}
 
 
 def _coaching(principal: Principal) -> UUID:
@@ -61,8 +63,9 @@ def describe(session: Session, principal: Principal, rows: Sequence[Membership])
     for row in rows:
         account = accounts[row.user_id]
         actions = []
-        if row.status == "ACTIVE" and may_manage_member(principal, row.role):
-            actions.append(NEW_ACTIVATION_LINK if account.status == INVITED else NEW_RESET_LINK)
+        link = _LINK_FOR_STATUS.get(account.status)
+        if link and row.status == "ACTIVE" and may_manage_member(principal, row.role):
+            actions.append(link)
         members.append(
             MemberOut(
                 membership_id=row.id,
@@ -178,6 +181,8 @@ def _reissue(
     session: Session, principal: Principal, member: Membership, request_id: str | None
 ) -> IssuedLink | None:
     member = get_member(session, member.id, lock=True)
+    # The request was allowed for the role it named; the member may have been promoted since.
+    require_may_manage_member(principal, member.role)
     if member.status != "ACTIVE" or user_status(session, member.user_id) != INVITED:
         return None
     return _issue(session, principal, member, LinkPurpose.ACTIVATION, request_id, retried=True)
@@ -197,7 +202,10 @@ def new_link(
     require_may_manage_member(principal, member.role)
     if member.status != "ACTIVE":
         raise Conflict("This person is no longer a member.", code="MEMBER_REMOVED")
-    invited = user_status(session, member.user_id) == INVITED
+    account_status = user_status(session, member.user_id)
+    if account_status == "DISABLED":
+        raise Conflict("This account is disabled.", code="ACCOUNT_DISABLED")
+    invited = account_status == INVITED
     if purpose is LinkPurpose.ACTIVATION and not invited:
         raise Conflict(
             "This account is already activated. Make a password-reset link instead.",
