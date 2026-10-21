@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import AfterValidator, BaseModel, EmailStr, Field, StringConstraints, model_validator
 
 from qbank.core.pagination import PageInfo
+from qbank.core.permissions import Grant
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
@@ -104,8 +105,8 @@ class MemberOut(BaseModel):
     joined_at: datetime
     actions: list[str] = Field(
         description=(
-            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK. The web app"
-            " shows only these buttons; the API checks again on every request."
+            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS."
+            " The web app shows only these buttons; the API checks again on every request."
         )
     )
 
@@ -141,3 +142,11 @@ class AccountLinkOut(BaseModel):
         )
     )
     expires_at: datetime
+
+
+class SetGrants(BaseModel):
+    grants: list[Grant] = Field(
+        max_length=len(Grant),
+        description="The complete new set (an empty list removes all); repeats count once.",
+        examples=[["QC", "APPROVE"]],
+    )

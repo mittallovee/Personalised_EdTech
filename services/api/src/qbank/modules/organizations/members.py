@@ -7,17 +7,25 @@ lock, so a screen that is a minute old can't act on someone who was promoted mea
 """
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import delete, select, tuple_
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
 from qbank.core.errors import Conflict, NotFound
+from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
-from qbank.core.permissions import Action, may_manage_member, require, require_may_manage_member
+from qbank.core.permissions import (
+    Action,
+    Grant,
+    is_allowed,
+    may_manage_member,
+    require,
+    require_may_manage_member,
+)
 from qbank.modules.audit.public import record_event
 from qbank.modules.identity.public import (
     INVITED,
@@ -34,6 +42,7 @@ from qbank.modules.organizations.schemas import InviteMember, MemberOut
 
 NEW_ACTIVATION_LINK = "NEW_ACTIVATION_LINK"
 NEW_RESET_LINK = "NEW_RESET_LINK"
+SET_GRANTS = "SET_GRANTS"
 # The link each account status can use; a disabled account gets none (redeeming would fail).
 _LINK_FOR_STATUS = {INVITED: NEW_ACTIVATION_LINK, "ACTIVE": NEW_RESET_LINK}
 
@@ -66,6 +75,9 @@ def describe(session: Session, principal: Principal, rows: Sequence[Membership])
         link = _LINK_FOR_STATUS.get(account.status)
         if link and row.status == "ACTIVE" and may_manage_member(principal, row.role):
             actions.append(link)
+        faculty = row.role == "FACULTY" and row.status == "ACTIVE"
+        if faculty and is_allowed(principal, Action.MANAGE_FACULTY):
+            actions.append(SET_GRANTS)
         members.append(
             MemberOut(
                 membership_id=row.id,
@@ -254,3 +266,68 @@ def _issue(
         after={"reason": "retried invitation"} if retried else None,
     )
     return link
+
+
+def set_grants(
+    session: Session,
+    principal: Principal,
+    membership_id: UUID,
+    grants: set[Grant],
+    *,
+    if_match: str | None,
+    request_id: str | None,
+) -> Membership:
+    """Replace a faculty member's grants (B-09), refusing stale changes (If-Match).
+
+    The new grants apply from the member's next request: permissions are reloaded every time.
+    Sending the grants they already have changes nothing.
+    """
+    require(principal, Action.MANAGE_FACULTY)
+    member = get_member(session, membership_id, lock=True)
+    require_if_match(if_match, member.revision)
+    if member.status != "ACTIVE":
+        raise Conflict("This person is no longer a member.", code="MEMBER_REMOVED")
+    if member.role != "FACULTY":
+        raise Conflict(
+            "Only faculty have grants; the Owner and admins already hold all of them.",
+            code="NOT_FACULTY",
+        )
+    current = {
+        Grant(name)
+        for name in session.scalars(
+            select(MembershipGrant.grant_name).where(MembershipGrant.membership_id == member.id)
+        )
+    }
+    if grants == current:
+        return member
+    for grant in current - grants:
+        session.execute(
+            delete(MembershipGrant).where(
+                MembershipGrant.membership_id == member.id, MembershipGrant.grant_name == grant
+            )
+        )
+    for grant in sorted(grants - current):
+        session.add(
+            MembershipGrant(
+                organization_id=member.organization_id,
+                membership_id=member.id,
+                grant_name=grant,
+                granted_by=principal.user_id,
+            )
+        )
+    member.revision += 1
+    member.updated_at = datetime.now(UTC)
+    session.flush()
+    record_event(
+        session,
+        action="MEMBER_GRANTS_CHANGED",
+        entity_type="membership",
+        entity_id=member.id,
+        organization_id=member.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=_is_platform(principal),
+        request_id=request_id,
+        before={"grants": sorted(current)},
+        after={"grants": sorted(grants)},
+    )
+    return member
