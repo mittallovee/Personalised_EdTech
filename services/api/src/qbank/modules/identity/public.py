@@ -13,6 +13,7 @@ from qbank.core.errors import Conflict
 from qbank.core.ids import new_id
 from qbank.core.security import hash_token, new_token
 from qbank.modules.identity.models import INVITED, AccountLink, User
+from qbank.modules.organizations.public import lock_membership
 
 __all__ = [
     "ACTIVATION_LINK_LIFETIME",
@@ -86,6 +87,9 @@ def issue_account_link(
     created_by: UUID,
 ) -> IssuedLink:
     """A new link for a member of the current coaching; an earlier unused one stops working."""
+    # Requests for the same member take turns: otherwise two at once could each revoke the old
+    # link and insert their own. A unique index also allows only one usable link per purpose.
+    lock_membership(session, membership_id)
     now = datetime.now(UTC)
     session.execute(
         update(AccountLink)

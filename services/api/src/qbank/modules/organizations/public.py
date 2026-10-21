@@ -48,3 +48,9 @@ def membership_grants(session: Session, membership_id: UUID) -> frozenset[str]:
             select(MembershipGrant.grant_name).where(MembershipGrant.membership_id == membership_id)
         )
     )
+
+
+def lock_membership(session: Session, membership_id: UUID) -> None:
+    """Hold the membership row until the transaction ends, so changes for one member (e.g. issuing
+    a new link) run one after another. Needs its coaching in the tenant context."""
+    session.execute(select(Membership.id).where(Membership.id == membership_id).with_for_update())

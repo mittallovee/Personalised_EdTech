@@ -34,9 +34,11 @@ IdempotencyKeyHeader = Header(
     description="Any unique string (e.g. a UUID). Retrying with the same key never creates twice.",
 )
 
+# Every claim also clears the sender's expired keys (all of them, not just this one), so the table
+# holds at most a day of keys per person.
 _FORGET_EXPIRED = text(
-    "DELETE FROM idempotency_keys WHERE actor_user_id = :actor AND operation = :operation"
-    " AND key = :key AND created_at < now() - CAST(:keep_for AS interval)"
+    "DELETE FROM idempotency_keys WHERE actor_user_id = :actor"
+    " AND created_at < now() - CAST(:keep_for AS interval)"
 )
 _CLAIM = text(
     "INSERT INTO idempotency_keys (actor_user_id, operation, key, request_hash, resource_id)"
@@ -70,7 +72,7 @@ def claim(
     for this transaction, then sees its outcome.
     """
     params = {"actor": actor_user_id, "operation": operation, "key": key}
-    session.execute(_FORGET_EXPIRED, {**params, "keep_for": KEEP_FOR})
+    session.execute(_FORGET_EXPIRED, {"actor": actor_user_id, "keep_for": KEEP_FOR})
     session.execute(
         _CLAIM, {**params, "request_hash": request_hash(body), "resource_id": new_resource_id}
     )

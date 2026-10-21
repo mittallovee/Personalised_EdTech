@@ -16,10 +16,13 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
+from qbank.core.idempotency import claim
+from qbank.core.ids import new_id
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.identity.models import User
+from qbank.modules.identity.public import LinkPurpose, issue_account_link
 from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.organizations.models import Membership, Organization
 from tests.integration.conftest import (
@@ -422,3 +425,93 @@ def test_link_must_belong_to_a_member_of_its_coaching(
                 "user": coaching_b.user_id,
             },
         )
+
+
+def test_concurrent_link_issuing_leaves_one_working_link(db: Database, owner_db: Database) -> None:
+    """Two requests making a new link for the same person at once: exactly one stays usable."""
+    member = make_member(owner_db, "FACULTY")
+    context = TenantContext(organization_id=member.org_id, user_id=member.user_id)
+    start = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def issue() -> None:
+        try:
+            with db.transaction(context) as session:
+                start.wait()
+                issue_account_link(
+                    session,
+                    organization_id=member.org_id,
+                    membership_id=member.membership_id,
+                    user_id=member.user_id,
+                    purpose=LinkPurpose.RESET,
+                    created_by=member.user_id,
+                )
+        except BaseException as exc:  # reported below, with the assertion
+            errors.append(exc)
+
+    threads = [threading.Thread(target=issue) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    with owner_db.transaction(context) as session:
+        usable = session.scalar(
+            text(
+                "SELECT count(*) FROM account_links WHERE membership_id = :m"
+                " AND used_at IS NULL AND revoked_at IS NULL"
+            ),
+            {"m": member.membership_id},
+        )
+    assert usable == 1
+
+
+def test_database_refuses_two_usable_links_for_one_purpose(
+    owner_db: Database,
+) -> None:
+    member = make_member(owner_db, "FACULTY")
+    insert = text(
+        "INSERT INTO account_links (id, organization_id, membership_id, user_id, purpose,"
+        " token_hash, expires_at)"
+        " VALUES (gen_random_uuid(), :org, :m, :u, 'RESET', :hash, now() + interval '1 hour')"
+    )
+    params = {"org": member.org_id, "m": member.membership_id, "u": member.user_id}
+    with (
+        pytest.raises(IntegrityError, match="account_links_one_usable"),
+        owner_db.transaction(TenantContext(organization_id=member.org_id)) as session,
+    ):
+        session.execute(insert, {**params, "hash": secrets.token_hex(8)})
+        session.execute(insert, {**params, "hash": secrets.token_hex(8)})
+
+
+def test_claiming_a_key_forgets_the_callers_expired_keys(db: Database, owner_db: Database) -> None:
+    member = make_member(owner_db, "OWNER")
+    context = TenantContext(organization_id=member.org_id, user_id=member.user_id)
+    with owner_db.transaction(context) as session:
+        session.execute(
+            text(
+                "INSERT INTO idempotency_keys"
+                " (actor_user_id, operation, key, request_hash, resource_id, created_at)"
+                " VALUES (:u, 'old_operation', 'old-key', 'x', gen_random_uuid(),"
+                " now() - interval '25 hours')"
+            ),
+            {"u": member.user_id},
+        )
+
+    with db.transaction(context) as session:
+        claim(
+            session,
+            actor_user_id=member.user_id,
+            operation="create_organization",
+            key="new-key",
+            body={},
+            new_resource_id=new_id(),
+        )
+
+    with owner_db.transaction(context) as session:
+        keys = session.scalars(
+            text("SELECT key FROM idempotency_keys WHERE actor_user_id = :u"),
+            {"u": member.user_id},
+        ).all()
+    assert keys == ["new-key"]

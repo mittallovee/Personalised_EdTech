@@ -58,6 +58,9 @@ def upgrade() -> None:
                 REFERENCES memberships (organization_id, id, user_id)
         );
         CREATE INDEX account_links_user ON account_links (user_id);
+        -- At most one usable link per member and purpose (ADR-0015: a new link replaces the old).
+        CREATE UNIQUE INDEX account_links_one_usable ON account_links (membership_id, purpose)
+            WHERE used_at IS NULL AND revoked_at IS NULL;
         ALTER TABLE account_links ENABLE ROW LEVEL SECURITY;
         ALTER TABLE account_links FORCE ROW LEVEL SECURITY;
         CREATE POLICY account_links_tenant ON account_links FOR ALL
