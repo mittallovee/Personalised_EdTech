@@ -68,6 +68,23 @@ def require(principal: Principal, action: Action) -> None:
         raise PermissionDenied("You don't have permission to do this.")
 
 
+def may_manage_member(principal: Principal, member_role: str) -> bool:
+    """May invite a member with this role, or make them a new activation or reset link?
+
+    Faculty: Owner and admins. Admins: the Owner. The Owner: only a platform admin acting in the
+    coaching (nobody inside it can take over the Owner's account).
+    """
+    if Role(member_role) is Role.OWNER:
+        return principal.is_platform_admin and principal.acting_organization_id is not None
+    action = Action.MANAGE_ADMINS if Role(member_role) is Role.ADMIN else Action.MANAGE_FACULTY
+    return is_allowed(principal, action)
+
+
+def require_may_manage_member(principal: Principal, member_role: str) -> None:
+    if not may_manage_member(principal, member_role):
+        raise PermissionDenied("You don't have permission to do this.")
+
+
 def has_grant(principal: Principal, grant: Grant) -> bool:
     if principal.is_platform_admin and principal.acting_organization_id is not None:
         return True

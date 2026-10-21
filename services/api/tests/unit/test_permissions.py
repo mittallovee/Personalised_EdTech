@@ -7,7 +7,15 @@ import pytest
 from qbank.core.auth import Principal
 from qbank.core.errors import PermissionDenied
 from qbank.core.ids import new_id
-from qbank.core.permissions import Action, Grant, has_grant, is_allowed, require
+from qbank.core.permissions import (
+    Action,
+    Grant,
+    has_grant,
+    is_allowed,
+    may_manage_member,
+    require,
+    require_may_manage_member,
+)
 
 COACHING = new_id()
 
@@ -82,3 +90,24 @@ def test_admins_owner_and_acting_platform_hold_every_grant(who: Principal) -> No
 
 def test_platform_admin_not_acting_in_a_coaching_holds_no_grant() -> None:
     assert not any(has_grant(PLATFORM, grant) for grant in Grant)
+
+
+# Who may invite a member of each role, or make them a new link (design note §3).
+# Columns as above: Faculty, Admin, Owner, Platform (not acting), Platform (acting).
+MANAGE_MEMBER = {
+    "FACULTY": (False, True, True, False, True),
+    "ADMIN": (False, False, True, False, True),
+    "OWNER": (False, False, False, False, True),
+}
+
+
+@pytest.mark.parametrize("member_role", list(MANAGE_MEMBER))
+def test_who_may_manage_a_member_of_each_role(member_role: str) -> None:
+    allowed = tuple(may_manage_member(who, member_role) for who in WHO)
+    assert allowed == MANAGE_MEMBER[member_role]
+
+
+def test_require_may_manage_member_raises_permission_denied() -> None:
+    require_may_manage_member(OWNER, "ADMIN")  # allowed: no error
+    with pytest.raises(PermissionDenied):
+        require_may_manage_member(OWNER, "OWNER")

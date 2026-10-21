@@ -18,6 +18,7 @@ from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
 from qbank.modules.identity.authenticator import SessionCookieAuthenticator
 from qbank.modules.organizations.api import router as organizations_router
+from qbank.modules.organizations.members_api import router as members_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -57,5 +58,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(identity_router)
     app.include_router(audit_router)
     app.include_router(organizations_router)
+    app.include_router(members_router)
     install_openapi(app)
     return app
