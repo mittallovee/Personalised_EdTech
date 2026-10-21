@@ -560,3 +560,14 @@ def test_no_grants_for_someone_who_is_no_longer_a_member(
     response = put_grants(client, headers, team["faculty"], ["QC"], '"rev-1"')
 
     assert (response.status_code, response.json()["error"]["code"]) == (409, "MEMBER_REMOVED")
+
+
+def test_repeated_grants_count_once_however_many_are_sent(
+    client: TestClient, team: dict[str, Member]
+) -> None:
+    headers = sign_in(client, team["owner"].email)
+
+    response = put_grants(client, headers, team["faculty"], ["QC"] * 8 + ["PUBLISH"], '"rev-1"')
+
+    assert response.status_code == 200, response.text
+    assert response.json()["grants"] == ["PUBLISH", "QC"]

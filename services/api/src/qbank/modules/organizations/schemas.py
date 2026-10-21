@@ -3,7 +3,15 @@ from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    EmailStr,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from qbank.core.pagination import PageInfo
 from qbank.core.permissions import Grant
@@ -144,8 +152,18 @@ class AccountLinkOut(BaseModel):
     expires_at: datetime
 
 
+def _without_repeats(value: object) -> object:
+    """Repeats count once, so the length limit applies to the distinct grants."""
+    if isinstance(value, list):
+        try:
+            return list(dict.fromkeys(value))
+        except TypeError:  # an unhashable entry: leave it for the type check to refuse
+            return value
+    return value
+
+
 class SetGrants(BaseModel):
-    grants: list[Grant] = Field(
+    grants: Annotated[list[Grant], BeforeValidator(_without_repeats)] = Field(
         max_length=len(Grant),
         description="The complete new set (an empty list removes all); repeats count once.",
         examples=[["QC", "APPROVE"]],
