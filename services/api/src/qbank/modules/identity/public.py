@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import select, text, update
+from sqlalchemy import insert, select, text, update
 from sqlalchemy.orm import Session
 
 from qbank.core.errors import Conflict
@@ -21,9 +21,11 @@ __all__ = [
     "RESET_LINK_LIFETIME",
     "IssuedLink",
     "LinkPurpose",
+    "MemberAccount",
     "create_invited_user",
     "display_names",
     "issue_account_link",
+    "member_accounts",
     "reserve_email",
     "revoke_coaching_sessions",
     "set_acting_organization",
@@ -37,6 +39,29 @@ def display_names(session: Session, user_ids: Collection[UUID]) -> dict[UUID, st
         return {}
     rows = session.execute(select(User.id, User.display_name).where(User.id.in_(user_ids)))
     return {row.id: row.display_name for row in rows}
+
+
+@dataclass(frozen=True, slots=True)
+class MemberAccount:
+    display_name: str
+    status: str  # INVITED, ACTIVE or DISABLED
+    email: str | None  # the sign-in email; None only for an account without one
+
+
+def member_accounts(session: Session, user_ids: Collection[UUID]) -> dict[UUID, MemberAccount]:
+    """Name, status and sign-in email of members of the current coaching (others are left out)."""
+    if not user_ids:
+        return {}
+    emails = {
+        row.user_id: row.email
+        for row in session.execute(
+            text("SELECT user_id, email FROM auth_member_emails(:ids)"), {"ids": list(user_ids)}
+        )
+    }
+    rows = session.execute(
+        select(User.id, User.display_name, User.status).where(User.id.in_(user_ids))
+    )
+    return {row.id: MemberAccount(row.display_name, row.status, emails.get(row.id)) for row in rows}
 
 
 # --- Invitations and one-time account links (ADR-0015) --------------------------------------------
@@ -61,8 +86,9 @@ class IssuedLink:
 def create_invited_user(session: Session, display_name: str) -> UUID:
     """A new account that cannot sign in until it is activated with a link."""
     user_id = new_id()
-    session.add(User(id=user_id, display_name=display_name, status=INVITED))
-    session.flush()
+    # Plain INSERT (no RETURNING): a coaching admin may create the user but sees it only once its
+    # membership exists (row-level security on users), so the new row can't be read back yet.
+    session.execute(insert(User).values(id=user_id, display_name=display_name, status=INVITED))
     return user_id
 
 

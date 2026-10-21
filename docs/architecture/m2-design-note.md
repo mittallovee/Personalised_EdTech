@@ -132,7 +132,7 @@ Rules that hold everywhere:
 - The feature is off until `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are set in `.env`. Both stay out of
   git, and the button is hidden while they are unset.
 
-## 6. Database (migrations 0004–0008)
+## 6. Database (migrations 0004–0009)
 
 All new coaching-owned tables have `organization_id`, `FORCE ROW LEVEL SECURITY` with the tenant policy, and
 composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role still never touches
@@ -141,10 +141,11 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 | Migration | Change |
 |---|---|
 | 0004 | `users.status` gains `INVITED`; `organizations.revision`, `memberships.revision` (for `If-Match`); unique index "one active OWNER per coaching"; `membership_grants (organization_id, membership_id, grant_name)` |
-| 0005 | `idempotency_keys (actor_user_id, operation, key, request_hash, resource_id, created_at)`: a key belongs to the person who sent it, honoured for 24 h (moved here from 0004 in PR 2: first used by coaching creation); `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching), list members' sign-in emails (current coaching only) |
+| 0005 | `idempotency_keys (actor_user_id, operation, key, request_hash, resource_id, created_at)`: a key belongs to the person who sent it, honoured for 24 h (moved here from 0004 in PR 2: first used by coaching creation); `account_emails (email PK, user_id UNIQUE)` (platform-wide, reached only through definer functions); `account_links (id, organization_id, user_id, purpose ACTIVATION/RESET, token_hash, created_by, created_at, expires_at, used_at, revoked_at)` + narrow `SECURITY DEFINER` functions: reserve email (atomic; release only for never-activated members), redeem link and set password, revoke a member's sessions/links (only for a user in the current coaching); listing members' sign-in emails came later, in 0008 |
 | 0006 | `auth_revoke_coaching_sessions(org)`: suspending a coaching ends its members' sessions (added in PR 3b after review) |
 | 0007 | `auth_redeem_link(token_hash, password_hash)`: the whole redemption in one step, plus a policy that finds a link only by its token hash (PR 4) |
-| 0008 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
+| 0008 | `auth_member_emails(user_ids)`: the sign-in emails of members of the current coaching only, for the member list (PR 5a) |
+| 0009 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
 action (e.g. `MEMBER_ROLE_CHANGED`, same style as M1's `USER_SIGNED_OUT`), target, before and after. Tokens, hashes and passwords are never
@@ -230,10 +231,12 @@ available, so the screens only show or hide buttons.
 | 3 | Platform: create coaching + Owner (with `Idempotency-Key`), list, get; migration 0005 (emails, links, idempotency keys) |
 | 3b | Platform: rename/time zone (`If-Match`), suspend/reactivate, acting-organization (split from 3 to keep PRs small) |
 | 4 | Link redemption (activation + reset) API and `/activate` page |
-| 5 | Members: list, invite, new links, grants; web Users & grants |
+| 5a | Members API: list, get, invite (`Idempotency-Key`), new activation/reset links; migration 0008 |
+| 5b | Members API: set faculty grants (`If-Match`) |
+| 5c | Web: Users & grants screen, with a browser test (split from 5 to keep PRs small) |
 | 6 | Change role, remove (T14), transfer ownership (T15); web |
 | 7 | Web: platform console, acting banner, audit log page |
-| 8 | Google login + linking (migration 0008) + `docs/operations/google-login.md` setup guide |
+| 8 | Google login + linking (migration 0009) + `docs/operations/google-login.md` setup guide |
 | 9 | M2 demo notes and exit checks |
 
 ## 12. Decisions for the owner

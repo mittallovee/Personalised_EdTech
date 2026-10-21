@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -86,3 +86,58 @@ class UpdateOrganization(BaseModel):
 
 class ActIn(BaseModel):
     organization_id: UUID
+
+
+# --- Members (M2 PR 5) ----------------------------------------------------------------------------
+
+
+class MemberOut(BaseModel):
+    membership_id: UUID
+    user_id: UUID
+    display_name: str
+    email: str | None = Field(description="Sign-in email; null only for an account without one")
+    role: str = Field(description="OWNER, ADMIN or FACULTY")
+    status: str = Field(description="Membership: ACTIVE or REMOVED")
+    account_status: str = Field(description="INVITED (not activated yet), ACTIVE or DISABLED")
+    grants: list[str] = Field(description="Faculty grants (Owner and admins hold all implicitly)")
+    revision: int
+    joined_at: datetime
+    actions: list[str] = Field(
+        description=(
+            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK. The web app"
+            " shows only these buttons; the API checks again on every request."
+        )
+    )
+
+
+class MemberPage(BaseModel):
+    data: list[MemberOut]
+    page: PageInfo
+
+
+class InviteMember(BaseModel):
+    email: EmailStr
+    display_name: Name
+    role: Literal["ADMIN", "FACULTY"] = Field(
+        description="The Owner is created with the coaching and changes only by a transfer."
+    )
+
+
+class InvitedMember(BaseModel):
+    member: MemberOut
+    activation: ActivationLink | None = Field(
+        description=(
+            "The invitee's activation link. Null only when a retried request finds that they"
+            " have already activated their account."
+        )
+    )
+
+
+class AccountLinkOut(BaseModel):
+    token: str = Field(
+        description=(
+            "Shown only now. The web app turns it into `<app address>/activate#<token>`. Any"
+            " earlier link of the same kind for this member stops working."
+        )
+    )
+    expires_at: datetime
