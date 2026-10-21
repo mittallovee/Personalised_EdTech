@@ -86,6 +86,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @qbank/e2e exec playwright install --with-deps chromium
       - name: Start the app (docker compose, default local settings)
+        env:
+          # The tests sign in and use links from one address, far more often than a person would.
+          LOGIN_ATTEMPTS_PER_IP: "1000"
+          LOGIN_ATTEMPTS_PER_EMAIL: "1000"
         run: |
           docker compose up --build -d
           deadline=$((SECONDS + 300))

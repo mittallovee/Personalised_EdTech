@@ -1,14 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { createCoaching, unique } from "./helpers";
+import { createCoaching, setPassword, unique } from "./helpers";
 
 // M2 (B-05, A-05, T16): a new coaching's Owner opens the activation link and sets a password.
-
-async function setPassword(page: Page, password: string, repeat = password): Promise<void> {
-  await page.fill('input[name="password"]', password);
-  await page.fill('input[name="repeat"]', repeat);
-  await page.click('button[type="submit"]');
-}
 
 test("the Owner activates the account and lands on Home", async ({ browser, baseURL }) => {
   const coaching = `Sharma Classes ${unique()}`;

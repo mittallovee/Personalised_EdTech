@@ -1,12 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import type { components, Me } from "@qbank/api-client";
+import type { components } from "@qbank/api-client";
 
 import { AppShell } from "@/components/app-shell";
 import { api } from "@/lib/api";
+import { useMe } from "@/lib/use-me";
 
 type ReadyStatus = components["schemas"]["ReadyStatus"];
 
@@ -14,34 +14,12 @@ const ALERT =
   "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300";
 
 export default function HomePage() {
-  const router = useRouter();
-  const [me, setMe] = useState<Me | null>(null);
+  const { me, loadError, signOutError, retry, signOut } = useMe();
   const [health, setHealth] = useState<ReadyStatus | "unreachable" | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      let who;
-      try {
-        who = await api().GET("/api/v1/me");
-      } catch {
-        if (!cancelled) setLoadError("Cannot reach the server. Check your connection.");
-        return;
-      }
-      if (cancelled) return;
-      // Only "not signed in" leads to the sign-in page; any other failure is an outage to report.
-      if (who.response.status === 401) {
-        router.replace("/login");
-        return;
-      }
-      if (!who.data) {
-        setLoadError("The server could not load your account right now.");
-        return;
-      }
-      setMe(who.data);
       try {
         const ready = await api().GET("/health/ready");
         // 200 and 503 both describe the health; anything else (e.g. a 500) means unreachable.
@@ -55,28 +33,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [router, attempt]);
-
-  function retry() {
-    setLoadError(null);
-    setAttempt((n) => n + 1);
-  }
-
-  async function signOut() {
-    setSignOutError(null);
-    try {
-      const { response } = await api().POST("/api/v1/auth/logout");
-      // 401: the session had already ended (expired or revoked), so the user is signed out anyway.
-      if (response.ok || response.status === 401) {
-        router.replace("/login");
-        return;
-      }
-    } catch {
-      // network failure: fall through
-    }
-    // Never show the signed-out screen while the server session may still be valid.
-    setSignOutError("Could not sign out. You are still signed in; please try again.");
-  }
+  }, []);
 
   if (loadError) {
     return (
@@ -106,7 +63,7 @@ export default function HomePage() {
       : "No coaching yet";
 
   return (
-    <AppShell me={me} onSignOut={signOut}>
+    <AppShell me={me} current="home" onSignOut={signOut}>
       {signOutError && (
         <p role="alert" className={`mb-6 max-w-md ${ALERT}`}>
           {signOutError}

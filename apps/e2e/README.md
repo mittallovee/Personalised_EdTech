@@ -22,6 +22,10 @@ E2E_ADMIN_EMAIL=you@example.com E2E_ADMIN_PASSWORD='your admin password' \
   account"). The tests create a new coaching each run, with a unique name, in that database.
   Use a local or test database, never a real one.
 - `E2E_BASE_URL`: another address (default `http://localhost:3000`).
+- **"HTTP 429" errors:** the API limits sign-in and link attempts per address (20 per 5 minutes).
+  The tests make many from one address, so start the stack for them with higher limits:
+  `LOGIN_ATTEMPTS_PER_IP=1000 LOGIN_ATTEMPTS_PER_EMAIL=1000 docker compose up --build -d`
+  (CI does this), or wait 5 minutes.
 - To watch the browser: add `--headed`; to step through one test: `--debug`;
   to open a failure report: `pnpm --filter @qbank/e2e exec playwright show-report`.
 

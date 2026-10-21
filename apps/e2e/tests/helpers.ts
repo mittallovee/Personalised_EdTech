@@ -1,4 +1,4 @@
-import type { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, Browser, BrowserContext, Page } from "@playwright/test";
 
 /** The platform admin the tests sign in as (created with `qbank create-platform-admin`). */
 export const admin = {
@@ -45,4 +45,32 @@ export async function createCoaching(
   }
   const body = (await created.json()) as { activation: { token: string } };
   return { token: body.activation.token, ownerName };
+}
+
+/** Fill in the activation page and save. */
+export async function setPassword(page: Page, password: string, repeat = password): Promise<void> {
+  await page.fill('input[name="password"]', password);
+  await page.fill('input[name="repeat"]', repeat);
+  await page.click('button[type="submit"]');
+}
+
+/**
+ * A new coaching whose Owner has already activated (through the API, to keep the test short;
+ * activation.spec.ts covers the screen). Returns a browser context signed in as the Owner.
+ */
+export async function signedInOwner(
+  browser: Browser,
+  baseURL: string,
+  displayName: string,
+): Promise<{ context: BrowserContext; ownerName: string }> {
+  const adminContext = await browser.newContext();
+  const { token, ownerName } = await createCoaching(adminContext.request, baseURL, displayName);
+  await adminContext.close();
+  const context = await browser.newContext();
+  const redeemed = await context.request.post("/api/v1/auth/links/redeem", {
+    headers: { Origin: baseURL },
+    data: { token, password: "an owner passphrase" },
+  });
+  if (!redeemed.ok()) throw new Error(`activating the Owner failed: HTTP ${redeemed.status()}`);
+  return { context, ownerName };
 }
