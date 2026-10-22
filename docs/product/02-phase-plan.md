@@ -99,5 +99,5 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 ## 8. Open questions
 
 None blocking. M1 and M2 are built. Next: the owner checks M2 with the [M2 demo](../operations/m2-demo.md)
-(and, optionally, turns on Google login with its [setup guide](../operations/google-login.md)). Then M3 starts
-with its design note for owner approval.
+(and, optionally, turns on Google login with its [setup guide](../operations/google-login.md)). The [M3 design note](../architecture/m3-design-note.md)
+(question authoring) is drafted and awaits owner approval.
