@@ -207,3 +207,41 @@ test("creating a coaching or acting in one after the session has ended sends you
     await expect(staff).toHaveURL(/\/login$/);
   }
 });
+
+test("pressing Show more twice on the coachings list loads the next page once", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  const context = await platformAdminContext(browser, baseURL!);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  // Enough coachings that the list has a second page, however many earlier runs left behind.
+  for (let n = 0; n < 51; n++) {
+    const response = await context.request.post("/api/v1/platform/organizations", {
+      headers,
+      data: {
+        display_name: `Many ${n} ${unique()}`,
+        timezone: "Asia/Kolkata",
+        owner: { email: `many${n}-${unique()}@example.com`, display_name: "Owner" },
+      },
+    });
+    expect(response.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  let nextPageRequests = 0;
+  await page.route("**/api/v1/platform/organizations?*cursor=*", async (route) => {
+    nextPageRequests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 800)); // a slow connection
+    await route.continue();
+  });
+  await page.goto("/platform/coachings");
+  const cards = page.getByRole("list", { name: "Coachings" }).getByRole("listitem");
+  await expect(cards).toHaveCount(50);
+
+  await page.getByRole("button", { name: "Show more" }).dblclick();
+
+  await expect(cards).not.toHaveCount(50); // the next page arrived
+  const names = await cards.locator("span.font-medium").allTextContents();
+  expect(new Set(names).size).toBe(names.length); // nobody twice
+  expect(nextPageRequests).toBe(1);
+});

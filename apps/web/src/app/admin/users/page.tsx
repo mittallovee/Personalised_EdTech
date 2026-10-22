@@ -31,6 +31,8 @@ export default function UsersPage() {
   const { me, loadError, shellError, retry, signOut, stopActing } = useMe();
   const [members, setMembers] = useState<Member[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const moreInFlight = useRef(false);
   const [listState, setListState] = useState<"loading" | "ready" | "denied" | "failed">("loading");
   const [listError, setListError] = useState<string | null>(null);
   const [link, setLink] = useState<IssuedLink | null>(null);
@@ -83,13 +85,31 @@ export default function UsersPage() {
         after = result.data.page.next_cursor ?? null;
         if (!after || loaded.length >= keep) break;
       }
-      setMembers((current) => (cursor ? [...current, ...loaded] : loaded));
+      // A page already shown is not added twice, whatever order requests finish in.
+      setMembers((current) =>
+        cursor
+          ? [...current, ...loaded.filter((m) => !current.some((c) => c.membership_id === m.membership_id))]
+          : loaded,
+      );
       setNextCursor(after);
       setListState("ready");
       setListError(null);
     },
     [router],
   );
+
+  /** "Show more": one request at a time, so pressing it twice does not load the page twice. */
+  async function showMore() {
+    if (moreInFlight.current || !nextCursor) return;
+    moreInFlight.current = true;
+    setLoadingMore(true);
+    try {
+      await load(nextCursor);
+    } finally {
+      moreInFlight.current = false;
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     // `load` sets state only after the network call returns, never during this effect.
@@ -439,7 +459,8 @@ export default function UsersPage() {
             <button
               type="button"
               className={`mt-4 ${BUTTON}`}
-              onClick={() => void load(nextCursor)}
+              disabled={loadingMore}
+              onClick={() => void showMore()}
             >
               Show more
             </button>
