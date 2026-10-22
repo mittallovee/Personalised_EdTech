@@ -39,6 +39,7 @@ UNLINK = "/api/v1/auth/google/unlink"
 LINK_FAILED = "/profile?google=failed"
 LINKED = "/profile?google=linked"
 SIGN_IN_FAILED = "/login?google=failed"
+LINK_SIGNED_OUT = "/login?google=link-failed"
 
 pytestmark = pytest.mark.usefixtures("empty_google_tables")
 
@@ -286,7 +287,9 @@ def test_losing_the_session_or_access_while_at_google_stops_the_link(
     state = state_of(start_link(client, headers))  # the person leaves for Google...
     spoil(client, headers, member, owner_db)  # ...and meanwhile loses the session or access
 
-    assert call_back(client, state) == LINK_FAILED
+    # The person can no longer use the app, so the Profile page would only bounce them to sign-in
+    # and lose the explanation: the failure goes to the sign-in page, which can explain it.
+    assert call_back(client, state) == LINK_SIGNED_OUT
 
     assert linked_subjects(owner_db, member.user_id) == []
 

@@ -88,11 +88,13 @@ export async function goToGoogle(
  * The `?google=...` result Google's callback leaves in the address bar. It is read once and
  * removed, so a reload or a copied address does not repeat the message.
  */
-export function useGoogleResult(): "linked" | "failed" | null {
-  const [result, setResult] = useState<"linked" | "failed" | null>(null);
+export type GoogleResult = "linked" | "failed" | "link-failed";
+
+export function useGoogleResult(): GoogleResult | null {
+  const [result, setResult] = useState<GoogleResult | null>(null);
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get("google");
-    if (value === "linked" || value === "failed") {
+    if (value === "linked" || value === "failed" || value === "link-failed") {
       window.history.replaceState(null, "", window.location.pathname);
       // Reading the address bar is only possible in the browser, after the first render.
       // eslint-disable-next-line react-hooks/set-state-in-effect

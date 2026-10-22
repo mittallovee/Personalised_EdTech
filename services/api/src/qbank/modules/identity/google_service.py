@@ -7,6 +7,7 @@ person nobody linked fails, and never creates or merges an account.
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 import structlog
@@ -51,6 +52,10 @@ LINKED_PATH = "/profile?google=linked"
 # for the case where the flow and its cookie have already expired and nothing else is known.
 _STATE_KIND = {"SIGN_IN": "s", "ACTIVATE": "a", "LINK": "l"}
 LINK_FAILED_PATH = "/profile?google=failed"
+# A link that failed because the person can no longer use the app (signed out, session ended,
+# removed, coaching suspended, disabled): the Profile page would only bounce them to the sign-in
+# page and lose the explanation, so the sign-in page explains it.
+LINK_SIGNED_OUT_PATH = "/login?google=link-failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,7 +243,7 @@ def finish(
 
     with database.transaction(NO_CONTEXT) as session:
         result: service.LoginResult | None = None
-        linked = False
+        linked: Literal["linked", "failed", "signed_out"] = "failed"
         if flow.purpose == "SIGN_IN":
             result = _sign_in(session, settings, identity, request_id)
         elif flow.purpose == "ACTIVATE":
@@ -246,8 +251,10 @@ def finish(
         elif flow.purpose == "LINK":
             linked = _link(session, flow.id, flow.user_id, flow.session_id, identity, request_id)
     if flow.purpose == "LINK":
-        log.info("google_link_finished", user_id=str(flow.user_id), linked=linked)
-        return Finished(LINKED_PATH) if linked else failed
+        log.info("google_link_finished", user_id=str(flow.user_id), outcome=linked)
+        if linked == "signed_out":
+            return Finished(LINK_SIGNED_OUT_PATH)
+        return Finished(LINKED_PATH) if linked == "linked" else failed
     if result is None:
         log.info("google_flow_failed", reason="not_allowed", purpose=flow.purpose)
         return failed
@@ -298,6 +305,21 @@ def _activate(
     return result
 
 
+def _session_alive(session: Session, user_id: UUID, session_id: UUID) -> bool:
+    """Whether this sign-in is still valid (not signed out, revoked or expired)."""
+    apply_tenant_context(session, TenantContext(user_id=user_id))
+    return bool(
+        session.scalar(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM sessions s WHERE s.id = :sid AND s.user_id = :uid"
+                " AND s.revoked_at IS NULL AND s.idle_expires_at > now()"
+                " AND s.absolute_expires_at > now())"
+            ),
+            {"sid": session_id, "uid": user_id},
+        )
+    )
+
+
 def _link(
     session: Session,
     flow_id: UUID,
@@ -305,24 +327,25 @@ def _link(
     session_id: UUID,
     identity: GoogleIdentity,
     request_id: str | None,
-) -> bool:
+) -> Literal["linked", "failed", "signed_out"]:
     """Link this Google account to the signed-in person who started the flow.
 
     Checked afresh in this transaction: the person still has access (the check every request
     makes), and the session that started the flow is still theirs and valid (the database function
-    locks it). A Google account that belongs to anyone is refused.
+    locks it). A Google account that belongs to anyone is refused. "signed_out" means the person
+    can no longer use the app at all, which changes where the browser should go.
     """
     apply_tenant_context(session, TenantContext(user_id=user_id))
     principal = service.load_principal(session, user_id, session_id)
-    if principal is None:
-        return False
+    if principal is None or not _session_alive(session, user_id, session_id):
+        return "signed_out"
     apply_tenant_context(session, principal.tenant_context)
     linked = session.scalar(
         text("SELECT auth_google_link(:flow, :subject, :email)"),
         {"flow": flow_id, "subject": identity.subject, "email": identity.email},
     )
     if linked is None:
-        return False
+        return "failed"
     record_event(
         session,
         action="GOOGLE_LINKED",
@@ -334,7 +357,7 @@ def _link(
         request_id=request_id,
         after={"provider": "google"},
     )
-    return True
+    return "linked"
 
 
 def start_link(

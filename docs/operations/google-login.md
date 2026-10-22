@@ -117,7 +117,7 @@ Both values must be set; setting only one stops the API at start-up with a clear
 | Google shows **Access blocked** or "has not completed verification" | The app is in **Testing** and your account is not a test user. Add it under **Test users**, or publish the app. |
 | The app says "We could not sign you in with Google" | The Google account is not linked to any account here (sign in with your password and link it on **Profile**); or that Google account is linked to someone else; or the account lost access (removed, or the coaching is suspended). The app deliberately never says which. |
 | While activating: "We could not finish setting up your account with Google" | The person cancelled at Google, took more than 10 minutes, or the link was used, replaced or expired meanwhile. They open the link the admin sent them again (a cancelled attempt does not use it up); if it no longer works, the admin makes a new one. |
-| "We could not link your Google account" | The Google account already belongs to another person here, or you took too long (the sign-in expires after 10 minutes), or you were signed out meanwhile. Try again. |
+| "We could not link your Google account" | The Google account already belongs to another person here, or you took too long (the sign-in expires after 10 minutes), or you were signed out meanwhile. Try again. If you were signed out meanwhile, the sign-in page says so instead: sign in with your password and try again from Profile. |
 | Linking asks for the password and refuses it | Wrong password. Repeated wrong passwords lock the account for a while, just as at sign-in. |
 | The request to start fails with "web address is not allowed" | The address in the browser is not in `ALLOWED_ORIGINS`. |
 

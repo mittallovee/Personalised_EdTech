@@ -146,7 +146,9 @@ class InvitedMember(BaseModel):
 class AccountLinkOut(BaseModel):
     token: str = Field(
         description=(
-            "Shown only now. The web app turns it into `<app address>/activate#<token>`. Any"
+            "Shown only now. The web app turns it into `<app address>/activate#<token>` for an"
+            " activation link, and `<app address>/activate#<token>.reset` for a password-reset link"
+            " (the mark tells the page not to offer Google, which cannot use a reset link). Any"
             " earlier link of the same kind for this member stops working."
         )
     )

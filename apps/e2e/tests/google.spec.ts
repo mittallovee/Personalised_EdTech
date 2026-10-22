@@ -491,3 +491,17 @@ test("a link that Google cannot use says what to do, and the password form stays
   await expect(page).not.toHaveURL(/\/login/);
   await expect(page.getByRole("button", { name: "Save and sign in" })).toBeEnabled();
 });
+
+test("a link that failed because the person was signed out is explained on the sign-in page", async ({
+  page,
+}) => {
+  // Codex review on PR #27: the Profile page would bounce a signed-out person and lose the message.
+  await page.goto("/login?google=link-failed");
+
+  await expect(alerts(page)).toContainText("could not link your Google account");
+  await expect(alerts(page)).toContainText("signed out");
+  await expect(alerts(page)).toContainText("Sign in with your password");
+  await expect(page).toHaveURL(/\/login$/);
+  await page.reload();
+  await expect(alerts(page)).toHaveCount(0);
+});
