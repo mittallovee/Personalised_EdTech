@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import {
   activate,
   createCoaching,
+  csrfOf,
   invite,
   person,
   setPassword,
@@ -319,4 +320,42 @@ test("an activation link is still offered Google, and its address has no marker"
   await googleIsOn(visitor);
   await visitor.goto(link);
   await expect(visitor.getByRole("button", { name: "Continue with Google instead" })).toBeVisible();
+});
+
+test("linking or unlinking after the session has ended sends you to sign in", async ({
+  browser,
+  baseURL,
+}) => {
+  // Codex review on PR #27: these two signed-in actions live under /auth/, but a 401 on them means
+  // the sign-in has ended, not "wrong password".
+  for (const action of ["link", "unlink"] as const) {
+    const { context } = await signedInOwner(browser, baseURL!, `Gended ${action} ${unique()}`);
+    const page = await context.newPage();
+    await googleIsOn(page);
+    if (action === "unlink") {
+      await page.route("**/api/v1/me/login-methods", (route) =>
+        route.fulfill({
+          json: { password: true, google: { linked: true, email: "me@gmail.example" } },
+        }),
+      );
+    }
+    await page.goto("/profile");
+    await expect(page.getByRole("list", { name: "Sign-in methods" })).toBeVisible();
+    // The same sign-in ends elsewhere (another tab, or it expired).
+    const ended = await context.request.post("/api/v1/auth/logout", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) },
+    });
+    expect(ended.ok()).toBe(true);
+
+    if (action === "link") {
+      const form = page.getByRole("form", { name: "Link a Google account" });
+      await form.getByLabel("Your password").fill("an owner passphrase");
+      await form.getByRole("button", { name: "Link Google account" }).click();
+    } else {
+      await page.getByRole("button", { name: "Unlink Google", exact: true }).click();
+      await page.getByRole("button", { name: "Unlink Google" }).last().click();
+    }
+
+    await expect(page).toHaveURL(/\/login$/);
+  }
 });
