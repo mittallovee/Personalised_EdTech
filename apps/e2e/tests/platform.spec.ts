@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { activate, coaching, platformAdminContext, signedInOwner, unique } from "./helpers";
+import {
+  actingPlatformAdmin,
+  activate,
+  coaching,
+  csrfOf,
+  platformAdminContext,
+  signedInOwner,
+  unique,
+} from "./helpers";
 
 // M2 (A-04, A-05, A-06, A-07): the platform admin's Coachings screen and the acting banner.
 
@@ -126,4 +134,44 @@ test("an out-of-date tab cannot overwrite a newer rename", async ({ browser, bas
     first.getByRole("alert").filter({ hasText: "Someone else changed this" }),
   ).toBeVisible();
   await expect(coaching(first, renamed)).toBeVisible(); // reloaded: it shows the newer name
+});
+
+test("renaming the coaching you are acting in updates the banner", async ({ browser, baseURL }) => {
+  const name = `Banner Classes ${unique()}`;
+  const { context } = await signedInOwner(browser, baseURL!, name);
+  const organizationId = (await (await context.request.get("/api/v1/me")).json()).organization.id;
+  const staff = await (await actingPlatformAdmin(browser, baseURL!, organizationId)).newPage();
+  await staff.goto("/admin/users");
+  await staff.getByRole("link", { name: "Coachings" }).click(); // still acting, on the platform list
+
+  await coaching(staff, name).getByRole("button", { name: "Rename or change time zone" }).click();
+  const newName = `${name} Renamed`;
+  await coaching(staff, name).getByLabel("Name").fill(newName);
+  await coaching(staff, name).getByRole("button", { name: "Save" }).click();
+
+  await expect(staff.getByRole("status")).toHaveText(`${newName} was saved.`);
+  await expect(staff.getByRole("region", { name: "Acting in a coaching" })).toContainText(
+    `Acting in ${newName}`,
+  );
+});
+
+test("stopping acting after the session has ended sends you to sign in", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Expired Classes ${unique()}`);
+  const organizationId = (await (await context.request.get("/api/v1/me")).json()).organization.id;
+  const staffContext = await actingPlatformAdmin(browser, baseURL!, organizationId);
+  const staff = await staffContext.newPage();
+  await staff.goto("/admin/users");
+  await expect(staff.getByRole("region", { name: "Acting in a coaching" })).toBeVisible();
+  // The same sign-in ends elsewhere (another tab, or it expired).
+  const ended = await staffContext.request.post("/api/v1/auth/logout", {
+    headers: { Origin: baseURL!, "X-CSRF-Token": await csrfOf(staffContext) },
+  });
+  expect(ended.ok()).toBe(true);
+
+  await staff.getByRole("button", { name: "Stop acting" }).click();
+
+  await expect(staff).toHaveURL(/\/login$/);
 });

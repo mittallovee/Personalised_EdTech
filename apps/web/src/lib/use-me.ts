@@ -72,6 +72,11 @@ export function useMe() {
     setShellError(null);
     try {
       const { response } = await api().DELETE("/api/v1/platform/acting-organization");
+      // 401: the sign-in has ended (expired or revoked), so there is nothing to stop acting in.
+      if (response.status === 401) {
+        router.replace("/login");
+        return;
+      }
       if (response.ok) {
         router.replace("/platform/coachings");
         retry(); // who you are has changed: reload it

@@ -187,6 +187,8 @@ export default function CoachingsPage() {
       (updated) => {
         replace(updated);
         setNotice(`${updated.display_name} was saved.`);
+        // The banner names the coaching you are acting in: reload who you are if it just changed.
+        if (updated.id === me?.acting_organization_id) retry();
       },
     );
   }
