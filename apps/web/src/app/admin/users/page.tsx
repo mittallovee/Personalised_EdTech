@@ -3,16 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
-import type { components } from "@qbank/api-client";
+import type { components, ErrorResponse } from "@qbank/api-client";
 
 import { AppShell } from "@/components/app-shell";
-import { GrantsEditor } from "@/components/grants-editor";
 import { LinkNotice, type IssuedLink } from "@/components/link-notice";
+import { MemberCard, type Member, type Panel } from "@/components/member-card";
 import { api, errorMessage, ifMatch } from "@/lib/api";
-import { grantLabel } from "@/lib/grants";
 import { useMe } from "@/lib/use-me";
 
-type Member = components["schemas"]["MemberOut"];
+type Role = components["schemas"]["ChangeRole"]["expected_role"];
 
 const ALERT =
   "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300";
@@ -34,43 +33,57 @@ export default function UsersPage() {
   const [listState, setListState] = useState<"loading" | "ready" | "denied" | "failed">("loading");
   const [listError, setListError] = useState<string | null>(null);
   const [link, setLink] = useState<IssuedLink | null>(null);
-  const [editing, setEditing] = useState<string | null>(null); // membership id
+  const [panel, setPanel] = useState<{ id: string; kind: Panel } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; name: string; message: string } | null>(
+    null,
+  );
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   // A retry of the same invitation reuses its Idempotency-Key, so a lost response never means
   // two accounts; a changed form gets a new key.
   const inviteKey = useRef<{ key: string; fingerprint: string } | null>(null);
 
+  /**
+   * Load a page of people: the first one (`cursor` null) or the next one. A reload passes `keep`,
+   * the number of people showing, and keeps loading pages until that many are back, so people
+   * shown through "Show more" do not drop off the list.
+   */
   const load = useCallback(
-    async (cursor: string | null) => {
-      let result;
-      try {
-        result = await api().GET("/api/v1/members", {
-          params: { query: cursor ? { cursor } : {} },
-        });
-      } catch {
-        setListState("failed");
-        setListError(NETWORK);
-        return;
+    async (cursor: string | null, keep = 0) => {
+      let after = cursor;
+      let loaded: Member[] = [];
+      for (;;) {
+        let result;
+        try {
+          result = await api().GET("/api/v1/members", {
+            params: { query: after ? { cursor: after } : {} },
+          });
+        } catch {
+          setListState("failed");
+          setListError(NETWORK);
+          return;
+        }
+        if (result.response.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        if (result.response.status === 403) {
+          setListState("denied");
+          return;
+        }
+        if (!result.data) {
+          setListState("failed");
+          setListError(errorMessage(result.error, result.response.status));
+          return;
+        }
+        loaded = [...loaded, ...result.data.data];
+        after = result.data.page.next_cursor ?? null;
+        if (!after || loaded.length >= keep) break;
       }
-      if (result.response.status === 401) {
-        router.replace("/login");
-        return;
-      }
-      if (result.response.status === 403) {
-        setListState("denied");
-        return;
-      }
-      if (!result.data) {
-        setListState("failed");
-        setListError(errorMessage(result.error, result.response.status));
-        return;
-      }
-      const page = result.data;
-      setMembers((current) => (cursor ? [...current, ...page.data] : page.data));
-      setNextCursor(page.page.next_cursor ?? null);
+      setMembers((current) => (cursor ? [...current, ...loaded] : loaded));
+      setNextCursor(after);
       setListState("ready");
       setListError(null);
     },
@@ -133,59 +146,169 @@ export default function UsersPage() {
     }
   }
 
-  async function newLink(member: Member, kind: "activation" | "reset") {
+  /**
+   * One change to one person: shows that it is running, shows the API's message if it is refused,
+   * and reloads the list after a refusal so the next try starts from what is really there. A
+   * stale or conflicting answer also closes the panel, because what it asked about has changed.
+   */
+  async function change<T>(
+    member: Member,
+    call: () => Promise<{ data?: T; error?: unknown; response: Response }>,
+    done: (data: T) => void,
+  ) {
     setBusyId(member.membership_id);
     setRowError(null);
+    setNotice(null);
     try {
-      const path = { membership_id: member.membership_id };
-      const { data, error, response } =
-        kind === "activation"
-          ? await api().POST("/api/v1/members/{membership_id}/activation-link", {
-              params: { path },
-            })
-          : await api().POST("/api/v1/members/{membership_id}/reset-link", { params: { path } });
+      const { data, error, response } = await call();
       if (data) {
-        setLink({ who: member.display_name, kind, token: data.token, expiresAt: data.expires_at });
-      } else {
-        setRowError({ id: member.membership_id, message: errorMessage(error, response.status) });
-        void load(null); // the member may have changed (activated, removed...): show the truth
+        done(data);
+        return;
       }
+      const message = errorMessage(error as ErrorResponse | undefined, response.status);
+      setRowError({ id: member.membership_id, name: member.display_name, message });
+      if (response.status === 412 || response.status === 409) setPanel(null);
+      void load(null, members.length);
     } catch {
-      setRowError({ id: member.membership_id, message: NETWORK });
+      setRowError({
+        id: member.membership_id,
+        name: member.display_name,
+        message: NETWORK,
+      });
     } finally {
       setBusyId(null);
     }
   }
 
-  async function saveGrants(member: Member, grants: string[]) {
-    setBusyId(member.membership_id);
-    setRowError(null);
-    try {
-      const { data, error, response } = await api().PUT("/api/v1/members/{membership_id}/grants", {
-        params: {
-          path: { membership_id: member.membership_id },
-          header: { "If-Match": ifMatch(member.revision) },
-        },
-        body: { grants: grants as components["schemas"]["SetGrants"]["grants"] },
-      });
-      if (data) {
-        setMembers((current) =>
-          current.map((m) => (m.membership_id === data.membership_id ? data : m)),
-        );
-        setEditing(null);
-      } else {
-        setRowError({ id: member.membership_id, message: errorMessage(error, response.status) });
-        if (response.status === 412 || response.status === 409) {
-          setEditing(null);
-          void load(null); // someone else changed it: reload so the next try starts from the truth
-        }
-      }
-    } catch {
-      setRowError({ id: member.membership_id, message: NETWORK });
-    } finally {
-      setBusyId(null);
-    }
+  function replace(updated: Member) {
+    setMembers((current) =>
+      current.map((m) => (m.membership_id === updated.membership_id ? updated : m)),
+    );
+    setPanel(null);
   }
+
+  function newLink(member: Member, kind: "activation" | "reset") {
+    const path = { membership_id: member.membership_id };
+    const call = () =>
+      kind === "activation"
+        ? api().POST("/api/v1/members/{membership_id}/activation-link", { params: { path } })
+        : api().POST("/api/v1/members/{membership_id}/reset-link", { params: { path } });
+    void change(member, call, (data) =>
+      setLink({ who: member.display_name, kind, token: data.token, expiresAt: data.expires_at }),
+    );
+  }
+
+  function saveGrants(member: Member, grants: string[]) {
+    void change(
+      member,
+      () =>
+        api().PUT("/api/v1/members/{membership_id}/grants", {
+          params: {
+            path: { membership_id: member.membership_id },
+            header: { "If-Match": ifMatch(member.revision) },
+          },
+          body: { grants: grants as components["schemas"]["SetGrants"]["grants"] },
+        }),
+      replace,
+    );
+  }
+
+  function changeRole(member: Member) {
+    const promoting = member.role === "FACULTY";
+    void change(
+      member,
+      () =>
+        api().POST("/api/v1/members/{membership_id}/change-role", {
+          params: {
+            path: { membership_id: member.membership_id },
+            header: { "If-Match": ifMatch(member.revision) },
+          },
+          body: { expected_role: member.role as Role, new_role: promoting ? "ADMIN" : "FACULTY" },
+        }),
+      (updated) => {
+        replace(updated);
+        setNotice(`${member.display_name} is now ${promoting ? "an admin" : "faculty"}.`);
+      },
+    );
+  }
+
+  function remove(member: Member) {
+    void change(
+      member,
+      () =>
+        api().POST("/api/v1/members/{membership_id}/remove", {
+          params: {
+            path: { membership_id: member.membership_id },
+            header: { "If-Match": ifMatch(member.revision) },
+          },
+          body: { expected_role: member.role as Role },
+        }),
+      () => {
+        setMembers((current) => current.filter((m) => m.membership_id !== member.membership_id));
+        setPanel(null);
+        setNotice(`${member.display_name} was removed. Their access has ended.`);
+      },
+    );
+  }
+
+  /** The current Owner, from the list or, for a long list, from the pages not loaded yet. */
+  async function findOwner(): Promise<Member | null> {
+    const loaded = members.find((m) => m.role === "OWNER");
+    if (loaded) return loaded;
+    let cursor = nextCursor;
+    while (cursor) {
+      const { data } = await api().GET("/api/v1/members", { params: { query: { cursor } } });
+      if (!data) return null;
+      const found = data.data.find((m) => m.role === "OWNER");
+      if (found) return found;
+      cursor = data.page.next_cursor ?? null;
+    }
+    return null;
+  }
+
+  async function transfer(heir: Member) {
+    let owner: Member | null;
+    try {
+      owner = await findOwner();
+    } catch {
+      setRowError({ id: heir.membership_id, name: heir.display_name, message: NETWORK });
+      return;
+    }
+    if (!owner) {
+      setRowError({
+        id: heir.membership_id,
+        name: heir.display_name,
+        message: "Could not find the current Owner. Reload the page and try again.",
+      });
+      return;
+    }
+    const current = owner;
+    void change(
+      heir,
+      () =>
+        api().POST("/api/v1/organization/transfer-ownership", {
+          params: { header: { "If-Match": ifMatch(current.revision) } },
+          body: {
+            expected_owner_membership_id: current.membership_id,
+            new_owner_membership_id: heir.membership_id,
+          },
+        }),
+      () => {
+        setPanel(null);
+        setNotice(
+          `${heir.display_name} is now the Owner. ${
+            current.user_id === me?.id ? "You are" : `${current.display_name} is now`
+          } an admin.`,
+        );
+        void load(null, members.length);
+        retry(); // your own role changed: reload who you are
+      },
+    );
+  }
+
+  const orphanedError =
+    rowError && !members.some((m) => m.membership_id === rowError.id) ? rowError : null;
+  const currentOwner = members.find((m) => m.role === "OWNER");
 
   if (loadError) {
     return (
@@ -210,10 +333,19 @@ export default function UsersPage() {
       )}
       <h1 className="text-2xl font-semibold">Users &amp; grants</h1>
       <p className="mt-1 mb-6 text-zinc-600 dark:text-zinc-400">
-        Invite people, give faculty their grants, and make links when someone needs to get in.
+        Invite people, give faculty their grants, change roles, remove people, and make links when
+        someone needs to get in.
       </p>
 
       {link && <LinkNotice link={link} onDismiss={() => setLink(null)} />}
+      {notice && (
+        <p
+          role="status"
+          className="mb-6 max-w-2xl rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+        >
+          {notice}
+        </p>
+      )}
 
       {listState === "denied" && (
         <p role="alert" className={`max-w-md ${ALERT}`}>
@@ -271,88 +403,43 @@ export default function UsersPage() {
             </button>
           </form>
 
+          {orphanedError && (
+            // The person this is about is no longer in the list (removed meanwhile, say), so
+            // there is no card to carry the message.
+            <p role="alert" className={`mb-4 max-w-2xl ${ALERT}`}>
+              {orphanedError.name}: {orphanedError.message}
+            </p>
+          )}
           <h2 className="mb-3 font-medium">People in your coaching</h2>
           <ul aria-label="Members" className="max-w-2xl space-y-3">
-            {members.map((member) => (
-              <li
-                key={member.membership_id}
-                className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
-                    <span className="font-medium">{member.display_name}</span>
-                    <span className="ml-2 text-sm text-zinc-500">{member.email}</span>
-                  </div>
-                  <div className="flex gap-2 text-xs">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
-                      {member.role.charAt(0) + member.role.slice(1).toLowerCase()}
-                    </span>
-                    {member.account_status !== "ACTIVE" && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                        {member.account_status === "INVITED" ? "Invited" : "Disabled"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {member.role !== "FACULTY"
-                    ? "Holds every grant"
-                    : member.grants.length === 0
-                      ? "No grants"
-                      : `Grants: ${member.grants.map(grantLabel).join(", ")}`}
-                </p>
-                {member.actions.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {member.actions.includes("SET_GRANTS") && (
-                      <button
-                        type="button"
-                        className={BUTTON}
-                        onClick={() => {
-                          setRowError(null);
-                          setEditing(member.membership_id);
-                        }}
-                      >
-                        Edit grants
-                      </button>
-                    )}
-                    {member.actions.includes("NEW_ACTIVATION_LINK") && (
-                      <button
-                        type="button"
-                        className={BUTTON}
-                        disabled={busyId === member.membership_id}
-                        onClick={() => void newLink(member, "activation")}
-                      >
-                        New activation link
-                      </button>
-                    )}
-                    {member.actions.includes("NEW_RESET_LINK") && (
-                      <button
-                        type="button"
-                        className={BUTTON}
-                        disabled={busyId === member.membership_id}
-                        onClick={() => void newLink(member, "reset")}
-                      >
-                        Password-reset link
-                      </button>
-                    )}
-                  </div>
-                )}
-                {editing === member.membership_id && (
-                  <GrantsEditor
-                    name={member.display_name}
-                    current={member.grants}
-                    busy={busyId === member.membership_id}
-                    onSave={(grants) => void saveGrants(member, grants)}
-                    onCancel={() => setEditing(null)}
-                  />
-                )}
-                {rowError?.id === member.membership_id && (
-                  <p role="alert" className={`mt-3 ${ALERT}`}>
-                    {rowError.message}
-                  </p>
-                )}
-              </li>
-            ))}
+            {members.map((member) => {
+              const id = member.membership_id;
+              const open = panel?.id === id ? panel.kind : null;
+              return (
+                <MemberCard
+                  key={id}
+                  member={member}
+                  panel={open}
+                  busy={busyId === id}
+                  error={rowError?.id === id ? rowError.message : null}
+                  owner={
+                    currentOwner
+                      ? { name: currentOwner.display_name, isYou: currentOwner.user_id === me.id }
+                      : null
+                  }
+                  onOpen={(kind) => {
+                    setRowError(null);
+                    setPanel({ id, kind });
+                  }}
+                  onClose={() => setPanel(null)}
+                  onNewLink={(kind) => newLink(member, kind)}
+                  onSaveGrants={(grants) => saveGrants(member, grants)}
+                  onChangeRole={() => changeRole(member)}
+                  onRemove={() => remove(member)}
+                  onTransfer={() => void transfer(member)}
+                />
+              );
+            })}
           </ul>
           {nextCursor && (
             <button
