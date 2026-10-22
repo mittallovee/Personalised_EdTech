@@ -144,9 +144,12 @@ def upgrade() -> None:
             END IF;
 
             PERFORM set_config('app.org_id', flow.organization_id::text, true);
-            SELECT * INTO link FROM account_links l WHERE l.id = flow.account_link_id FOR UPDATE;
-            IF NOT FOUND OR link.purpose <> 'ACTIVATION' OR link.used_at IS NOT NULL
-               OR link.revoked_at IS NOT NULL OR link.expires_at <= now() THEN
+            -- Locks are taken in the order everything else takes them (the membership, then its
+            -- link: removing a member locks the membership and then revokes their link), or two
+            -- people working at once could wait for each other. So first read the link without a
+            -- lock, only to learn which membership it belongs to.
+            SELECT * INTO link FROM account_links l WHERE l.id = flow.account_link_id;
+            IF NOT FOUND THEN
                 PERFORM set_config('app.org_id', coalesce(previous_org, ''), true);
                 RETURN;
             END IF;
@@ -162,6 +165,13 @@ def upgrade() -> None:
                   AND o.status = 'ACTIVE' AND u.id = link.user_id AND u.status = 'INVITED'
                 FOR SHARE OF m, o;
             IF NOT FOUND THEN
+                PERFORM set_config('app.org_id', coalesce(previous_org, ''), true);
+                RETURN;
+            END IF;
+            -- Now the link itself, locked and checked again, as it may have changed meanwhile.
+            SELECT * INTO link FROM account_links l WHERE l.id = flow.account_link_id FOR UPDATE;
+            IF NOT FOUND OR link.purpose <> 'ACTIVATION' OR link.used_at IS NOT NULL
+               OR link.revoked_at IS NOT NULL OR link.expires_at <= now() THEN
                 PERFORM set_config('app.org_id', coalesce(previous_org, ''), true);
                 RETURN;
             END IF;

@@ -1,6 +1,7 @@
 """M2 PR 8b: activating an invited account with Google instead of a password (B-02, B-04, T19)."""
 
 import threading
+import time
 from collections.abc import Callable, Iterator
 from uuid import UUID
 
@@ -371,3 +372,43 @@ def test_an_activation_waits_for_a_suspension_or_removal_in_progress(
     assert outcome["row"] is None  # it saw the committed change and activated nobody
     assert user_status(owner_db, owner_of(created)) == "INVITED"
     assert linked_accounts(owner_db) == 0
+
+
+def test_a_removal_that_revokes_the_link_does_not_deadlock_with_a_waiting_activation(
+    client: TestClient, owner_db: Database, db: Database
+) -> None:
+    """Codex review on PR #25: removing a member locks the membership and then revokes their link.
+    The activation must take its locks in the same order (membership, then link), or the two wait
+    for each other and the database has to cancel one of them."""
+    created = invite_owner(client, owner_db)
+    assert start_activation(client, token_of(created)).status_code == 200
+    with owner_db.transaction(PLATFORM) as session:
+        flow_id = session.scalar(text("SELECT id FROM oauth_flows"))
+        session.execute(text("UPDATE oauth_flows SET used_at = now()"))
+    outcome: dict[str, object] = {}
+
+    def activate() -> None:
+        try:
+            with db.transaction(NO_CONTEXT) as session:
+                outcome["row"] = session.execute(
+                    text("SELECT * FROM auth_google_activate(:flow, 'sub-race', NULL)"),
+                    {"flow": flow_id},
+                ).first()
+        except Exception as error:
+            outcome["error"] = error
+
+    context = TenantContext(organization_id=org_of(created), is_platform=True)
+    with owner_db.transaction(context) as session:
+        session.execute(
+            text("UPDATE memberships SET status = 'REMOVED' WHERE organization_id = :org"),
+            {"org": org_of(created)},
+        )
+        worker = threading.Thread(target=activate)
+        worker.start()
+        time.sleep(0.5)  # the activation is under way, and must not be holding the link
+        session.execute(text("UPDATE account_links SET revoked_at = now()"))  # as remove does
+    worker.join(timeout=10.0)
+
+    assert "error" not in outcome, outcome.get("error")
+    assert outcome["row"] is None
+    assert user_status(owner_db, owner_of(created)) == "INVITED"
