@@ -36,41 +36,54 @@ export default function UsersPage() {
   const [panel, setPanel] = useState<{ id: string; kind: Panel } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; name: string; message: string } | null>(
+    null,
+  );
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   // A retry of the same invitation reuses its Idempotency-Key, so a lost response never means
   // two accounts; a changed form gets a new key.
   const inviteKey = useRef<{ key: string; fingerprint: string } | null>(null);
 
+  /**
+   * Load a page of people: the first one (`cursor` null) or the next one. A reload passes `keep`,
+   * the number of people showing, and keeps loading pages until that many are back, so people
+   * shown through "Show more" do not drop off the list.
+   */
   const load = useCallback(
-    async (cursor: string | null) => {
-      let result;
-      try {
-        result = await api().GET("/api/v1/members", {
-          params: { query: cursor ? { cursor } : {} },
-        });
-      } catch {
-        setListState("failed");
-        setListError(NETWORK);
-        return;
+    async (cursor: string | null, keep = 0) => {
+      let after = cursor;
+      let loaded: Member[] = [];
+      for (;;) {
+        let result;
+        try {
+          result = await api().GET("/api/v1/members", {
+            params: { query: after ? { cursor: after } : {} },
+          });
+        } catch {
+          setListState("failed");
+          setListError(NETWORK);
+          return;
+        }
+        if (result.response.status === 401) {
+          router.replace("/login");
+          return;
+        }
+        if (result.response.status === 403) {
+          setListState("denied");
+          return;
+        }
+        if (!result.data) {
+          setListState("failed");
+          setListError(errorMessage(result.error, result.response.status));
+          return;
+        }
+        loaded = [...loaded, ...result.data.data];
+        after = result.data.page.next_cursor ?? null;
+        if (!after || loaded.length >= keep) break;
       }
-      if (result.response.status === 401) {
-        router.replace("/login");
-        return;
-      }
-      if (result.response.status === 403) {
-        setListState("denied");
-        return;
-      }
-      if (!result.data) {
-        setListState("failed");
-        setListError(errorMessage(result.error, result.response.status));
-        return;
-      }
-      const page = result.data;
-      setMembers((current) => (cursor ? [...current, ...page.data] : page.data));
-      setNextCursor(page.page.next_cursor ?? null);
+      setMembers((current) => (cursor ? [...current, ...loaded] : loaded));
+      setNextCursor(after);
       setListState("ready");
       setListError(null);
     },
@@ -153,11 +166,15 @@ export default function UsersPage() {
         return;
       }
       const message = errorMessage(error as ErrorResponse | undefined, response.status);
-      setRowError({ id: member.membership_id, message });
+      setRowError({ id: member.membership_id, name: member.display_name, message });
       if (response.status === 412 || response.status === 409) setPanel(null);
-      void load(null);
+      void load(null, members.length);
     } catch {
-      setRowError({ id: member.membership_id, message: NETWORK });
+      setRowError({
+        id: member.membership_id,
+        name: member.display_name,
+        message: NETWORK,
+      });
     } finally {
       setBusyId(null);
     }
@@ -254,12 +271,13 @@ export default function UsersPage() {
     try {
       owner = await findOwner();
     } catch {
-      setRowError({ id: heir.membership_id, message: NETWORK });
+      setRowError({ id: heir.membership_id, name: heir.display_name, message: NETWORK });
       return;
     }
     if (!owner) {
       setRowError({
         id: heir.membership_id,
+        name: heir.display_name,
         message: "Could not find the current Owner. Reload the page and try again.",
       });
       return;
@@ -277,12 +295,20 @@ export default function UsersPage() {
         }),
       () => {
         setPanel(null);
-        setNotice(`${heir.display_name} is now the Owner. You are an admin.`);
-        void load(null);
+        setNotice(
+          `${heir.display_name} is now the Owner. ${
+            current.user_id === me?.id ? "You are" : `${current.display_name} is now`
+          } an admin.`,
+        );
+        void load(null, members.length);
         retry(); // your own role changed: reload who you are
       },
     );
   }
+
+  const orphanedError =
+    rowError && !members.some((m) => m.membership_id === rowError.id) ? rowError : null;
+  const currentOwner = members.find((m) => m.role === "OWNER");
 
   if (loadError) {
     return (
@@ -377,6 +403,13 @@ export default function UsersPage() {
             </button>
           </form>
 
+          {orphanedError && (
+            // The person this is about is no longer in the list (removed meanwhile, say), so
+            // there is no card to carry the message.
+            <p role="alert" className={`mb-4 max-w-2xl ${ALERT}`}>
+              {orphanedError.name}: {orphanedError.message}
+            </p>
+          )}
           <h2 className="mb-3 font-medium">People in your coaching</h2>
           <ul aria-label="Members" className="max-w-2xl space-y-3">
             {members.map((member) => {
@@ -389,6 +422,11 @@ export default function UsersPage() {
                   panel={open}
                   busy={busyId === id}
                   error={rowError?.id === id ? rowError.message : null}
+                  owner={
+                    currentOwner
+                      ? { name: currentOwner.display_name, isYou: currentOwner.user_id === me.id }
+                      : null
+                  }
                   onOpen={(kind) => {
                     setRowError(null);
                     setPanel({ id, kind });

@@ -28,6 +28,7 @@ export function MemberCard({
   panel,
   busy,
   error,
+  owner,
   onOpen,
   onClose,
   onNewLink,
@@ -40,6 +41,8 @@ export function MemberCard({
   panel: Panel | null;
   busy: boolean;
   error: string | null;
+  /** The current Owner, for describing a hand-over; `isYou` when the signed-in person is them. */
+  owner: { name: string; isYou: boolean } | null;
   onOpen: (panel: Panel) => void;
   onClose: () => void;
   onNewLink: (kind: "activation" | "reset") => void;
@@ -159,7 +162,9 @@ export function MemberCard({
       {panel === "transfer" && (
         <ConfirmPanel
           question={`Hand the coaching to ${name}?`}
-          detail="They become the Owner and you become an admin. Only the new Owner can undo this."
+          detail={`They become the Owner and ${
+            owner?.isYou ? "you become" : `${owner?.name ?? "the current Owner"} becomes`
+          } an admin. Only the new Owner can undo this.`}
           confirmLabel="Make owner"
           busy={busy}
           onConfirm={onTransfer}

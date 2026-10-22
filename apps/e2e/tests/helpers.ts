@@ -115,3 +115,31 @@ export async function activate(browser: Browser, link: string, name: string): Pr
   await expect(page.getByRole("heading", { name: `Welcome, ${name}` })).toBeVisible();
   return page;
 }
+
+/** The CSRF token the API gave this browser at sign-in (changes must send it back). */
+export async function csrfOf(context: BrowserContext): Promise<string> {
+  const cookie = (await context.cookies()).find((c) => c.name === "qb_csrf");
+  if (!cookie) throw new Error("not signed in: no CSRF cookie");
+  return decodeURIComponent(cookie.value);
+}
+
+/**
+ * A browser signed in as the platform admin and acting inside a coaching (A-06), through the API:
+ * the console screens for it come later in M2.
+ */
+export async function actingPlatformAdmin(
+  browser: Browser,
+  baseURL: string,
+  organizationId: string,
+): Promise<BrowserContext> {
+  const context = await browser.newContext();
+  const origin = { Origin: baseURL };
+  const login = await context.request.post("/api/v1/auth/login", { headers: origin, data: admin });
+  if (!login.ok()) throw new Error(`admin sign-in failed: HTTP ${login.status()}`);
+  const acted = await context.request.post("/api/v1/platform/acting-organization", {
+    headers: { ...origin, "X-CSRF-Token": await csrfOf(context) },
+    data: { organization_id: organizationId },
+  });
+  if (acted.status() !== 204) throw new Error(`acting in the coaching failed: ${acted.status()}`);
+  return context;
+}

@@ -1,6 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-import { activate, invite, person, signedInOwner, unique } from "./helpers";
+import {
+  activate,
+  actingPlatformAdmin,
+  csrfOf,
+  invite,
+  person,
+  signedInOwner,
+  unique,
+} from "./helpers";
 
 // M2 (B-08, B-09, B-10, T14, T15, T17): change roles, remove people and hand over the coaching on
 // the Users & grants screen. The buttons come from the API's `actions`; every change asks first.
@@ -138,4 +146,109 @@ test("the Owner hands the coaching to an admin and becomes an admin", async ({
   await admin.goto("/admin/users");
   await expect(person(admin, ownerName).getByRole("button", { name: "Make owner" })).toBeVisible();
   await expect(person(admin, ownerName).getByRole("button", { name: "Remove" })).toBeVisible();
+});
+
+test("a platform admin acting in the coaching is told who really steps down", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context, ownerName } = await signedInOwner(
+    browser,
+    baseURL!,
+    `Acting Classes ${unique()}`,
+  );
+  const owner = await context.newPage();
+  await owner.goto("/admin/users");
+  const email = `meera-${unique()}@example.com`;
+  await activate(browser, await invite(owner, "Meera Nair", email, "ADMIN"), "Meera Nair");
+  const organizationId = (await (await context.request.get("/api/v1/me")).json()).organization.id;
+  const staff = await (await actingPlatformAdmin(browser, baseURL!, organizationId)).newPage();
+  await staff.goto("/admin/users");
+
+  await person(staff, email).getByRole("button", { name: "Make owner" }).click();
+  const confirm = person(staff, email).getByRole("region", {
+    name: "Hand the coaching to Meera Nair?",
+  });
+  await expect(confirm).toContainText(`${ownerName} becomes an admin`);
+  await expect(confirm).not.toContainText("you become");
+  await confirm.getByRole("button", { name: "Make owner" }).click();
+
+  await expect(staff.getByRole("status")).toHaveText(
+    `Meera Nair is now the Owner. ${ownerName} is now an admin.`,
+  );
+});
+
+test("a refusal about someone who is no longer listed is still explained", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Gone Classes ${unique()}`);
+  const first = await context.newPage();
+  await first.goto("/admin/users");
+  const email = `kiran-${unique()}@example.com`;
+  await invite(first, "Kiran Das", email);
+
+  // Another tab removes him; this tab still shows him and asks to remove him too.
+  const second = await context.newPage();
+  await second.goto("/admin/users");
+  await person(second, email).getByRole("button", { name: "Remove" }).click();
+  await person(second, email)
+    .getByRole("region", { name: "Remove Kiran Das?" })
+    .getByRole("button", { name: "Remove" })
+    .click();
+  await expect(person(second, email)).toHaveCount(0);
+
+  await person(first, email).getByRole("button", { name: "Remove" }).click();
+  await person(first, email)
+    .getByRole("region", { name: "Remove Kiran Das?" })
+    .getByRole("button", { name: "Remove" })
+    .click();
+
+  await expect(person(first, email)).toHaveCount(0); // the list shows the truth: he is gone
+  await expect(first.locator("main").getByRole("alert")).toContainText("Kiran Das");
+  await expect(first.locator("main").getByRole("alert")).toContainText("Someone else changed this");
+});
+
+test("after Show more, a refusal keeps the people already loaded", async ({ browser, baseURL }) => {
+  test.setTimeout(90_000);
+  const { context } = await signedInOwner(browser, baseURL!, `Long Classes ${unique()}`);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const firstEmail = `first-${unique()}@example.com`;
+  for (let n = 0; n < 52; n++) {
+    const email = n === 0 ? firstEmail : `person${n}-${unique()}@example.com`;
+    const response = await context.request.post("/api/v1/members/invitations", {
+      headers,
+      data: { email, display_name: `Person ${n}`, role: "FACULTY" },
+    });
+    expect(response.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  await page.goto("/admin/users");
+  const members = page.getByRole("list", { name: "Members" }).getByRole("listitem");
+  await expect(members).toHaveCount(50); // the first page
+  await page.getByRole("button", { name: "Show more" }).click();
+  await expect(members).toHaveCount(53); // 52 invited and the Owner
+  const oldest = person(page, firstEmail); // invited first, so on the second page
+
+  // Meanwhile someone else makes her an admin, so this screen is out of date.
+  const found = await context.request.get(`/api/v1/members?limit=100`);
+  const target = (await found.json()).data.find((m: { email: string }) => m.email === firstEmail);
+  const promoted = await context.request.post(
+    `/api/v1/members/${target.membership_id}/change-role`,
+    {
+      headers: { ...headers, "If-Match": `"rev-${target.revision}"` },
+      data: { expected_role: "FACULTY", new_role: "ADMIN" },
+    },
+  );
+  expect(promoted.status()).toBe(200);
+
+  await oldest.getByRole("button", { name: "Remove" }).click();
+  await oldest
+    .getByRole("region", { name: "Remove Person 0?" })
+    .getByRole("button", { name: "Remove" })
+    .click();
+
+  await expect(oldest.getByRole("alert")).toContainText("Someone else changed this");
+  await expect(members).toHaveCount(53); // nobody dropped off the list
+  await expect(oldest).toContainText("Holds every grant"); // and she shows as the admin she is now
 });
