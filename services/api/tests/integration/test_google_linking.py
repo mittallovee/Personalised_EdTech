@@ -472,3 +472,81 @@ def test_a_link_waits_for_a_sign_out_in_progress(
     assert outcome.get("done") is True
     assert outcome["user"] is None  # it saw the revoked session and linked nothing
     assert linked_subjects(owner_db, member.user_id) == []
+
+
+def test_unlinking_records_what_was_removed_in_before(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #26: the removed provider belongs in ``before``, not ``after``."""
+    member, headers = signed_in_member(client, owner_db)
+    google.accounts["code-1"] = identity("sub-mine")
+    assert call_back(client, state_of(start_link(client, headers))) == LINKED
+
+    assert client.post(UNLINK, headers=headers).status_code == 204
+
+    with owner_db.transaction(PLATFORM) as session:
+        event = session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.action == "GOOGLE_UNLINKED", AuditEvent.entity_id == member.user_id
+            )
+        ).one()
+    assert event.before == {"provider": "google"}
+    assert event.after is None
+
+
+def test_a_platform_admin_unlinking_while_acting_does_not_write_to_that_coachings_log(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #26: unlinking is about the admin's own account, not the coaching they
+    happen to be acting in, whose Owner and admins can read that coaching's audit log."""
+    email = platform_admin(owner_db)
+    headers = sign_in(client, email)
+    google.accounts["code-1"] = identity("sub-admin")
+    assert call_back(client, state_of(start_link(client, headers))) == LINKED
+    created = invite_owner(client, owner_db)
+    org_id = created["organization"]["id"]  # type: ignore[index]
+    acting = client.post(
+        "/api/v1/platform/acting-organization", json={"organization_id": org_id}, headers=headers
+    )
+    assert acting.status_code == 204
+
+    assert client.post(UNLINK, headers=headers).status_code == 204
+
+    with owner_db.transaction(PLATFORM) as session:
+        admin_id = session.scalar(
+            text("SELECT user_id FROM account_emails WHERE email = :e"), {"e": email}
+        )
+        organizations = session.scalars(
+            text(
+                "SELECT organization_id FROM audit_events"
+                " WHERE action = 'GOOGLE_UNLINKED' AND entity_id = :u"
+            ),
+            {"u": admin_id},
+        ).all()
+    assert list(organizations) == [None]
+
+
+def test_a_throttled_link_callback_still_goes_to_the_profile_page(
+    settings: Settings, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #26: being throttled must not send a signed-in person to the login."""
+    # Signing in counts as the first request from this address, starting the link the second.
+    strict = settings.model_copy(update={"login_attempts_per_ip": 2})
+    app = create_app(strict)
+    app.state.google = google
+    member = make_member(owner_db, "ADMIN")
+    google.accounts["code-1"] = identity("sub-mine")
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": member.email, "password": MEMBER_PASSWORD},
+            headers=ORIGIN,
+        )
+        headers = {**ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
+        started = start_link(client, headers)
+        assert started.status_code == 200
+
+        location = call_back(client, state_of(started))  # the third: over the limit
+
+    assert location == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []

@@ -250,16 +250,18 @@ def google_callback(
     if google is not None:
         limiter: LoginRateLimiter = request.app.state.login_limiter
         client_ip = client_address(request)
-        if not limiter.check(client_ip, f"google-callback:{client_ip}"):
-            finished = google_service.finish(
-                database,
-                settings,
-                google,
-                cookie=request.cookies.get(FLOW_COOKIE),
-                state=state,
-                code=code,
-                request_id=request.state.request_id,
-            )
+        # Too many callbacks still end the flow (the flow is used up), but ask nothing of Google.
+        throttled = bool(limiter.check(client_ip, f"google-callback:{client_ip}"))
+        finished = google_service.finish(
+            database,
+            settings,
+            google,
+            cookie=request.cookies.get(FLOW_COOKIE),
+            state=state,
+            code=code,
+            throttled=throttled,
+            request_id=request.state.request_id,
+        )
     redirect = RedirectResponse(finished.path, status_code=status.HTTP_303_SEE_OTHER)
     if finished.login:
         set_auth_cookies(redirect, settings, finished.login)

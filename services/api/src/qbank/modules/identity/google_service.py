@@ -169,6 +169,7 @@ def finish(
     cookie: str | None,
     state: str | None,
     code: str | None,
+    throttled: bool,
     request_id: str | None,
 ) -> Finished:
     """Complete a flow Google has called back about. Every failure is one outcome (a redirect to
@@ -192,6 +193,11 @@ def finish(
         log.info("google_flow_failed", reason="no_usable_flow")
         return Finished(SIGN_IN_FAILED_PATH)
     failed = Finished(LINK_FAILED_PATH if flow.purpose == "LINK" else SIGN_IN_FAILED_PATH)
+    if throttled:
+        # Too many callbacks from this address. The flow is used up (it cannot be retried), but the
+        # person is still sent to the page the flow began on, and Google is not asked.
+        log.info("google_flow_failed", reason="throttled", purpose=flow.purpose)
+        return failed
     if not code:
         log.info("google_flow_failed", reason="no_code", purpose=flow.purpose)  # e.g. "Cancel"
         return failed
@@ -390,11 +396,13 @@ def unlink(database: Database, principal: Principal, request_id: str | None) -> 
                 action="GOOGLE_UNLINKED",
                 entity_type="user",
                 entity_id=principal.user_id,
-                organization_id=principal.tenant_context.organization_id,
+                # The person's own account, not the coaching a platform admin may be acting in:
+                # that coaching's Owner and admins can read its audit log.
+                organization_id=principal.organization_id,
                 actor_user_id=principal.user_id,
                 actor_is_platform=principal.is_platform_admin,
                 request_id=request_id,
-                after={"provider": "google"},
+                before={"provider": "google"},
             )
     if outcome == "NO_PASSWORD":
         raise Conflict(
