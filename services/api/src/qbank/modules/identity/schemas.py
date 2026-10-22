@@ -47,7 +47,15 @@ class AuthMethods(BaseModel):
 
 
 class GoogleStartRequest(BaseModel):
-    purpose: Literal["SIGN_IN"] = Field(description="What the person is doing at Google.")
+    purpose: Literal["SIGN_IN", "ACTIVATE"] = Field(
+        description="What the person is doing at Google: signing in, or activating their account."
+    )
+    link_token: str | None = Field(
+        default=None,
+        min_length=20,
+        max_length=100,
+        description="`ACTIVATE` only: the part after # in the activation link.",
+    )
     return_origin: str = Field(
         max_length=200,
         description="The web address the person is on; must be one of ALLOWED_ORIGINS.",

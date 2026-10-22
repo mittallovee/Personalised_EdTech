@@ -6,8 +6,9 @@ from fastapi.responses import RedirectResponse
 from qbank.core.clientip import client_address
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
-from qbank.core.errors import NotFound, TooManyRequests
+from qbank.core.errors import NotFound, TooManyRequests, ValidationFailed
 from qbank.core.ratelimit import LoginRateLimiter
+from qbank.core.security import hash_token
 from qbank.modules.identity import google_service
 from qbank.modules.identity.api import get_settings_from_app, set_auth_cookies
 from qbank.modules.identity.google import GoogleClient
@@ -55,10 +56,16 @@ def auth_methods(request: Request) -> AuthMethods:
     summary="Start signing in with Google",
     description=(
         "Returns the Google address to send the browser to, and sets a short-lived HttpOnly cookie"
-        " that only this browser can finish the flow with. Nothing is created: signing in works"
-        " only for a Google account somebody already linked."
+        " that only this browser can finish the flow with. `SIGN_IN` works only for a Google"
+        " account somebody already linked. `ACTIVATE` takes the `link_token` of an activation"
+        " link, which is checked before leaving for Google, and binds the Google account to the"
+        " person that link was made for. Nothing else is ever created."
     ),
     responses={
+        401: {
+            "description": "`ACTIVATE` only: the activation link is unknown, used, replaced,"
+            " expired, or its membership or coaching is no longer active (`LINK_INVALID`)"
+        },
         404: {"description": "Google sign-in is not set up on this server (`GOOGLE_DISABLED`)"},
         422: {
             "description": "`return_origin` is not an allowed web address"
@@ -77,8 +84,22 @@ def start_google(
     google = _google(request)
     if google is None:
         raise NotFound("Google sign-in is not turned on.", code="GOOGLE_DISABLED")
-    _limit(request, "google-start")
-    started = google_service.start_sign_in(database, settings, google, body.return_origin)
+    if body.purpose == "ACTIVATE":
+        if not body.link_token:
+            raise ValidationFailed("An activation link is needed to activate with Google.")
+        # Counted per client address and per link, exactly like redeeming the link with a password.
+        limiter: LoginRateLimiter = request.app.state.login_limiter
+        wait = limiter.check(client_address(request), f"link:{hash_token(body.link_token)}")
+        if wait:
+            raise TooManyRequests(
+                "Too many attempts. Please wait and try again.", retry_after_seconds=wait
+            )
+        started = google_service.start_activation(
+            database, settings, google, body.return_origin, body.link_token
+        )
+    else:
+        _limit(request, "google-start")
+        started = google_service.start_sign_in(database, settings, google, body.return_origin)
     response.set_cookie(
         FLOW_COOKIE,
         started.cookie_value,

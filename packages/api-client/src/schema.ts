@@ -137,7 +137,7 @@ export interface paths {
         put?: never;
         /**
          * Start signing in with Google
-         * @description Returns the Google address to send the browser to, and sets a short-lived HttpOnly cookie that only this browser can finish the flow with. Nothing is created: signing in works only for a Google account somebody already linked.
+         * @description Returns the Google address to send the browser to, and sets a short-lived HttpOnly cookie that only this browser can finish the flow with. `SIGN_IN` works only for a Google account somebody already linked. `ACTIVATE` takes the `link_token` of an activation link, which is checked before leaving for Google, and binds the Google account to the person that link was made for. Nothing else is ever created.
          */
         post: operations["start_google_api_v1_auth_google_start_post"];
         delete?: never;
@@ -643,10 +643,15 @@ export interface components {
         GoogleStartRequest: {
             /**
              * Purpose
-             * @description What the person is doing at Google.
-             * @constant
+             * @description What the person is doing at Google: signing in, or activating their account.
+             * @enum {string}
              */
-            purpose: "SIGN_IN";
+            purpose: "SIGN_IN" | "ACTIVATE";
+            /**
+             * Link Token
+             * @description `ACTIVATE` only: the part after # in the activation link.
+             */
+            link_token?: string | null;
             /**
              * Return Origin
              * @description The web address the person is on; must be one of ALLOWED_ORIGINS.
@@ -1312,6 +1317,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoogleStartResponse"];
+                };
+            };
+            /** @description `ACTIVATE` only: the activation link is unknown, used, replaced, expired, or its membership or coaching is no longer active (`LINK_INVALID`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website) */
