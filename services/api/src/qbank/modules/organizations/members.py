@@ -7,6 +7,7 @@ lock, so a screen that is a minute old can't act on someone who was promoted mea
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -14,8 +15,8 @@ from sqlalchemy import delete, select, tuple_
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
-from qbank.core.errors import Conflict, NotFound
-from qbank.core.etag import require_if_match
+from qbank.core.errors import Conflict, NotFound, PreconditionFailed
+from qbank.core.etag import etag, require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import (
@@ -39,13 +40,20 @@ from qbank.modules.identity.public import (
     user_status,
 )
 from qbank.modules.organizations.models import Membership, MembershipGrant
-from qbank.modules.organizations.schemas import ChangeRole, InviteMember, MemberOut, RemoveMember
+from qbank.modules.organizations.schemas import (
+    ChangeRole,
+    InviteMember,
+    MemberOut,
+    RemoveMember,
+    TransferOwnership,
+)
 
 NEW_ACTIVATION_LINK = "NEW_ACTIVATION_LINK"
 NEW_RESET_LINK = "NEW_RESET_LINK"
 SET_GRANTS = "SET_GRANTS"
 CHANGE_ROLE = "CHANGE_ROLE"
 REMOVE = "REMOVE"
+TRANSFER_OWNERSHIP = "TRANSFER_OWNERSHIP"
 # The link each account status can use; a disabled account gets none (redeeming would fail).
 _LINK_FOR_STATUS = {INVITED: NEW_ACTIVATION_LINK, "ACTIVE": NEW_RESET_LINK}
 
@@ -86,6 +94,10 @@ def describe(session: Session, principal: Principal, rows: Sequence[Membership])
                 actions.append(CHANGE_ROLE)
             if may_manage_member(principal, row.role):
                 actions.append(REMOVE)
+        # Ownership goes only to an admin who has activated their account.
+        heir = row.role == "ADMIN" and row.status == "ACTIVE" and account.status == "ACTIVE"
+        if heir and is_allowed(principal, Action.TRANSFER_OWNERSHIP):
+            actions.append(TRANSFER_OWNERSHIP)
         members.append(
             MemberOut(
                 membership_id=row.id,
@@ -454,3 +466,90 @@ def remove_member(
         after={"role": member.role, "status": member.status},
     )
     return member
+
+
+def transfer_ownership(
+    session: Session,
+    principal: Principal,
+    body: TransferOwnership,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+) -> tuple[Membership, Membership]:
+    """Hand the coaching to another admin; the Owner becomes an admin (B-08). Returns (old, new).
+
+    ``If-Match`` is the revision of the current Owner's membership: ownership is a fact about that
+    row, and only the platform may write the coaching's own row. Whoever holds the Owner row's lock
+    goes first; a second, simultaneous transfer finds ownership already moved and is refused.
+    """
+    require(principal, Action.TRANSFER_OWNERSHIP)
+    owner = session.scalars(
+        select(Membership)
+        .where(
+            Membership.organization_id == _coaching(principal),
+            Membership.role == "OWNER",
+            Membership.status == "ACTIVE",
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).first()
+    if owner is None:  # waited for a transfer that finished first: the row is no longer the Owner
+        current = session.scalars(
+            select(Membership).where(
+                Membership.organization_id == _coaching(principal),
+                Membership.role == "OWNER",
+                Membership.status == "ACTIVE",
+            )
+        ).first()
+        raise PreconditionFailed(
+            "Ownership changed in the meantime. Reload and try again.",
+            details={"current_etag": etag(current.revision)} if current else None,
+        )
+    # Who the Owner is comes before which revision: a screen that shows the previous Owner
+    # should hear "the Owner changed", not just "stale".
+    if owner.id != body.expected_owner_membership_id:
+        raise Conflict(
+            "The Owner is someone else now. Reload and check before you transfer.",
+            code="OWNER_CHANGED",
+        )
+    require_if_match(if_match, owner.revision)
+    heir = get_member(session, body.new_owner_membership_id, lock=True)
+    account = user_status(session, heir.user_id)
+    if heir.role != "ADMIN" or heir.status != "ACTIVE" or account != "ACTIVE":
+        raise Conflict(
+            "Ownership can only go to an admin of this coaching who has activated their account.",
+            code="INVALID_NEW_OWNER",
+        )
+    # One active Owner at a time is enforced by the database: step down first, then step up.
+    owner.role = "ADMIN"
+    owner.revision += 1
+    owner.updated_at = datetime.now(UTC)
+    session.flush()
+    heir.role = "OWNER"
+    heir.revision += 1
+    heir.updated_at = datetime.now(UTC)
+    session.flush()
+    record_event(
+        session,
+        action="OWNERSHIP_TRANSFERRED",
+        entity_type="organization",
+        entity_id=owner.organization_id,
+        organization_id=owner.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=_is_platform(principal),
+        request_id=request_id,
+        before={"owner_membership_id": str(owner.id), "owner_user_id": str(owner.user_id)},
+        after={"owner_membership_id": str(heir.id), "owner_user_id": str(heir.user_id)},
+    )
+    return owner, heir
+
+
+def caller_after_transfer(principal: Principal, previous_owner: Membership) -> Principal:
+    """The caller as they are once the transfer is done, for what the response offers them.
+
+    The Owner who just handed over is an admin from now on (the next request already sees it), so
+    the response must not advertise owner-only actions to them.
+    """
+    if principal.user_id == previous_owner.user_id and principal.role == "OWNER":
+        return replace(principal, role=previous_owner.role)
+    return principal

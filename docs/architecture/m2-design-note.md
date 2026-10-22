@@ -172,7 +172,7 @@ cookie and `state` match.
 | `POST /members/{id}/activation-link` · `/reset-link` | New link (old one revoked) |
 | `PUT /members/{id}/grants` | Set faculty grants (`If-Match`) |
 | `POST /members/{id}/change-role` · `/remove` | Promote/demote · remove, naming the expected current role |
-| `POST /organization/transfer-ownership` | To an active admin; `If-Match` on the coaching |
+| `POST /organization/transfer-ownership` | To an active admin who has activated; names the expected Owner and sends `If-Match` with **the Owner's membership** revision (not the coaching's: only the platform may write the coaching row, and ownership is held on the membership). A second, simultaneous transfer gets `412` |
 | `POST /auth/links/redeem` | Activate or reset with a link token (no session; see above) |
 | `GET /auth/methods` | Which sign-in methods are on (hides the Google button when off) |
 | `POST /auth/google/start` · `GET /auth/google/callback` · `POST /auth/google/unlink` | §5 |
