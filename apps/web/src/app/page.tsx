@@ -14,7 +14,7 @@ const ALERT =
   "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300";
 
 export default function HomePage() {
-  const { me, loadError, signOutError, retry, signOut } = useMe();
+  const { me, loadError, shellError, retry, signOut, stopActing } = useMe();
   const [health, setHealth] = useState<ReadyStatus | "unreachable" | null>(null);
 
   useEffect(() => {
@@ -63,10 +63,10 @@ export default function HomePage() {
       : "No coaching yet";
 
   return (
-    <AppShell me={me} current="home" onSignOut={signOut}>
-      {signOutError && (
+    <AppShell me={me} current="home" onSignOut={signOut} onStopActing={stopActing}>
+      {shellError && (
         <p role="alert" className={`mb-6 max-w-md ${ALERT}`}>
-          {signOutError}
+          {shellError}
         </p>
       )}
       <h1 className="text-2xl font-semibold">Welcome, {me.display_name}</h1>

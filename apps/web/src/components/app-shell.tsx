@@ -15,7 +15,12 @@ function showsUsers(me: Me): boolean {
   return role === "OWNER" || role === "ADMIN" || me.acting_organization_id !== null;
 }
 
-export type Page = "home" | "users";
+/** Whether to show the Coachings link: the platform admin's own screen. A hint, like the above. */
+function showsCoachings(me: Me): boolean {
+  return me.is_platform_admin;
+}
+
+export type Page = "home" | "users" | "coachings";
 
 const ITEM = "block rounded-md px-3 py-2";
 const CURRENT = "bg-zinc-100 font-medium dark:bg-zinc-800";
@@ -24,15 +29,36 @@ export function AppShell({
   me,
   current,
   onSignOut,
+  onStopActing,
   children,
 }: {
   me: Me;
   current: Page;
   onSignOut: () => void;
+  onStopActing: () => void;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-screen flex-col">
+      {me.acting_organization_id && (
+        <div
+          role="region"
+          aria-label="Acting in a coaching"
+          className="flex flex-wrap items-center justify-between gap-2 bg-amber-200 px-6 py-2 text-sm text-amber-950"
+        >
+          <span>
+            Acting in <strong>{me.acting_organization_name}</strong>. You have full authority here,
+            and what you change is recorded as a platform change.
+          </span>
+          <button
+            type="button"
+            onClick={onStopActing}
+            className="rounded-md border border-amber-900 px-3 py-1 font-medium hover:bg-amber-300"
+          >
+            Stop acting
+          </button>
+        </div>
+      )}
       <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <span className="font-semibold">{me.organization?.display_name ?? "Question Bank"}</span>
         <div className="flex items-center gap-4 text-sm">
@@ -61,6 +87,17 @@ export function AppShell({
                 Home
               </Link>
             </li>
+            {showsCoachings(me) && (
+              <li>
+                <Link
+                  href="/platform/coachings"
+                  aria-current={current === "coachings" ? "page" : undefined}
+                  className={`${ITEM} ${current === "coachings" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Coachings
+                </Link>
+              </li>
+            )}
             {showsUsers(me) && (
               <li>
                 <Link

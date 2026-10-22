@@ -15,7 +15,7 @@ export function useMe() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [shellError, setShellError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export function useMe() {
   }
 
   async function signOut() {
-    setSignOutError(null);
+    setShellError(null);
     try {
       const { response } = await api().POST("/api/v1/auth/logout");
       // 401: the session had already ended (expired or revoked), so the user is signed out anyway.
@@ -64,8 +64,24 @@ export function useMe() {
       // network failure: fall through
     }
     // Never show the signed-out screen while the server session may still be valid.
-    setSignOutError("Could not sign out. You are still signed in; please try again.");
+    setShellError("Could not sign out. You are still signed in; please try again.");
   }
 
-  return { me, loadError, signOutError, retry, signOut };
+  /** Stop acting inside a coaching (A-06): back to the platform's own screens. */
+  async function stopActing() {
+    setShellError(null);
+    try {
+      const { response } = await api().DELETE("/api/v1/platform/acting-organization");
+      if (response.ok) {
+        router.replace("/platform/coachings");
+        retry(); // who you are has changed: reload it
+        return;
+      }
+    } catch {
+      // network failure: fall through
+    }
+    setShellError("Could not stop acting in the coaching. You are still acting in it; try again.");
+  }
+
+  return { me, loadError, shellError, retry, signOut, stopActing };
 }
