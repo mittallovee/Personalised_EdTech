@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { linkFragment } from "@/lib/links";
+
 export interface IssuedLink {
   /** Whose link: shown in the heading. */
   who: string;
@@ -22,7 +24,7 @@ const KIND = {
 export function LinkNotice({ link, onDismiss }: { link: IssuedLink; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const url = `${window.location.origin}/activate#${link.token}`;
+  const url = `${window.location.origin}/activate#${linkFragment(link.token, link.kind)}`;
 
   async function copy() {
     setCopyFailed(false);

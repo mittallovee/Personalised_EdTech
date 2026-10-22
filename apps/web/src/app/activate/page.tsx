@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { GoogleButton, OrDivider } from "@/components/google-button";
 import { api, errorMessage } from "@/lib/api";
 import { goToGoogle, useAuthMethods } from "@/lib/google";
+import { parseLinkFragment, type ParsedLink } from "@/lib/links";
 
 const MIN_LENGTH = 12; // the API enforces it too; this only saves a round trip
 
@@ -19,7 +20,9 @@ const FIELD =
  */
 export default function ActivatePage() {
   const router = useRouter();
-  const [token, setToken] = useState<string | null | undefined>(undefined); // undefined = reading
+  const [link, setLink] = useState<ParsedLink | null | undefined>(undefined); // undefined = reading
+  const token = link === undefined ? undefined : link?.token || null;
+  const isReset = link?.kind === "reset";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -30,7 +33,7 @@ export default function ActivatePage() {
     window.history.replaceState(null, "", window.location.pathname);
     // Reading the address bar is only possible in the browser, after the first render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToken(fromLink || null);
+    setLink(fromLink ? parseLinkFragment(fromLink) : null);
   }, []);
 
   async function continueWithGoogle() {
@@ -133,7 +136,7 @@ export default function ActivatePage() {
             >
               {busy ? "Saving…" : "Save and sign in"}
             </button>
-            {methods.google && (
+            {methods.google && !isReset && (
               <>
                 <OrDivider />
                 <GoogleButton

@@ -1,6 +1,14 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { createCoaching, signedInOwner, unique } from "./helpers";
+import {
+  activate,
+  createCoaching,
+  invite,
+  person,
+  setPassword,
+  signedInOwner,
+  unique,
+} from "./helpers";
 
 /**
  * The Google screens. Google itself cannot be reached from a test browser, and the test stack has
@@ -268,4 +276,47 @@ test("the Profile page reports the result Google's callback leaves, once", async
   await expect(alerts(page)).toContainText("could not link your Google account");
   await page.reload();
   await expect(alerts(page)).toHaveCount(0);
+});
+
+test("a password-reset link is not offered Google, and still resets the password", async ({
+  browser,
+  baseURL,
+}) => {
+  // Codex review on PR #27: /activate serves both kinds of link, but Google only activates.
+  const { context } = await signedInOwner(browser, baseURL!, `Greset ${unique()}`);
+  const owner = await context.newPage();
+  await owner.goto("/admin/users");
+  const activationLink = await invite(owner, "Anita Rao", `anita-${unique()}@example.com`);
+  await activate(browser, activationLink, "Anita Rao");
+  await owner.reload(); // she is active now, so the card offers a reset link
+  await person(owner, "Anita Rao").getByRole("button", { name: "Password-reset link" }).click();
+  const notice = owner.getByRole("status", { name: "Password-reset link for Anita Rao" });
+  const resetLink = await notice.getByLabel("Link").inputValue();
+  expect(resetLink).toMatch(/\/activate#[A-Za-z0-9_-]+\.reset$/);
+  const visitor = await (await browser.newContext()).newPage();
+  await googleIsOn(visitor);
+
+  await visitor.goto(resetLink);
+
+  await expect(visitor.getByRole("button", { name: "Save and sign in" })).toBeVisible();
+  await expect(visitor.getByRole("button", { name: /Google/ })).toHaveCount(0);
+  await setPassword(visitor, "a brand new passphrase");
+  await expect(visitor.getByRole("heading", { name: "Welcome, Anita Rao" })).toBeVisible();
+});
+
+test("an activation link is still offered Google, and its address has no marker", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Gmark ${unique()}`);
+  const owner = await context.newPage();
+  await owner.goto("/admin/users");
+
+  const link = await invite(owner, "Anita Rao", `anita-${unique()}@example.com`);
+
+  expect(link).toMatch(/\/activate#[A-Za-z0-9_-]+$/);
+  const visitor = await (await browser.newContext()).newPage();
+  await googleIsOn(visitor);
+  await visitor.goto(link);
+  await expect(visitor.getByRole("button", { name: "Continue with Google instead" })).toBeVisible();
 });
