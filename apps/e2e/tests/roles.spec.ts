@@ -252,3 +252,38 @@ test("after Show more, a refusal keeps the people already loaded", async ({ brow
   await expect(members).toHaveCount(53); // nobody dropped off the list
   await expect(oldest).toContainText("Holds every grant"); // and she shows as the admin she is now
 });
+
+test("pressing Show more twice on a slow connection loads the next page once", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(90_000);
+  const { context } = await signedInOwner(browser, baseURL!, `Double Classes ${unique()}`);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  for (let n = 0; n < 52; n++) {
+    const response = await context.request.post("/api/v1/members/invitations", {
+      headers,
+      data: {
+        email: `p${n}-${unique()}@example.com`,
+        display_name: `Person ${n}`,
+        role: "FACULTY",
+      },
+    });
+    expect(response.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  let nextPageRequests = 0;
+  await page.route("**/api/v1/members?*cursor=*", async (route) => {
+    nextPageRequests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 800)); // a slow connection
+    await route.continue();
+  });
+  await page.goto("/admin/users");
+  const members = page.getByRole("list", { name: "Members" }).getByRole("listitem");
+  await expect(members).toHaveCount(50);
+
+  await page.getByRole("button", { name: "Show more" }).dblclick();
+
+  await expect(members).toHaveCount(53); // 52 invited and the Owner, each once
+  expect(nextPageRequests).toBe(1);
+});

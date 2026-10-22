@@ -123,23 +123,39 @@ export async function csrfOf(context: BrowserContext): Promise<string> {
   return decodeURIComponent(cookie.value);
 }
 
-/**
- * A browser signed in as the platform admin and acting inside a coaching (A-06), through the API:
- * the console screens for it come later in M2.
- */
+/** A browser signed in as the platform admin, through the API (sign-in has its own tests). */
+export async function platformAdminContext(
+  browser: Browser,
+  baseURL: string,
+): Promise<BrowserContext> {
+  const context = await browser.newContext();
+  const login = await context.request.post("/api/v1/auth/login", {
+    headers: { Origin: baseURL },
+    data: admin,
+  });
+  if (!login.ok()) throw new Error(`admin sign-in failed: HTTP ${login.status()}`);
+  return context;
+}
+
+/** The platform admin acting inside a coaching (A-06), through the API. */
 export async function actingPlatformAdmin(
   browser: Browser,
   baseURL: string,
   organizationId: string,
 ): Promise<BrowserContext> {
-  const context = await browser.newContext();
-  const origin = { Origin: baseURL };
-  const login = await context.request.post("/api/v1/auth/login", { headers: origin, data: admin });
-  if (!login.ok()) throw new Error(`admin sign-in failed: HTTP ${login.status()}`);
+  const context = await platformAdminContext(browser, baseURL);
   const acted = await context.request.post("/api/v1/platform/acting-organization", {
-    headers: { ...origin, "X-CSRF-Token": await csrfOf(context) },
+    headers: { Origin: baseURL, "X-CSRF-Token": await csrfOf(context) },
     data: { organization_id: organizationId },
   });
   if (acted.status() !== 204) throw new Error(`acting in the coaching failed: ${acted.status()}`);
   return context;
+}
+
+/** One coaching's card on the Coachings screen, found by its name. */
+export function coaching(page: Page, name: string) {
+  return page
+    .getByRole("list", { name: "Coachings" })
+    .getByRole("listitem")
+    .filter({ hasText: name });
 }

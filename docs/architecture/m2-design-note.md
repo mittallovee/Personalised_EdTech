@@ -238,7 +238,8 @@ available, so the screens only show or hide buttons.
 | 6a | Members API: change role, remove (T14, T17); migration 0009 |
 | 6b | Transfer ownership (T15) |
 | 6c | Web: role, remove and transfer on the Users & grants screen, with browser tests |
-| 7 | Web: platform console, acting banner, audit log page |
+| 7a | Web: platform console (coachings list, create, rename, suspend/reactivate, "Act in") and the acting banner |
+| 7b | Web: audit log page |
 | 8 | Google login + linking (migration 0010) + `docs/operations/google-login.md` setup guide |
 | 9 | M2 demo notes and exit checks |
 

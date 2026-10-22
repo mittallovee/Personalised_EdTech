@@ -8,6 +8,7 @@ import type { components, ErrorResponse } from "@qbank/api-client";
 import { AppShell } from "@/components/app-shell";
 import { LinkNotice, type IssuedLink } from "@/components/link-notice";
 import { MemberCard, type Member, type Panel } from "@/components/member-card";
+import { StatusNotice } from "@/components/status-notice";
 import { api, errorMessage, ifMatch } from "@/lib/api";
 import { useMe } from "@/lib/use-me";
 
@@ -27,9 +28,11 @@ const NETWORK = "Cannot reach the server. Check your connection and try again.";
  */
 export default function UsersPage() {
   const router = useRouter();
-  const { me, loadError, signOutError, retry, signOut } = useMe();
+  const { me, loadError, shellError, retry, signOut, stopActing } = useMe();
   const [members, setMembers] = useState<Member[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const moreInFlight = useRef(false);
   const [listState, setListState] = useState<"loading" | "ready" | "denied" | "failed">("loading");
   const [listError, setListError] = useState<string | null>(null);
   const [link, setLink] = useState<IssuedLink | null>(null);
@@ -82,13 +85,34 @@ export default function UsersPage() {
         after = result.data.page.next_cursor ?? null;
         if (!after || loaded.length >= keep) break;
       }
-      setMembers((current) => (cursor ? [...current, ...loaded] : loaded));
+      // A page already shown is not added twice, whatever order requests finish in.
+      setMembers((current) =>
+        cursor
+          ? [
+              ...current,
+              ...loaded.filter((m) => !current.some((c) => c.membership_id === m.membership_id)),
+            ]
+          : loaded,
+      );
       setNextCursor(after);
       setListState("ready");
       setListError(null);
     },
     [router],
   );
+
+  /** "Show more": one request at a time, so pressing it twice does not load the page twice. */
+  async function showMore() {
+    if (moreInFlight.current || !nextCursor) return;
+    moreInFlight.current = true;
+    setLoadingMore(true);
+    try {
+      await load(nextCursor);
+    } finally {
+      moreInFlight.current = false;
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     // `load` sets state only after the network call returns, never during this effect.
@@ -325,10 +349,10 @@ export default function UsersPage() {
   if (!me) return <p className="p-8 text-sm text-zinc-500">Loading…</p>;
 
   return (
-    <AppShell me={me} current="users" onSignOut={signOut}>
-      {signOutError && (
+    <AppShell me={me} current="users" onSignOut={signOut} onStopActing={stopActing}>
+      {shellError && (
         <p role="alert" className={`mb-6 max-w-md ${ALERT}`}>
-          {signOutError}
+          {shellError}
         </p>
       )}
       <h1 className="text-2xl font-semibold">Users &amp; grants</h1>
@@ -338,14 +362,7 @@ export default function UsersPage() {
       </p>
 
       {link && <LinkNotice link={link} onDismiss={() => setLink(null)} />}
-      {notice && (
-        <p
-          role="status"
-          className="mb-6 max-w-2xl rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
-        >
-          {notice}
-        </p>
-      )}
+      {notice && <StatusNotice>{notice}</StatusNotice>}
 
       {listState === "denied" && (
         <p role="alert" className={`max-w-md ${ALERT}`}>
@@ -445,7 +462,8 @@ export default function UsersPage() {
             <button
               type="button"
               className={`mt-4 ${BUTTON}`}
-              onClick={() => void load(nextCursor)}
+              disabled={loadingMore}
+              onClick={() => void showMore()}
             >
               Show more
             </button>
