@@ -24,6 +24,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `ACCOUNT_DISABLED` | 409 | The account is disabled, so no activation or reset link can be made for it | M2 |
 | `ROLE_CHANGED` | 409 | The person's role is not the one the request named (`details.current_role`); reload before changing them | M2 |
 | `LAST_OWNER` | 409 | The Owner can't be demoted or removed; transfer ownership to an admin first | M2 |
+| `OWNER_CHANGED` | 409 | An ownership transfer named an Owner who no longer holds that role; reload before transferring | M2 |
+| `INVALID_NEW_OWNER` | 409 | Ownership can only go to an admin of the coaching who is active and has activated their account | M2 |
 | `NOT_FACULTY` | 409 | Grants were set for an Owner or admin, who already hold every grant | M2 |
 | `MEMBER_REMOVED` | 409 | The person is no longer a member of the coaching | M2 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |

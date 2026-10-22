@@ -2301,6 +2301,145 @@
           }
         }
       }
+    },
+    "/api/v1/organization/transfer-ownership": {
+      "post": {
+        "tags": [
+          "members"
+        ],
+        "summary": "Hand the coaching to another admin (B-08)",
+        "description": "The Owner (or a platform admin acting in the coaching) makes an admin of this coaching the Owner; the old Owner becomes an admin. Name the Owner you saw in `expected_owner_membership_id` and send that Owner's ETag (from `GET /members/{id}`) in `If-Match`; if either is out of date nothing changes. The new Owner must be an admin who has activated their account. The change applies from each person's next request.",
+        "operationId": "transfer_ownership_api_v1_organization_transfer_ownership_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnership"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipTransferred"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner may do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such member in your coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Owner is someone else now (`OWNER_CHANGED`), or the new Owner is not an active admin (`INVALID_NEW_OWNER`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed by someone else since your read (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2943,7 +3082,7 @@
             },
             "type": "array",
             "title": "Actions",
-            "description": "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS, CHANGE_ROLE, REMOVE. The web app shows only these buttons; the API checks again on every request."
+            "description": "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS, CHANGE_ROLE, REMOVE, TRANSFER_OWNERSHIP. The web app shows only these buttons; the API checks again on every request."
           }
         },
         "type": "object",
@@ -3097,6 +3236,23 @@
         ],
         "title": "OrganizationPage"
       },
+      "OwnershipTransferred": {
+        "properties": {
+          "previous_owner": {
+            "$ref": "#/components/schemas/MemberOut",
+            "description": "Now an admin."
+          },
+          "new_owner": {
+            "$ref": "#/components/schemas/MemberOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "previous_owner",
+          "new_owner"
+        ],
+        "title": "OwnershipTransferred"
+      },
       "PageInfo": {
         "properties": {
           "next_cursor": {
@@ -3224,6 +3380,28 @@
           "grants"
         ],
         "title": "SetGrants"
+      },
+      "TransferOwnership": {
+        "properties": {
+          "expected_owner_membership_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Expected Owner Membership Id",
+            "description": "The Owner the screen showed. If ownership has moved since, nothing changes."
+          },
+          "new_owner_membership_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "New Owner Membership Id",
+            "description": "An active admin of this coaching, who becomes the Owner."
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_owner_membership_id",
+          "new_owner_membership_id"
+        ],
+        "title": "TransferOwnership"
       },
       "UpdateOrganization": {
         "properties": {

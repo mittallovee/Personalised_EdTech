@@ -114,8 +114,8 @@ class MemberOut(BaseModel):
     actions: list[str] = Field(
         description=(
             "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS,"
-            " CHANGE_ROLE, REMOVE. The web app shows only these buttons; the API checks again on"
-            " every request."
+            " CHANGE_ROLE, REMOVE, TRANSFER_OWNERSHIP. The web app shows only these buttons; the"
+            " API checks again on every request."
         )
     )
 
@@ -184,3 +184,17 @@ class RemoveMember(BaseModel):
     expected_role: Literal["OWNER", "ADMIN", "FACULTY"] = Field(
         description="The role the screen showed. If they have another role now, nothing changes."
     )
+
+
+class TransferOwnership(BaseModel):
+    expected_owner_membership_id: UUID = Field(
+        description="The Owner the screen showed. If ownership has moved since, nothing changes."
+    )
+    new_owner_membership_id: UUID = Field(
+        description="An active admin of this coaching, who becomes the Owner."
+    )
+
+
+class OwnershipTransferred(BaseModel):
+    previous_owner: MemberOut = Field(description="Now an admin.")
+    new_owner: MemberOut
