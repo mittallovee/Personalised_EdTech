@@ -106,6 +106,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which sign-in methods are on
+         * @description For the sign-in page: hides the Google button while Google is not set up.
+         */
+        get: operations["auth_methods_api_v1_auth_methods_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/google/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start signing in with Google
+         * @description Returns the Google address to send the browser to, and sets a short-lived HttpOnly cookie that only this browser can finish the flow with. Nothing is created: signing in works only for a Google account somebody already linked.
+         */
+        post: operations["start_google_api_v1_auth_google_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where Google sends the browser back
+         * @description Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`. Every failure (an unknown or replayed flow, a Google account nobody linked, no access any more, Google refusing) is the same redirect to `/login?google=failed`, so nothing is revealed.
+         */
+        get: operations["google_callback_api_v1_auth_google_callback_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-events": {
         parameters: {
             query?: never;
@@ -501,6 +561,19 @@ export interface components {
             data: components["schemas"]["AuditEventOut"][];
             page: components["schemas"]["PageInfo"];
         };
+        /** AuthMethods */
+        AuthMethods: {
+            /**
+             * Password
+             * @description Sign-in with email and password is always available.
+             */
+            password: boolean;
+            /**
+             * Google
+             * @description Google sign-in is set up on this server; show its button.
+             */
+            google: boolean;
+        };
         /** ChangeRole */
         ChangeRole: {
             /**
@@ -565,6 +638,29 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorInfo"];
+        };
+        /** GoogleStartRequest */
+        GoogleStartRequest: {
+            /**
+             * Purpose
+             * @description What the person is doing at Google.
+             * @constant
+             */
+            purpose: "SIGN_IN";
+            /**
+             * Return Origin
+             * @description The web address the person is on; must be one of ALLOWED_ORIGINS.
+             * @example http://localhost:3000
+             */
+            return_origin: string;
+        };
+        /** GoogleStartResponse */
+        GoogleStartResponse: {
+            /**
+             * Authorization Url
+             * @description Send the person's browser here.
+             */
+            authorization_url: string;
         };
         /**
          * Grant
@@ -1149,6 +1245,145 @@ export interface operations {
             };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    auth_methods_api_v1_auth_methods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMethods"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_google_api_v1_auth_google_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleStartResponse"];
+                };
+            };
+            /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Google sign-in is not set up on this server (`GOOGLE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `return_origin` is not an allowed web address (`RETURN_ORIGIN_NOT_ALLOWED`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many attempts; see the Retry-After header */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    google_callback_api_v1_auth_google_callback_get: {
+        parameters: {
+            query?: {
+                code?: string | null;
+                state?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the home page, or to `/login?google=failed` */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
