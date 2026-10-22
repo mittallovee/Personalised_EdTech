@@ -80,6 +80,12 @@ def _purpose_from_state(state: str | None) -> str | None:
     return next((purpose for purpose, letter in _STATE_KIND.items() if letter == kind), None)
 
 
+def failure_for_state(state: str | None) -> Finished:
+    """The failure outcome for a callback that cannot be processed at all (Google switched off,
+    say), on the page the `state` says the person started from."""
+    return Finished(_failure_path(_purpose_from_state(state)))
+
+
 def redirect_uri(return_origin: str) -> str:
     return f"{return_origin}{CALLBACK_PATH}"
 
@@ -198,7 +204,7 @@ def finish(
     """
     # Used if the flow cannot be found (it may have expired, with its cookie): the `state` still
     # says which page the person started on.
-    unknown = Finished(_failure_path(_purpose_from_state(state)))
+    unknown = failure_for_state(state)
     if not cookie or not state:
         log.info("google_flow_failed", reason="missing_cookie_or_state")
         return unknown

@@ -246,7 +246,9 @@ def google_callback(
     state: str | None = None,
 ) -> RedirectResponse:
     google = _google(request)
-    finished = google_service.Finished(google_service.SIGN_IN_FAILED_PATH)
+    # Even if nothing can be processed (Google switched off while the person was away), a failure
+    # goes back to the page the person started on.
+    finished = google_service.failure_for_state(state)
     if google is not None:
         limiter: LoginRateLimiter = request.app.state.login_limiter
         client_ip = client_address(request)

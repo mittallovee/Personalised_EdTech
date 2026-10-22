@@ -481,3 +481,15 @@ def test_an_activation_that_took_too_long_still_returns_to_the_activation_page(
 
     assert call_back(client, state) == ACTIVATION_FAILED
     assert redeem(client, token_of(created))[0] == 200  # the link is untouched
+
+
+def test_google_turned_off_while_the_person_is_away_still_returns_to_the_activation_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: Google may be switched off and the API restarted mid-flow."""
+    created = invite_owner(client, owner_db)
+    state = state_of(start_activation(client, token_of(created)))
+    client.app.state.google = None  # type: ignore[attr-defined]
+
+    assert call_back(client, state) == ACTIVATION_FAILED
+    assert redeem(client, token_of(created))[0] == 200  # the link is untouched

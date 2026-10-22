@@ -582,3 +582,14 @@ def test_the_kind_of_flow_in_the_state_only_chooses_the_failure_page(
     assert call_back(new_browser(client), state) == LINK_FAILED
     assert linked_subjects(owner_db, member.user_id) == []
     assert prefix
+
+
+def test_google_turned_off_while_the_person_is_away_still_returns_to_the_profile_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    member, headers = signed_in_member(client, owner_db)
+    state = state_of(start_link(client, headers))
+    client.app.state.google = None  # type: ignore[attr-defined]
+
+    assert call_back(client, state) == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []

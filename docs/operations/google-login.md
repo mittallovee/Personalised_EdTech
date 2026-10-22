@@ -1,7 +1,9 @@
 # Turning on "Sign in with Google"
 
 Until you do this, the app works with email and password only, and no Google button appears anywhere.
-The setup is a one-time job of about 15 minutes. It costs nothing and needs no payment details.
+The setup is a one-time job: about 15 minutes to try it yourself with your own Google account, and
+longer if you then publish it for everyone (step 2 explains why). It costs nothing and needs no
+payment details.
 
 > **Google renames its screens now and then.** The steps below say what to look for by purpose. If a
 > menu is called something slightly different, look for the same idea.
@@ -36,14 +38,19 @@ This is the screen people see at Google ("Question Bank wants to know your email
 3. **Audience / user type:**
    - Choose **External** (works for any Google account). Choose **Internal** only if everyone who
      will sign in belongs to one Google Workspace organisation you control.
-4. **Scopes:** the app asks only for `openid` and `email`. These are the basic ones; Google does
-   **not** require a review for them. If the console asks you to add scopes, add those two and
-   nothing else.
+4. **Scopes:** the app asks only for `openid` and `email`, the basic ones. If the console asks you
+   to add scopes, add those two and nothing else. Basic scopes do not need Google's scope review.
 5. **Publishing status:**
    - While the status is **Testing**, only the email addresses you list under **Test users** can use
-     it (up to 100). That is fine while you try it yourself: add your own Google account.
-   - When you are ready for faculty, choose **Publish app** (move it to **In production**). For
-     only these basic scopes, this needs no review.
+     it (up to 100), and none of the checks below apply. That is fine while you try it yourself: add
+     your own Google account.
+   - When you are ready for faculty, choose **Publish app** (**In production**). **Google may then
+     ask you to verify the app's branding** (its name and logo): typically a homepage and privacy
+     policy address on a domain you can prove you own. This is separate from the scope review, and
+     Google decides what it requires and changes the rules from time to time. Read the current
+     rules before you publish: <https://developers.google.com/identity/protocols/oauth2/production-readiness/brand-verification>.
+     (This guide was written without being able to check that page, so treat it as the authority,
+     including for what people see if the branding is not verified.)
 
 ## 3. Create the sign-in credentials
 
