@@ -56,6 +56,8 @@ The full M1 walkthrough, with what each check proves, is in [`docs/operations/m1
 Useful addresses: API readiness http://localhost:8000/health/ready · API docs (local only)
 http://localhost:8000/api/docs. To open the app on your own domain, see
 [`docs/operations/remote-access.md`](docs/operations/remote-access.md).
+To let people sign in with Google, follow [`docs/operations/google-login.md`](docs/operations/google-login.md)
+(off until you do; the app works with passwords without it).
 
 Stop with `Ctrl+C` or `docker compose down`. Database data is kept in a Docker volume between runs
 (`docker compose down -v` deletes it). After pulling new code, run `docker compose up --build -d` again:

@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { GoogleButton, OrDivider } from "@/components/google-button";
 import { api, errorMessage } from "@/lib/api";
+import { goToGoogle, useAuthMethods } from "@/lib/google";
 
 const MIN_LENGTH = 12; // the API enforces it too; this only saves a round trip
 
@@ -20,6 +22,8 @@ export default function ActivatePage() {
   const [token, setToken] = useState<string | null | undefined>(undefined); // undefined = reading
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const methods = useAuthMethods();
 
   useEffect(() => {
     const fromLink = window.location.hash.slice(1);
@@ -28,6 +32,21 @@ export default function ActivatePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setToken(fromLink || null);
   }, []);
+
+  async function continueWithGoogle() {
+    if (!token) return;
+    setGoogleBusy(true);
+    setError(null);
+    const message = await goToGoogle(() =>
+      api().POST("/api/v1/auth/google/start-activation", {
+        body: { return_origin: window.location.origin, link_token: token },
+      }),
+    );
+    if (message) {
+      setError(message);
+      setGoogleBusy(false);
+    }
+  }
 
   async function activate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,6 +133,16 @@ export default function ActivatePage() {
             >
               {busy ? "Saving…" : "Save and sign in"}
             </button>
+            {methods.google && (
+              <>
+                <OrDivider />
+                <GoogleButton
+                  label="Continue with Google instead"
+                  busy={googleBusy}
+                  onClick={() => void continueWithGoogle()}
+                />
+              </>
+            )}
           </form>
         )}
       </div>

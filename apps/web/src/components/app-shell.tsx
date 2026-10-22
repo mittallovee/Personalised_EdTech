@@ -28,7 +28,7 @@ function showsCoachings(me: Me): boolean {
   return me.is_platform_admin;
 }
 
-export type Page = "home" | "users" | "coachings" | "audit";
+export type Page = "home" | "users" | "coachings" | "audit" | "profile";
 
 const ITEM = "block rounded-md px-3 py-2";
 const CURRENT = "bg-zinc-100 font-medium dark:bg-zinc-800";
@@ -128,6 +128,15 @@ export function AppShell({
                 </Link>
               </li>
             )}
+            <li>
+              <Link
+                href="/profile"
+                aria-current={current === "profile" ? "page" : undefined}
+                className={`${ITEM} ${current === "profile" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+              >
+                Profile
+              </Link>
+            </li>
             {UPCOMING.map((name) => (
               <li
                 key={name}

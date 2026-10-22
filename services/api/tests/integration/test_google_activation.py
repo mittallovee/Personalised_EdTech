@@ -32,7 +32,13 @@ from tests.integration.google_support import (
     start_activation,
     state_of,
 )
-from tests.integration.test_link_redemption import invite_owner, redeem, reset_link, token_of
+from tests.integration.test_link_redemption import (
+    NEW_PASSWORD,
+    invite_owner,
+    redeem,
+    reset_link,
+    token_of,
+)
 
 pytestmark = pytest.mark.usefixtures("empty_google_tables")
 
@@ -412,3 +418,36 @@ def test_a_removal_that_revokes_the_link_does_not_deadlock_with_a_waiting_activa
     assert "error" not in outcome, outcome.get("error")
     assert outcome["row"] is None
     assert user_status(owner_db, owner_of(created)) == "INVITED"
+
+
+def test_someone_activated_with_google_can_later_get_a_password_with_a_reset_link(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """The setup guide promises this, so it is checked: an admin's reset link adds a password to an
+    account that was activated with Google, which keeps its Google account."""
+    created = invite_owner(client, owner_db)
+    google.accounts["code-1"] = identity("sub-owner")
+    assert call_back(client, state_of(start_activation(client, token_of(created)))) == "/"
+    with owner_db.transaction(TenantContext(organization_id=org_of(created))) as session:
+        membership_id = session.scalar(
+            text("SELECT id FROM memberships WHERE organization_id = :org"),
+            {"org": org_of(created)},
+        )
+        link = issue_account_link(
+            session,
+            organization_id=org_of(created),
+            membership_id=membership_id,
+            user_id=owner_of(created),
+            purpose=LinkPurpose.RESET,
+            created_by=owner_of(created),
+        )
+
+    assert redeem(client, link.token) == (200, "")
+
+    email: str = created["owner"]["email"]  # type: ignore[index]
+    with TestClient(client.app) as other:
+        login = other.post(
+            "/api/v1/auth/login", json={"email": email, "password": NEW_PASSWORD}, headers=ORIGIN
+        )
+        assert login.status_code == 200
+    assert linked_accounts(owner_db) == 1  # Google is still linked

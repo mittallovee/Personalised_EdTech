@@ -19,7 +19,8 @@
 6. [API style guide](./architecture/api-style-guide.md) and [ADRs](./architecture/adr/README.md): API rules and technical decisions.
 7. [M1 design note](./architecture/m1-design-note.md): approved; the foundation milestone (done).
    [M2 design note](./architecture/m2-design-note.md): identity and coaching admin, **draft for approval**.
-8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [remote access](./operations/remote-access.md) on your own domain.
+8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [remote access](./operations/remote-access.md) on your own domain;
+   [Google login](./operations/google-login.md): one-time Google Cloud setup (M2).
 
 ## Review reading order (history)
 
