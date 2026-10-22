@@ -1,27 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { setPassword, signedInOwner, unique } from "./helpers";
+import { invite, person, setPassword, signedInOwner, unique } from "./helpers";
 
 // M2 (A-01, B-05, B-06, B-09, B-10): the Owner invites people, gives faculty their grants, and
 // makes links, on the Users & grants screen.
-
-async function invite(page: Page, name: string, email: string): Promise<string> {
-  await page.fill('input[name="display_name"]', name);
-  await page.fill('input[name="email"]', email);
-  await page.getByRole("button", { name: "Invite and make link" }).click();
-  const notice = page.getByRole("status", { name: `Activation link for ${name}` });
-  await expect(notice).toBeVisible();
-  const link = await notice.getByLabel("Link").inputValue();
-  expect(link).toContain("/activate#");
-  return link;
-}
-
-function person(page: Page, email: string) {
-  return page
-    .getByRole("list", { name: "Members" })
-    .getByRole("listitem")
-    .filter({ hasText: email });
-}
 
 test("the Owner invites faculty, who activate, then gives them grants and a reset link", async ({
   browser,
