@@ -45,7 +45,7 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _load_principal(
+def load_principal(
     session: Session,
     user_id: UUID,
     session_id: UUID | None,
@@ -145,7 +145,7 @@ def start_session(
     session: Session, settings: Settings, user_id: UUID, request_id: str | None
 ) -> LoginResult | None:
     apply_tenant_context(session, TenantContext(user_id=user_id))
-    principal = _load_principal(session, user_id, session_id=None)
+    principal = load_principal(session, user_id, session_id=None)
     if principal is None:
         return None
     session.execute(text("SELECT auth_register_login_success(:user_id)"), {"user_id": user_id})
@@ -201,7 +201,7 @@ def resolve_session(database: Database, settings: Settings, token: str) -> Sessi
             return None
 
         apply_tenant_context(session, TenantContext(user_id=row.user_id))
-        principal = _load_principal(
+        principal = load_principal(
             session,
             row.user_id,
             session_id=row.id,

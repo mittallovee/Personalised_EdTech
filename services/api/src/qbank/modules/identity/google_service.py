@@ -6,18 +6,26 @@ person nobody linked fails, and never creates or merges an account.
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from qbank.core.auth import Principal
 from qbank.core.config import Settings, without_default_port
 from qbank.core.db import Database
-from qbank.core.errors import Unauthenticated, ValidationFailed
+from qbank.core.errors import (
+    Conflict,
+    NotFound,
+    PermissionDenied,
+    Unauthenticated,
+    ValidationFailed,
+)
 from qbank.core.ids import new_id
-from qbank.core.security import hash_token, new_token
-from qbank.core.tenancy import NO_CONTEXT
+from qbank.core.security import hash_token, new_token, verify_password
+from qbank.core.tenancy import NO_CONTEXT, TenantContext, apply_tenant_context
 from qbank.modules.audit.public import record_event
 from qbank.modules.identity import service
 from qbank.modules.identity.google import (
@@ -27,16 +35,31 @@ from qbank.modules.identity.google import (
     code_challenge,
     new_code_verifier,
 )
+from qbank.modules.identity.schemas import GoogleStatus, LoginMethods
 
 log = structlog.get_logger("qbank.identity")
 
 CALLBACK_PATH = "/api/v1/auth/google/callback"
+# Where the browser lands after Google calls back. Relative, so it stays on the web address the
+# person is already using (the web app proxies /api, ADR-0014).
+SIGNED_IN_PATH = "/"
+SIGN_IN_FAILED_PATH = "/login?google=failed"
+LINKED_PATH = "/profile?google=linked"
+LINK_FAILED_PATH = "/profile?google=failed"
 
 
 @dataclass(frozen=True, slots=True)
 class StartedFlow:
     authorization_url: str  # where to send the person
     cookie_value: str  # goes in the pending-flow cookie; only its hash is stored
+
+
+@dataclass(frozen=True, slots=True)
+class Finished:
+    """How a callback ends: where to send the browser, and the new session if there is one."""
+
+    path: str
+    login: service.LoginResult | None = None
 
 
 def redirect_uri(return_origin: str) -> str:
@@ -55,6 +78,7 @@ def _start(
     google: GoogleClient,
     origin: str,
     begin: Callable[[Session, dict[str, object]], bool],
+    context: TenantContext = NO_CONTEXT,
 ) -> StartedFlow | None:
     """Make the flow's secrets, let ``begin`` store the flow, and build Google's address.
 
@@ -74,7 +98,7 @@ def _start(
         "nonce": nonce,
         "origin": origin,
     }
-    with database.transaction(NO_CONTEXT) as session:
+    with database.transaction(context) as session:
         if not begin(session, flow):
             return None
     url = google.authorization_url(
@@ -145,29 +169,38 @@ def finish(
     cookie: str | None,
     state: str | None,
     code: str | None,
+    throttled: bool,
     request_id: str | None,
-) -> service.LoginResult | None:
-    """Complete a flow Google has called back about. Returns the new session, or None for any
-    failure (one outcome, so the person cannot learn why). Nothing is changed on failure.
+) -> Finished:
+    """Complete a flow Google has called back about. Every failure is one outcome (a redirect to
+    the page the flow began on, with ``?google=failed``), so the person cannot learn why. Nothing
+    is changed on failure.
 
     The flow is used up first, in its own transaction: a replay, a wrong ``state`` or a denied
-    consent can never be retried. Google is asked only after that. The person's right to sign in is
-    then checked afresh, because minutes may have passed (a removal or suspension stops the flow).
+    consent can never be retried. Google is asked only after that. The person's right to do what
+    the flow was for is then checked afresh, because minutes may have passed (a removal or
+    suspension stops the flow).
     """
     if not cookie or not state:
-        log.info("google_login_failed", reason="missing_cookie_or_state")
-        return None
+        log.info("google_flow_failed", reason="missing_cookie_or_state")
+        return Finished(SIGN_IN_FAILED_PATH)
     with database.transaction(NO_CONTEXT) as session:
         flow = session.execute(
             text("SELECT * FROM auth_oauth_take(:cookie, :state)"),
             {"cookie": hash_token(cookie), "state": hash_token(state)},
         ).first()
     if flow is None:
-        log.info("google_login_failed", reason="no_usable_flow")
-        return None
+        log.info("google_flow_failed", reason="no_usable_flow")
+        return Finished(SIGN_IN_FAILED_PATH)
+    failed = Finished(LINK_FAILED_PATH if flow.purpose == "LINK" else SIGN_IN_FAILED_PATH)
+    if throttled:
+        # Too many callbacks from this address. The flow is used up (it cannot be retried), but the
+        # person is still sent to the page the flow began on, and Google is not asked.
+        log.info("google_flow_failed", reason="throttled", purpose=flow.purpose)
+        return failed
     if not code:
-        log.info("google_login_failed", reason="no_code")  # e.g. the person pressed "Cancel"
-        return None
+        log.info("google_flow_failed", reason="no_code", purpose=flow.purpose)  # e.g. "Cancel"
+        return failed
     try:
         identity = google.identify(
             code=code,
@@ -176,21 +209,26 @@ def finish(
             nonce=flow.nonce,
         )
     except GoogleError as exc:
-        log.info("google_login_failed", reason="google_refused", detail=str(exc))
-        return None
+        log.info("google_flow_failed", reason="google_refused", detail=str(exc))
+        return failed
 
     with database.transaction(NO_CONTEXT) as session:
+        result: service.LoginResult | None = None
+        linked = False
         if flow.purpose == "SIGN_IN":
             result = _sign_in(session, settings, identity, request_id)
         elif flow.purpose == "ACTIVATE":
             result = _activate(session, settings, flow.id, identity, request_id)
-        else:
-            result = None  # a purpose this server cannot finish yet
+        elif flow.purpose == "LINK":
+            linked = _link(session, flow.id, flow.user_id, flow.session_id, identity, request_id)
+    if flow.purpose == "LINK":
+        log.info("google_link_finished", user_id=str(flow.user_id), linked=linked)
+        return Finished(LINKED_PATH) if linked else failed
     if result is None:
-        log.info("google_login_failed", reason="not_allowed", purpose=flow.purpose)
-        return None
+        log.info("google_flow_failed", reason="not_allowed", purpose=flow.purpose)
+        return failed
     log.info("google_login_succeeded", user_id=str(result.principal.user_id), purpose=flow.purpose)
-    return result
+    return Finished(SIGNED_IN_PATH, result)
 
 
 def _sign_in(
@@ -234,3 +272,151 @@ def _activate(
         after={"method": "google"},
     )
     return result
+
+
+def _link(
+    session: Session,
+    flow_id: UUID,
+    user_id: UUID,
+    session_id: UUID,
+    identity: GoogleIdentity,
+    request_id: str | None,
+) -> bool:
+    """Link this Google account to the signed-in person who started the flow.
+
+    Checked afresh in this transaction: the person still has access (the check every request
+    makes), and the session that started the flow is still theirs and valid (the database function
+    locks it). A Google account that belongs to anyone is refused.
+    """
+    apply_tenant_context(session, TenantContext(user_id=user_id))
+    principal = service.load_principal(session, user_id, session_id)
+    if principal is None:
+        return False
+    apply_tenant_context(session, principal.tenant_context)
+    linked = session.scalar(
+        text("SELECT auth_google_link(:flow, :subject, :email)"),
+        {"flow": flow_id, "subject": identity.subject, "email": identity.email},
+    )
+    if linked is None:
+        return False
+    record_event(
+        session,
+        action="GOOGLE_LINKED",
+        entity_type="user",
+        entity_id=user_id,
+        organization_id=principal.tenant_context.organization_id,
+        actor_user_id=user_id,
+        actor_is_platform=principal.is_platform_admin,
+        request_id=request_id,
+        after={"provider": "google"},
+    )
+    return True
+
+
+def start_link(
+    database: Database,
+    settings: Settings,
+    google: GoogleClient,
+    principal: Principal,
+    return_origin: str,
+    password: str,
+) -> StartedFlow:
+    """Start linking a Google account to the signed-in person, who must give their password now.
+
+    A session alone is never proof: the password comes in this very request. A wrong password
+    counts towards the same lockout as signing in, and a locked account is refused like a wrong one.
+    """
+    origin = _allowed_origin(settings, return_origin)
+    wrong_password = False
+    with database.transaction(principal.tenant_context) as session:
+        methods = session.execute(text("SELECT * FROM auth_my_login_methods()")).one()
+        if methods.google_linked:
+            raise Conflict(
+                "A Google account is already linked. Unlink it first to link another.",
+                code="ALREADY_LINKED",
+            )
+        credential = session.execute(text("SELECT * FROM auth_my_credential()")).first()
+        password_ok = verify_password(credential.password_hash if credential else None, password)
+        locked = (
+            credential is not None
+            and credential.locked_until is not None
+            and credential.locked_until > datetime.now(UTC)
+        )
+        if credential is None or locked or not password_ok:
+            wrong_password = True
+            if credential is not None and not locked:
+                session.execute(
+                    text("SELECT auth_register_login_failure(:user_id, :max, :lock_for)"),
+                    {
+                        "user_id": principal.user_id,
+                        "max": settings.login_max_failures,
+                        "lock_for": timedelta(minutes=settings.login_lock_minutes),
+                    },
+                )
+        else:
+            session.execute(
+                text("SELECT auth_register_login_success(:user_id)"),
+                {"user_id": principal.user_id},
+            )
+    if wrong_password:  # raised outside the transaction, so the failure count is kept
+        log.info("google_link_refused", user_id=str(principal.user_id), reason="password")
+        raise PermissionDenied("The password is incorrect.", code="PASSWORD_INCORRECT")
+
+    outcome: list[str] = []
+
+    def begin(session: Session, flow: dict[str, object]) -> bool:
+        result = session.scalar(
+            text(
+                "SELECT auth_oauth_begin_link"
+                "(:id, :cookie, :state, :verifier, :nonce, :origin, :session_id)"
+            ),
+            {**flow, "session_id": principal.session_id},
+        )
+        outcome.append(str(result))
+        return bool(result == "STARTED")
+
+    started = _start(database, google, origin, begin, principal.tenant_context)
+    if started is None:
+        if outcome == ["ALREADY_LINKED"]:
+            raise Conflict(
+                "A Google account is already linked. Unlink it first to link another.",
+                code="ALREADY_LINKED",
+            )
+        raise Unauthenticated("Please sign in.")  # the session ended meanwhile
+    return started
+
+
+def unlink(database: Database, principal: Principal, request_id: str | None) -> None:
+    """Remove the signed-in person's Google account, if they keep a password to sign in with."""
+    with database.transaction(principal.tenant_context) as session:
+        outcome = session.scalar(text("SELECT auth_google_unlink()"))
+        if outcome == "UNLINKED":
+            record_event(
+                session,
+                action="GOOGLE_UNLINKED",
+                entity_type="user",
+                entity_id=principal.user_id,
+                # The person's own account, not the coaching a platform admin may be acting in:
+                # that coaching's Owner and admins can read its audit log.
+                organization_id=principal.organization_id,
+                actor_user_id=principal.user_id,
+                actor_is_platform=principal.is_platform_admin,
+                request_id=request_id,
+                before={"provider": "google"},
+            )
+    if outcome == "NO_PASSWORD":
+        raise Conflict(
+            "Google is the only way you sign in. Ask your admin for a password-reset link first.",
+            code="NO_OTHER_LOGIN_METHOD",
+        )
+    if outcome != "UNLINKED":
+        raise NotFound("No Google account is linked.", code="GOOGLE_NOT_LINKED")
+
+
+def login_methods(database: Database, principal: Principal) -> LoginMethods:
+    with database.transaction(principal.tenant_context) as session:
+        row = session.execute(text("SELECT * FROM auth_my_login_methods()")).one()
+    return LoginMethods(
+        password=row.has_password,
+        google=GoogleStatus(linked=row.google_linked, email=row.google_email),
+    )
