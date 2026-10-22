@@ -122,9 +122,14 @@ Both values must be set; setting only one stops the API at start-up with a clear
   console, create a new secret, update `.env`, restart, and delete the old secret. Rotate it on
   purpose now and then as well.
 - **Turning it off again:** empty both values in `.env` and restart the API. People keep their
-  linked accounts, and password sign-in is unaffected.
-- **Nobody is locked out:** a Google account can be unlinked only while a password remains. A person
-  activated with Google has no password; an admin can make them a **password-reset link** if they
-  want one.
+  linked accounts, and password sign-in is unaffected. **But anyone who has no password can no longer
+  sign in at all while Google is off.** That means everyone who was activated with *Continue with
+  Google* and never got a password. The Profile page shows such a person "Password: Not set". Before
+  you turn Google off, give each of them a password: **Users & grants → Password-reset link**, and
+  send it to them. Or keep Google on. (The members list does not yet mark who signs in with Google
+  only; if in doubt, make a reset link for everyone who was invited while Google was on.)
+- **Nobody can lock themselves out by unlinking:** a Google account can be unlinked only while a
+  password remains. A person activated with Google has no password, so they cannot unlink; an admin
+  can make them a **password-reset link** if they want one.
 - **Cloud later (M7):** repeat step 3 for the real address of the deployed app, and keep the secret in
   the hosting provider's secret store instead of a `.env` file.

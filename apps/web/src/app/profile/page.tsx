@@ -81,6 +81,9 @@ export default function ProfilePage() {
       if (response.ok) {
         setConfirmingUnlink(false);
         setNotice("Your Google account is unlinked. You sign in with your password.");
+        // The unlink went through, so show that now; the reload below only confirms it, and a
+        // failed reload must not bring the old "linked" state back.
+        setMethods((current) => current && { ...current, google: { linked: false, email: null } });
         await load();
       } else {
         setConfirmingUnlink(false);

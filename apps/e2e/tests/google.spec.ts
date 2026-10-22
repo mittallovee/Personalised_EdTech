@@ -425,3 +425,35 @@ test("while Google sign-in is under way the password button waits", async ({ pag
 
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeDisabled();
 });
+
+test("after unlinking, a failed refresh does not leave Google shown as linked", async ({
+  browser,
+  baseURL,
+}) => {
+  // Codex review on PR #27: the page said "unlinked" while still showing the old state.
+  const { context } = await signedInOwner(browser, baseURL!, `Gstale ${unique()}`);
+  const page = await context.newPage();
+  await googleIsOn(page);
+  let reads = 0;
+  await page.route("**/api/v1/me/login-methods", (route) => {
+    reads += 1;
+    return reads === 1
+      ? route.fulfill({
+          json: { password: true, google: { linked: true, email: "me@gmail.example" } },
+        })
+      : route.fulfill(error("INTERNAL_ERROR", "Something went wrong.", 500)); // the refresh fails
+  });
+  await page.route("**/api/v1/auth/google/unlink", (route) => route.fulfill({ status: 204 }));
+  await page.goto("/profile");
+  await expect(page.getByRole("list", { name: "Sign-in methods" })).toContainText(
+    "me@gmail.example",
+  );
+
+  await page.getByRole("button", { name: "Unlink Google", exact: true }).click();
+  await page.getByRole("button", { name: "Unlink Google" }).last().click();
+
+  await expect(page.getByRole("status")).toContainText("Your Google account is unlinked");
+  const methods = page.getByRole("list", { name: "Sign-in methods" });
+  await expect(methods).not.toContainText("me@gmail.example");
+  await expect(page.getByRole("button", { name: /Unlink/ })).toHaveCount(0);
+});
