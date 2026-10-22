@@ -68,3 +68,26 @@ class GoogleActivationStartRequest(BaseModel):
 
 class GoogleStartResponse(BaseModel):
     authorization_url: str = Field(description="Send the person's browser here.")
+
+
+class GoogleLinkStartRequest(BaseModel):
+    return_origin: str = Field(
+        max_length=200,
+        description="The web address the person is on; must be one of ALLOWED_ORIGINS.",
+        examples=["http://localhost:3000"],
+    )
+    password: str = Field(
+        min_length=1,
+        max_length=128,
+        description="The account's current password: a session alone never links Google.",
+    )
+
+
+class GoogleStatus(BaseModel):
+    linked: bool
+    email: str | None = Field(description="The Google account's email when it was linked.")
+
+
+class LoginMethods(BaseModel):
+    password: bool = Field(description="The account has a password.")
+    google: GoogleStatus

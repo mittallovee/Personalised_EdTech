@@ -108,7 +108,7 @@ Rules that hold everywhere:
     - `ACTIVATE`, `POST /auth/google/start-activation {return_origin, link_token}`, needs the activation
       `link_token`, which the page reads from the `#` part, so the token is checked **before** leaving for
       Google;
-    - `LINK` (8c, its own endpoint) needs a session, the CSRF header and the account's current `password` **in the same request**.
+    - `LINK`, `POST /auth/google/start-link {return_origin, password}`, needs a session, the CSRF header and the account's current `password` **in the same request**.
       The API verifies the password right there: wrong passwords count towards the sign-in lockout and
       rate limits, and session age never counts as proof. Only accounts that have a password can start
       `LINK`, which is fine because an account can't link a second Google account anyway.
@@ -180,7 +180,7 @@ cookie and `state` match.
 | `POST /organization/transfer-ownership` | To an active admin who has activated; names the expected Owner and sends `If-Match` with **the Owner's membership** revision (not the coaching's: only the platform may write the coaching row, and ownership is held on the membership). A second, simultaneous transfer gets `412` |
 | `POST /auth/links/redeem` | Activate or reset with a link token (no session; see above) |
 | `GET /auth/methods` | Which sign-in methods are on (hides the Google button when off) |
-| `POST /auth/google/start` · `POST /auth/google/start-activation` · `GET /auth/google/callback` · `POST /auth/google/unlink` (and the start endpoint for `LINK`, 8c) | §5 |
+| `POST /auth/google/start` · `POST /auth/google/start-activation` · `GET /auth/google/callback` · `POST /auth/google/unlink` · `POST /auth/google/start-link` · `GET /me/login-methods` (whether I have a password and a linked Google account) | §5 |
 | `GET /audit-events` | Coaching (or platform) audit log, filters: actor, entity, time; paginated |
 
 New error codes are added to `error-codes.md`, for example `LINK_INVALID`, `ROLE_CHANGED` (409) and

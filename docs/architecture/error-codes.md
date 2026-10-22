@@ -30,6 +30,10 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `MEMBER_REMOVED` | 409 | The person is no longer a member of the coaching | M2 |
 | `GOOGLE_DISABLED` | 404 | Sign in with Google is not set up on this server (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) | M2 |
 | `RETURN_ORIGIN_NOT_ALLOWED` | 422 | The `return_origin` sent to start a Google flow is not in `ALLOWED_ORIGINS` | M2 |
+| `PASSWORD_INCORRECT` | 403 | The password sent with a request to link Google is wrong (or the account is locked); counts towards the sign-in lockout | M2 |
+| `ALREADY_LINKED` | 409 | A Google account is already linked to this account; unlink it first to link another | M2 |
+| `NO_OTHER_LOGIN_METHOD` | 409 | Google can't be unlinked because it is the only way to sign in; the account needs a password first | M2 |
+| `GOOGLE_NOT_LINKED` | 404 | There is no linked Google account to unlink | M2 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 

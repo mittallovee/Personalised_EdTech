@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import RedirectResponse
 
+from qbank.core.auth import CurrentPrincipal
 from qbank.core.clientip import client_address
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
@@ -15,8 +16,10 @@ from qbank.modules.identity.google import GoogleClient
 from qbank.modules.identity.schemas import (
     AuthMethods,
     GoogleActivationStartRequest,
+    GoogleLinkStartRequest,
     GoogleStartRequest,
     GoogleStartResponse,
+    LoginMethods,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
@@ -25,10 +28,6 @@ router = APIRouter(prefix="/api/v1", tags=["identity"])
 FLOW_COOKIE = "qb_google_flow"
 FLOW_COOKIE_PATH = "/api/v1/auth/google"
 FLOW_MAX_AGE_SECONDS = 600
-# Where the browser lands after Google calls back. Relative, so it stays on the web address the
-# person is already using (the web app proxies /api, ADR-0014).
-SIGNED_IN_PATH = "/"
-FAILED_PATH = "/login?google=failed"
 
 
 def _google(request: Request) -> GoogleClient | None:
@@ -149,18 +148,95 @@ def start_google_activation(
     return GoogleStartResponse(authorization_url=started.authorization_url)
 
 
+@router.post(
+    "/auth/google/start-link",
+    summary="Start linking a Google account to my account",
+    description=(
+        "For a signed-in person with a password. The current password must be in this very"
+        " request: a session alone is never enough. Wrong passwords count towards the sign-in"
+        " lockout. Returns the Google address to send the browser to; when Google calls back, the"
+        " account is linked (the session stays as it is). Only one Google account can be linked."
+    ),
+    responses={
+        403: {"description": "The password is incorrect (`PASSWORD_INCORRECT`)"},
+        404: {"description": "Google sign-in is not set up on this server (`GOOGLE_DISABLED`)"},
+        409: {"description": "A Google account is already linked (`ALREADY_LINKED`)"},
+        422: {
+            "description": "`return_origin` is not an allowed web address"
+            " (`RETURN_ORIGIN_NOT_ALLOWED`)"
+        },
+        429: {"description": "Too many attempts; see the Retry-After header"},
+    },
+)
+def start_google_link(
+    body: GoogleLinkStartRequest,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    settings: Annotated[Settings, Depends(get_settings_from_app)],
+) -> GoogleStartResponse:
+    google = _google(request)
+    if google is None:
+        raise NotFound("Google sign-in is not turned on.", code="GOOGLE_DISABLED")
+    _limit(request, f"google-link:{principal.user_id}")
+    started = google_service.start_link(
+        database, settings, google, principal, body.return_origin, body.password
+    )
+    _set_flow_cookie(response, settings, started)
+    return GoogleStartResponse(authorization_url=started.authorization_url)
+
+
+@router.post(
+    "/auth/google/unlink",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Unlink my Google account",
+    responses={
+        404: {"description": "No Google account is linked (`GOOGLE_NOT_LINKED`)"},
+        409: {
+            "description": "Google is the only way to sign in; a password must remain"
+            " (`NO_OTHER_LOGIN_METHOD`)"
+        },
+    },
+)
+def unlink_google(
+    principal: CurrentPrincipal,
+    request: Request,
+    database: Annotated[Database, Depends(get_database)],
+) -> None:
+    google_service.unlink(database, principal, request.state.request_id)
+
+
+@router.get(
+    "/me/login-methods",
+    summary="How I can sign in",
+    description="Whether the signed-in account has a password and a linked Google account.",
+)
+def my_login_methods(
+    principal: CurrentPrincipal, database: Annotated[Database, Depends(get_database)]
+) -> LoginMethods:
+    return google_service.login_methods(database, principal)
+
+
 @router.get(
     "/auth/google/callback",
     summary="Where Google sends the browser back",
     description=(
         "Not called by our web app. On success the browser is redirected to the home page with a"
-        " new session, as after `POST /auth/login`. Every failure (an unknown or replayed flow, a"
-        " Google account nobody linked, no access any more, Google refusing) is the same"
-        " redirect to `/login?google=failed`, so nothing is revealed."
+        " new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`."
+        " Every failure (an unknown or replayed flow, a Google account nobody linked or already"
+        " linked, no access any more, Google refusing) is the same redirect, to"
+        " `/login?google=failed` (to `/profile?google=failed` when linking), so nothing is"
+        " revealed."
     ),
     status_code=status.HTTP_303_SEE_OTHER,
     response_class=RedirectResponse,
-    responses={303: {"description": "Redirect to the home page, or to `/login?google=failed`"}},
+    responses={
+        303: {
+            "description": "Redirect to the home page, to `/profile?google=linked`, or to the"
+            " failure address"
+        }
+    },
 )
 def google_callback(
     request: Request,
@@ -170,12 +246,12 @@ def google_callback(
     state: str | None = None,
 ) -> RedirectResponse:
     google = _google(request)
-    result = None
+    finished = google_service.Finished(google_service.SIGN_IN_FAILED_PATH)
     if google is not None:
         limiter: LoginRateLimiter = request.app.state.login_limiter
         client_ip = client_address(request)
         if not limiter.check(client_ip, f"google-callback:{client_ip}"):
-            result = google_service.finish(
+            finished = google_service.finish(
                 database,
                 settings,
                 google,
@@ -184,10 +260,8 @@ def google_callback(
                 code=code,
                 request_id=request.state.request_id,
             )
-    redirect = RedirectResponse(
-        SIGNED_IN_PATH if result else FAILED_PATH, status_code=status.HTTP_303_SEE_OTHER
-    )
-    if result:
-        set_auth_cookies(redirect, settings, result)
+    redirect = RedirectResponse(finished.path, status_code=status.HTTP_303_SEE_OTHER)
+    if finished.login:
+        set_auth_cookies(redirect, settings, finished.login)
     redirect.delete_cookie(FLOW_COOKIE, path=FLOW_COOKIE_PATH)  # one flow, one try
     return redirect

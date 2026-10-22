@@ -166,6 +166,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/google/start-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start linking a Google account to my account
+         * @description For a signed-in person with a password. The current password must be in this very request: a session alone is never enough. Wrong passwords count towards the sign-in lockout. Returns the Google address to send the browser to; when Google calls back, the account is linked (the session stays as it is). Only one Google account can be linked.
+         */
+        post: operations["start_google_link_api_v1_auth_google_start_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/google/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlink my Google account */
+        post: operations["unlink_google_api_v1_auth_google_unlink_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/login-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How I can sign in
+         * @description Whether the signed-in account has a password and a linked Google account.
+         */
+        get: operations["my_login_methods_api_v1_me_login_methods_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/google/callback": {
         parameters: {
             query?: never;
@@ -175,7 +232,7 @@ export interface paths {
         };
         /**
          * Where Google sends the browser back
-         * @description Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`. Every failure (an unknown or replayed flow, a Google account nobody linked, no access any more, Google refusing) is the same redirect to `/login?google=failed`, so nothing is revealed.
+         * @description Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`. Every failure (an unknown or replayed flow, a Google account nobody linked or already linked, no access any more, Google refusing) is the same redirect, to `/login?google=failed` (to `/profile?google=failed` when linking), so nothing is revealed.
          */
         get: operations["google_callback_api_v1_auth_google_callback_get"];
         put?: never;
@@ -673,6 +730,20 @@ export interface components {
              */
             link_token: string;
         };
+        /** GoogleLinkStartRequest */
+        GoogleLinkStartRequest: {
+            /**
+             * Return Origin
+             * @description The web address the person is on; must be one of ALLOWED_ORIGINS.
+             * @example http://localhost:3000
+             */
+            return_origin: string;
+            /**
+             * Password
+             * @description The account's current password: a session alone never links Google.
+             */
+            password: string;
+        };
         /** GoogleStartRequest */
         GoogleStartRequest: {
             /**
@@ -695,6 +766,16 @@ export interface components {
              * @description Send the person's browser here.
              */
             authorization_url: string;
+        };
+        /** GoogleStatus */
+        GoogleStatus: {
+            /** Linked */
+            linked: boolean;
+            /**
+             * Email
+             * @description The Google account's email when it was linked.
+             */
+            email: string | null;
         };
         /**
          * Grant
@@ -748,6 +829,15 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** LoginMethods */
+        LoginMethods: {
+            /**
+             * Password
+             * @description The account has a password.
+             */
+            password: boolean;
+            google: components["schemas"]["GoogleStatus"];
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1477,6 +1567,196 @@ export interface operations {
             };
         };
     };
+    start_google_link_api_v1_auth_google_start_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleLinkStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleStartResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The password is incorrect (`PASSWORD_INCORRECT`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Google sign-in is not set up on this server (`GOOGLE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A Google account is already linked (`ALREADY_LINKED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `return_origin` is not an allowed web address (`RETURN_ORIGIN_NOT_ALLOWED`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many attempts; see the Retry-After header */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unlink_google_api_v1_auth_google_unlink_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No Google account is linked (`GOOGLE_NOT_LINKED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Google is the only way to sign in; a password must remain (`NO_OTHER_LOGIN_METHOD`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    my_login_methods_api_v1_me_login_methods_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginMethods"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     google_callback_api_v1_auth_google_callback_get: {
         parameters: {
             query?: {
@@ -1489,7 +1769,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to the home page, or to `/login?google=failed` */
+            /** @description Redirect to the home page, to `/profile?google=linked`, or to the failure address */
             303: {
                 headers: {
                     [name: string]: unknown;

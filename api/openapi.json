@@ -578,13 +578,247 @@
         }
       }
     },
+    "/api/v1/auth/google/start-link": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Start linking a Google account to my account",
+        "description": "For a signed-in person with a password. The current password must be in this very request: a session alone is never enough. Wrong passwords count towards the sign-in lockout. Returns the Google address to send the browser to; when Google calls back, the account is linked (the session stays as it is). Only one Google account can be linked.",
+        "operationId": "start_google_link_api_v1_auth_google_start_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleLinkStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStartResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The password is incorrect (`PASSWORD_INCORRECT`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Google sign-in is not set up on this server (`GOOGLE_DISABLED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A Google account is already linked (`ALREADY_LINKED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`return_origin` is not an allowed web address (`RETURN_ORIGIN_NOT_ALLOWED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; see the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/google/unlink": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Unlink my Google account",
+        "operationId": "unlink_google_api_v1_auth_google_unlink_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No Google account is linked (`GOOGLE_NOT_LINKED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Google is the only way to sign in; a password must remain (`NO_OTHER_LOGIN_METHOD`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/login-methods": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "How I can sign in",
+        "description": "Whether the signed-in account has a password and a linked Google account.",
+        "operationId": "my_login_methods_api_v1_me_login_methods_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginMethods"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/google/callback": {
       "get": {
         "tags": [
           "identity"
         ],
         "summary": "Where Google sends the browser back",
-        "description": "Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`. Every failure (an unknown or replayed flow, a Google account nobody linked, no access any more, Google refusing) is the same redirect to `/login?google=failed`, so nothing is revealed.",
+        "description": "Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`. Every failure (an unknown or replayed flow, a Google account nobody linked or already linked, no access any more, Google refusing) is the same redirect, to `/login?google=failed` (to `/profile?google=failed` when linking), so nothing is revealed.",
         "operationId": "google_callback_api_v1_auth_google_callback_get",
         "parameters": [
           {
@@ -622,7 +856,7 @@
         ],
         "responses": {
           "303": {
-            "description": "Redirect to the home page, or to `/login?google=failed`"
+            "description": "Redirect to the home page, to `/profile?google=linked`, or to the failure address"
           },
           "400": {
             "description": "The request is not valid (`MALFORMED_REQUEST`)",
@@ -3145,6 +3379,32 @@
         ],
         "title": "GoogleActivationStartRequest"
       },
+      "GoogleLinkStartRequest": {
+        "properties": {
+          "return_origin": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Return Origin",
+            "description": "The web address the person is on; must be one of ALLOWED_ORIGINS.",
+            "examples": [
+              "http://localhost:3000"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "description": "The account's current password: a session alone never links Google."
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_origin",
+          "password"
+        ],
+        "title": "GoogleLinkStartRequest"
+      },
       "GoogleStartRequest": {
         "properties": {
           "purpose": {
@@ -3183,6 +3443,32 @@
           "authorization_url"
         ],
         "title": "GoogleStartResponse"
+      },
+      "GoogleStatus": {
+        "properties": {
+          "linked": {
+            "type": "boolean",
+            "title": "Linked"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "The Google account's email when it was linked."
+          }
+        },
+        "type": "object",
+        "required": [
+          "linked",
+          "email"
+        ],
+        "title": "GoogleStatus"
       },
       "Grant": {
         "type": "string",
@@ -3294,6 +3580,24 @@
           "status"
         ],
         "title": "LiveStatus"
+      },
+      "LoginMethods": {
+        "properties": {
+          "password": {
+            "type": "boolean",
+            "title": "Password",
+            "description": "The account has a password."
+          },
+          "google": {
+            "$ref": "#/components/schemas/GoogleStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password",
+          "google"
+        ],
+        "title": "LoginMethods"
       },
       "LoginRequest": {
         "properties": {
