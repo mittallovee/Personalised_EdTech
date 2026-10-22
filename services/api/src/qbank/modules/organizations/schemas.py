@@ -113,8 +113,9 @@ class MemberOut(BaseModel):
     joined_at: datetime
     actions: list[str] = Field(
         description=(
-            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS."
-            " The web app shows only these buttons; the API checks again on every request."
+            "What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS,"
+            " CHANGE_ROLE, REMOVE. The web app shows only these buttons; the API checks again on"
+            " every request."
         )
     )
 
@@ -167,4 +168,19 @@ class SetGrants(BaseModel):
     grants: Annotated[list[Grant], BeforeValidator(_without_repeats)] = Field(
         description="The complete new set (an empty list removes all); repeats count once.",
         examples=[["QC", "APPROVE"]],
+    )
+
+
+class ChangeRole(BaseModel):
+    expected_role: Literal["OWNER", "ADMIN", "FACULTY"] = Field(
+        description="The role the screen showed. If they have another role now, nothing changes."
+    )
+    new_role: Literal["ADMIN", "FACULTY"] = Field(
+        description="Faculty to admin promotes; admin to faculty demotes (and clears grants)."
+    )
+
+
+class RemoveMember(BaseModel):
+    expected_role: Literal["OWNER", "ADMIN", "FACULTY"] = Field(
+        description="The role the screen showed. If they have another role now, nothing changes."
     )

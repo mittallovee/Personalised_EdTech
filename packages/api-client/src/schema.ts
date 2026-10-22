@@ -349,6 +349,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/members/{membership_id}/change-role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote faculty to admin, or demote an admin to faculty (B-08)
+         * @description Owner only. Name the role you saw in `expected_role` and send the ETag from your last read in `If-Match`; if either is out of date nothing changes. Their grants are cleared (admins hold every grant anyway). The new role applies from their next request. The Owner changes only by a transfer of ownership.
+         */
+        post: operations["change_role_api_v1_members__membership_id__change_role_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/{membership_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove someone from the coaching (B-08, B-09, B-10)
+         * @description Owner and admins remove faculty; only the Owner removes admins. Their sign-in sessions and unused links end at once; their content and history stay with the coaching. If they never activated, their email is freed. Name the role you saw in `expected_role` and send the ETag in `If-Match`. The Owner can't be removed.
+         */
+        post: operations["remove_member_api_v1_members__membership_id__remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -440,6 +480,21 @@ export interface components {
             /** Data */
             data: components["schemas"]["AuditEventOut"][];
             page: components["schemas"]["PageInfo"];
+        };
+        /** ChangeRole */
+        ChangeRole: {
+            /**
+             * Expected Role
+             * @description The role the screen showed. If they have another role now, nothing changes.
+             * @enum {string}
+             */
+            expected_role: "OWNER" | "ADMIN" | "FACULTY";
+            /**
+             * New Role
+             * @description Faculty to admin promotes; admin to faculty demotes (and clears grants).
+             * @enum {string}
+             */
+            new_role: "ADMIN" | "FACULTY";
         };
         /** CreateOrganization */
         CreateOrganization: {
@@ -631,7 +686,7 @@ export interface components {
             joined_at: string;
             /**
              * Actions
-             * @description What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS. The web app shows only these buttons; the API checks again on every request.
+             * @description What you may do to this member now: NEW_ACTIVATION_LINK, NEW_RESET_LINK, SET_GRANTS, CHANGE_ROLE, REMOVE. The web app shows only these buttons; the API checks again on every request.
              */
             actions: string[];
         };
@@ -738,6 +793,15 @@ export interface components {
              * @description The new password (at least 12 characters).
              */
             password: string;
+        };
+        /** RemoveMember */
+        RemoveMember: {
+            /**
+             * Expected Role
+             * @description The role the screen showed. If they have another role now, nothing changes.
+             * @enum {string}
+             */
+            expected_role: "OWNER" | "ADMIN" | "FACULTY";
         };
         /** SetGrants */
         SetGrants: {
@@ -2120,6 +2184,208 @@ export interface operations {
                 };
             };
             /** @description The member is not faculty (`NOT_FACULTY`), or no longer a member (`MEMBER_REMOVED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since your read (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The If-Match header is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    change_role_api_v1_members__membership_id__change_role_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRole"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such member in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The person was already removed (`MEMBER_REMOVED`), their role is not the one you named (`ROLE_CHANGED`), or they are the Owner (`LAST_OWNER`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since your read (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The If-Match header is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_member_api_v1_members__membership_id__remove_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoveMember"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such member in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The person was already removed (`MEMBER_REMOVED`), their role is not the one you named (`ROLE_CHANGED`), or they are the Owner (`LAST_OWNER`) */
             409: {
                 headers: {
                     [name: string]: unknown;

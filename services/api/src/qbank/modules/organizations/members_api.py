@@ -14,10 +14,12 @@ from qbank.modules.organizations import members
 from qbank.modules.organizations.schemas import (
     AccountLinkOut,
     ActivationLink,
+    ChangeRole,
     InvitedMember,
     InviteMember,
     MemberOut,
     MemberPage,
+    RemoveMember,
     SetGrants,
 )
 
@@ -212,6 +214,84 @@ def set_grants(
             principal,
             membership_id,
             set(body.grants),
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        response.headers["ETag"] = etag(member.revision)
+        return members.describe(session, principal, [member])[0]
+
+
+_CHANGE_ERRORS: dict[int | str, dict[str, Any]] = {
+    **_DENIED,
+    **_NOT_FOUND,
+    409: {
+        "description": "The person was already removed (`MEMBER_REMOVED`), their role is not"
+        " the one you named (`ROLE_CHANGED`), or they are the Owner (`LAST_OWNER`)"
+    },
+    412: {"description": "Changed by someone else since your read (`REVISION_STALE`)"},
+    428: {"description": "The If-Match header is missing (`IF_MATCH_REQUIRED`)"},
+}
+
+
+@router.post(
+    "/{membership_id}/change-role",
+    summary="Promote faculty to admin, or demote an admin to faculty (B-08)",
+    description=(
+        "Owner only. Name the role you saw in `expected_role` and send the ETag from your last"
+        " read in `If-Match`; if either is out of date nothing changes. Their grants are cleared"
+        " (admins hold every grant anyway). The new role applies from their next request. The"
+        " Owner changes only by a transfer of ownership."
+    ),
+    responses=_CHANGE_ERRORS,
+)
+def change_role(
+    membership_id: UUID,
+    body: ChangeRole,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> MemberOut:
+    with database.transaction(principal.tenant_context) as session:
+        member = members.change_role(
+            session,
+            principal,
+            membership_id,
+            body,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        response.headers["ETag"] = etag(member.revision)
+        return members.describe(session, principal, [member])[0]
+
+
+@router.post(
+    "/{membership_id}/remove",
+    summary="Remove someone from the coaching (B-08, B-09, B-10)",
+    description=(
+        "Owner and admins remove faculty; only the Owner removes admins. Their sign-in sessions"
+        " and unused links end at once; their content and history stay with the coaching. If they"
+        " never activated, their email is freed. Name the role you saw in `expected_role` and send"
+        " the ETag in `If-Match`. The Owner can't be removed."
+    ),
+    responses=_CHANGE_ERRORS,
+)
+def remove_member(
+    membership_id: UUID,
+    body: RemoveMember,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> MemberOut:
+    with database.transaction(principal.tenant_context) as session:
+        member = members.remove_member(
+            session,
+            principal,
+            membership_id,
+            body,
             if_match=if_match,
             request_id=request.state.request_id,
         )

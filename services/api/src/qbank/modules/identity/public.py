@@ -28,6 +28,7 @@ __all__ = [
     "member_accounts",
     "reserve_email",
     "revoke_coaching_sessions",
+    "revoke_member_access",
     "set_acting_organization",
     "user_status",
 ]
@@ -193,3 +194,24 @@ def revoke_coaching_sessions(session: Session, organization_id: UUID) -> int:
         text("SELECT auth_revoke_coaching_sessions(:org)"), {"org": organization_id}
     )
     return revoked
+
+
+def revoke_member_access(session: Session, user_id: UUID) -> None:
+    """End a removed member's access (B-10): their sign-in sessions and unused links stop working.
+
+    Call after the membership is marked REMOVED, in the same transaction. If they never activated,
+    their email is freed and the account disabled, so an abandoned invitation can be redone; an
+    activated account keeps its email, because its history stays with the coaching.
+    """
+    session.execute(text("SELECT auth_revoke_member_sessions(:u)"), {"u": user_id})
+    session.execute(
+        update(AccountLink)
+        .where(
+            AccountLink.user_id == user_id,
+            AccountLink.used_at.is_(None),
+            AccountLink.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(UTC))
+    )
+    if session.scalar(text("SELECT auth_release_email(:u)"), {"u": user_id}):
+        session.execute(update(User).where(User.id == user_id).values(status="DISABLED"))
