@@ -10,13 +10,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from qbank.core.auth import Principal
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
+from qbank.core.errors import PermissionDenied
 from qbank.core.ids import new_id
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
+from qbank.modules.taxonomy import service
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
+from qbank.modules.taxonomy.schemas import CreateNode, UpdateNode
 from tests.integration.conftest import (
     PLATFORM,
     Member,
@@ -112,7 +116,7 @@ def insert_node(
     org_id: UUID,
     kind: str,
     name: str,
-    parent: tuple[UUID, str] | None = None,
+    parent: tuple[UUID, str | None] | None = None,
 ) -> UUID:
     node_id = new_id()
     with owner_db.transaction(TenantContext(organization_id=org_id)) as session:
@@ -164,6 +168,16 @@ def test_database_refuses_a_class_with_a_parent_and_a_subject_without_one(
         insert_node(owner_db, org, "CLASS", "Class 12", (cls, "CLASS"))
     with pytest.raises(IntegrityError):
         insert_node(owner_db, org, "SUBJECT", "Physics")
+
+
+def test_database_refuses_a_parent_with_no_parent_kind(
+    owner_db: Database, team: dict[str, Member]
+) -> None:
+    """A NULL parent kind would skip the composite key, so any made-up parent id would pass."""
+    org = team["owner"].org_id
+
+    with pytest.raises(IntegrityError):
+        insert_node(owner_db, org, "TOPIC", "Motion", (new_id(), None))
 
 
 def test_database_refuses_a_parent_in_another_coaching(
@@ -484,6 +498,40 @@ def test_faculty_read_but_cannot_change_the_syllabus(
 
     assert [response.status_code for response in responses] == [403, 403, 403, 403]
     assert faculty.get(NODES).status_code == 200
+
+
+def test_the_service_functions_refuse_a_principal_who_may_not_change_the_syllabus(
+    db: Database, owner_db: Database, team: dict[str, Member]
+) -> None:
+    """Other code (the import, jobs) calls the service directly, so it must check for itself."""
+    org = team["owner"].org_id
+    node_id = insert_node(owner_db, org, "CLASS", "Class 11")
+    faculty = Principal(
+        user_id=team["faculty"].user_id,
+        display_name="Faculty",
+        is_platform_admin=False,
+        organization_id=org,
+        role="FACULTY",
+        grants=frozenset({"EDIT_OTHERS"}),
+    )
+
+    with db.transaction(faculty.tenant_context) as session:
+        with pytest.raises(PermissionDenied):
+            service.create_node(
+                session,
+                faculty,
+                CreateNode(kind="CLASS", name="Class 12"),
+                idempotency_key=None,
+                request_id=None,
+            )
+        with pytest.raises(PermissionDenied):
+            service.update_node(
+                session, faculty, node_id, UpdateNode(name="X"), if_match='"rev-1"', request_id=None
+            )
+        with pytest.raises(PermissionDenied):
+            service.set_state(
+                session, faculty, node_id, "DEPRECATED", if_match='"rev-1"', request_id=None
+            )
 
 
 def test_the_owner_may_change_the_syllabus_too(client: TestClient, team: dict[str, Member]) -> None:

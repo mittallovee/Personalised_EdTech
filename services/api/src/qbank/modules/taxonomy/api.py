@@ -153,7 +153,6 @@ def create_node(
     database: Annotated[Database, Depends(get_database)],
     idempotency_key: Annotated[str | None, IdempotencyKeyHeader] = None,
 ) -> NodeOut:
-    require(principal, Action.MANAGE_CATALOGUES)
     with database.transaction(principal.tenant_context) as session:
         node = service.create_node(
             session,
@@ -188,7 +187,6 @@ def update_node(
     database: Annotated[Database, Depends(get_database)],
     if_match: Annotated[str | None, IfMatchHeader] = None,
 ) -> NodeOut:
-    require(principal, Action.MANAGE_CATALOGUES)
     with database.transaction(principal.tenant_context) as session:
         node = service.update_node(
             session,
@@ -211,7 +209,6 @@ def _set_state(
     database: Database,
     if_match: str | None,
 ) -> NodeOut:
-    require(principal, Action.MANAGE_CATALOGUES)
     with database.transaction(principal.tenant_context) as session:
         node = service.set_state(
             session,
