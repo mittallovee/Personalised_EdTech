@@ -7,6 +7,7 @@ lock, so a screen that is a minute old can't act on someone who was promoted mea
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
 from qbank.core.errors import Conflict, NotFound, PreconditionFailed
-from qbank.core.etag import require_if_match
+from qbank.core.etag import etag, require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import (
@@ -493,15 +494,25 @@ def transfer_ownership(
         .execution_options(populate_existing=True)
     ).first()
     if owner is None:  # waited for a transfer that finished first: the row is no longer the Owner
+        current = session.scalars(
+            select(Membership).where(
+                Membership.organization_id == _coaching(principal),
+                Membership.role == "OWNER",
+                Membership.status == "ACTIVE",
+            )
+        ).first()
         raise PreconditionFailed(
             "Ownership changed in the meantime. Reload and try again.",
+            details={"current_etag": etag(current.revision)} if current else None,
         )
-    require_if_match(if_match, owner.revision)
+    # Who the Owner is comes before which revision: a screen that shows the previous Owner
+    # should hear "the Owner changed", not just "stale".
     if owner.id != body.expected_owner_membership_id:
         raise Conflict(
             "The Owner is someone else now. Reload and check before you transfer.",
             code="OWNER_CHANGED",
         )
+    require_if_match(if_match, owner.revision)
     heir = get_member(session, body.new_owner_membership_id, lock=True)
     account = user_status(session, heir.user_id)
     if heir.role != "ADMIN" or heir.status != "ACTIVE" or account != "ACTIVE":
@@ -531,3 +542,14 @@ def transfer_ownership(
         after={"owner_membership_id": str(heir.id), "owner_user_id": str(heir.user_id)},
     )
     return owner, heir
+
+
+def caller_after_transfer(principal: Principal, previous_owner: Membership) -> Principal:
+    """The caller as they are once the transfer is done, for what the response offers them.
+
+    The Owner who just handed over is an admin from now on (the next request already sees it), so
+    the response must not advertise owner-only actions to them.
+    """
+    if principal.user_id == previous_owner.user_id and principal.role == "OWNER":
+        return replace(principal, role=previous_owner.role)
+    return principal

@@ -99,6 +99,9 @@ def test_owner_hands_the_coaching_to_an_admin(
         body = response.json()
         assert (body["previous_owner"]["role"], body["new_owner"]["role"]) == ("ADMIN", "OWNER")
         assert body["new_owner"]["membership_id"] == str(team["admin"].membership_id)
+        # The caller is an admin now: the response must not offer them owner-only actions.
+        assert body["previous_owner"]["actions"] == []
+        assert body["new_owner"]["actions"] == []
         # Both people's open sessions see their new roles on the next request.
         assert admin_browser.get("/api/v1/me").json()["organization"]["role"] == "OWNER"
         assert client.get("/api/v1/me").json()["organization"]["role"] == "ADMIN"
@@ -289,7 +292,7 @@ def test_simultaneous_transfers_leave_exactly_one_owner(
     settings: Settings, owner_db: Database, team: dict[str, Member]
 ) -> None:
     """T15: two transfers sent at the same moment, to different admins, from the same screen."""
-    statuses: list[int] = []
+    responses: list[Any] = []
     start = threading.Barrier(2)
     heirs = [team["admin"], team["other_admin"]]
 
@@ -312,7 +315,7 @@ def test_simultaneous_transfers_leave_exactly_one_owner(
                 },
                 headers={**headers[index], "If-Match": etag},
             )
-            statuses.append(response.status_code)
+            responses.append(response)
 
         threads = [threading.Thread(target=send, args=(i,)) for i in range(2)]
         for thread in threads:
@@ -320,10 +323,16 @@ def test_simultaneous_transfers_leave_exactly_one_owner(
         for thread in threads:
             thread.join()
 
-    assert sorted(statuses) == [200, 412]
+    assert sorted(r.status_code for r in responses) == [200, 412]
     held = roles(owner_db, team["owner"].org_id)
     owners = [member for member, (role, status) in held.items() if role == "OWNER"]
     assert len(owners) == 1
+    # The loser learns the revision to start from (the new Owner's), like any stale change.
+    [loser] = [r for r in responses if r.status_code == 412]
+    with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
+        revision = session.get(Membership, owners[0]).revision  # type: ignore[union-attr]
+    assert code_of(loser) == (412, "REVISION_STALE")
+    assert loser.json()["error"]["details"] == {"current_etag": f'"rev-{revision}"'}
     assert owners[0] in {team["admin"].membership_id, team["other_admin"].membership_id}
     assert held[team["owner"].membership_id] == ("ADMIN", "ACTIVE")
 
@@ -339,3 +348,23 @@ def test_changes_need_a_session_and_the_csrf_token(
     assert client.post(TRANSFER, json=body, headers=ORIGIN).status_code == 401
     sign_in(client, team["owner"].email)
     assert client.post(TRANSFER, json=body, headers=ORIGIN).status_code == 403
+
+
+def test_a_screen_showing_the_previous_owner_is_told_the_owner_changed(
+    client: TestClient, settings: Settings, owner_db: Database, team: dict[str, Member]
+) -> None:
+    """After a transfer, a stale request names the old Owner: say so, not just "stale"."""
+    owner_headers = sign_in(client, team["owner"].email)
+    assert transfer(client, owner_headers, team["owner"], team["admin"]).status_code == 200
+    with TestClient(create_app(settings)) as platform:
+        headers = sign_in(platform, platform_admin(owner_db))
+        acted = platform.post(
+            "/api/v1/platform/acting-organization",
+            json={"organization_id": str(team["owner"].org_id)},
+            headers=headers,
+        )
+        assert acted.status_code == 204
+
+        stale = transfer(platform, headers, team["owner"], team["other_admin"], '"rev-1"')
+
+    assert code_of(stale) == (409, "OWNER_CHANGED")

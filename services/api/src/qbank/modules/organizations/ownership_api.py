@@ -44,5 +44,6 @@ def transfer_ownership(
         previous, new = members.transfer_ownership(
             session, principal, body, if_match=if_match, request_id=request.state.request_id
         )
-        previous_out, new_out = members.describe(session, principal, [previous, new])
+        caller = members.caller_after_transfer(principal, previous)
+        previous_out, new_out = members.describe(session, caller, [previous, new])
     return OwnershipTransferred(previous_owner=previous_out, new_owner=new_out)
