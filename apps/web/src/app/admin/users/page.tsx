@@ -88,7 +88,10 @@ export default function UsersPage() {
       // A page already shown is not added twice, whatever order requests finish in.
       setMembers((current) =>
         cursor
-          ? [...current, ...loaded.filter((m) => !current.some((c) => c.membership_id === m.membership_id))]
+          ? [
+              ...current,
+              ...loaded.filter((m) => !current.some((c) => c.membership_id === m.membership_id)),
+            ]
           : loaded,
       );
       setNextCursor(after);
