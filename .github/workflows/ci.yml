@@ -74,7 +74,9 @@ jobs:
   e2e:
     # Browser tests (apps/e2e): the whole stack from compose.yaml, driven by a real Chromium.
     name: Browser tests (e2e)
-    runs-on: ubuntu-latest
+    # Pinned: "ubuntu-latest" moved to 26.04 on 22 Oct 2026, which Playwright 1.56 cannot install
+    # Chromium on. Move to "ubuntu-latest" again when Playwright is upgraded to support it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
