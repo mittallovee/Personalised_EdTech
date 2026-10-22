@@ -555,7 +555,7 @@ export interface paths {
         };
         /**
          * The question languages
-         * @description The same for every coaching. English comes first.
+         * @description The same for every coaching. English comes first. Like the syllabus, they are for people in a coaching (or a platform admin acting in one).
          */
         get: operations["list_languages_api_v1_languages_get"];
         put?: never;
@@ -3480,6 +3480,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
                 headers: {
@@ -3518,6 +3527,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
                 headers: {
@@ -3549,6 +3567,15 @@ export interface operations {
             };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

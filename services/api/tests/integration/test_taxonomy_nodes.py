@@ -276,6 +276,30 @@ def test_anyone_signed_in_reads_the_fixed_lists(
     assert [item["level"] for item in guide] == list(range(1, 11))
 
 
+FIXED_LISTS = (
+    "/api/v1/languages",
+    "/api/v1/catalogues/bloom",
+    "/api/v1/catalogues/difficulty-guide",
+)
+
+
+def test_a_platform_admin_reads_the_fixed_lists_only_while_acting_in_a_coaching(
+    client: TestClient, owner_db: Database, team: dict[str, Member]
+) -> None:
+    headers = sign_in(client, platform_admin(owner_db))
+
+    before = [client.get(path).status_code for path in FIXED_LISTS]
+    client.post(
+        "/api/v1/platform/acting-organization",
+        json={"organization_id": str(team["owner"].org_id)},
+        headers=headers,
+    )
+    after = [client.get(path).status_code for path in FIXED_LISTS]
+
+    assert before == [403, 403, 403]
+    assert after == [200, 200, 200]
+
+
 # --- Building the tree through the API ---------------------------------------------------------
 
 

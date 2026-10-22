@@ -2974,7 +2974,7 @@
           "catalogues"
         ],
         "summary": "The question languages",
-        "description": "The same for every coaching. English comes first.",
+        "description": "The same for every coaching. English comes first. Like the syllabus, they are for people in a coaching (or a platform admin acting in one).",
         "operationId": "list_languages_api_v1_languages_get",
         "responses": {
           "200": {
@@ -2993,6 +2993,16 @@
           },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3051,6 +3061,16 @@
               }
             }
           },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
             "content": {
@@ -3094,6 +3114,16 @@
           },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
             "content": {
               "application/json": {
                 "schema": {

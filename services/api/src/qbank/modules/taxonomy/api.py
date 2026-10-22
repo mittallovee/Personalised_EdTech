@@ -40,9 +40,12 @@ _STALE: dict[int | str, dict[str, Any]] = {
 @catalogues.get(
     "/languages",
     summary="The question languages",
-    description="The same for every coaching. English comes first.",
+    description="The same for every coaching. English comes first. Like the syllabus, they are for"
+    " people in a coaching (or a platform admin acting in one).",
+    responses=_DENIED,
 )
-def list_languages(_principal: CurrentPrincipal) -> list[LanguageOut]:
+def list_languages(principal: CurrentPrincipal) -> list[LanguageOut]:
+    require(principal, Action.VIEW_CATALOGUES)
     return [
         LanguageOut(
             tag=language.tag,
@@ -53,8 +56,9 @@ def list_languages(_principal: CurrentPrincipal) -> list[LanguageOut]:
     ]
 
 
-@catalogues.get("/catalogues/bloom", summary="The Bloom levels, easiest first")
-def list_bloom_levels(_principal: CurrentPrincipal) -> list[BloomLevelOut]:
+@catalogues.get("/catalogues/bloom", summary="The Bloom levels, easiest first", responses=_DENIED)
+def list_bloom_levels(principal: CurrentPrincipal) -> list[BloomLevelOut]:
+    require(principal, Action.VIEW_CATALOGUES)
     return [BloomLevelOut(key=level.key, label=level.label) for level in BLOOM_LEVELS]
 
 
@@ -62,8 +66,10 @@ def list_bloom_levels(_principal: CurrentPrincipal) -> list[BloomLevelOut]:
     "/catalogues/difficulty-guide",
     summary="What each difficulty level from 1 to 10 means",
     description="Shown beside the difficulty field of the question editor.",
+    responses=_DENIED,
 )
-def difficulty_guide(_principal: CurrentPrincipal) -> list[DifficultyLevelOut]:
+def difficulty_guide(principal: CurrentPrincipal) -> list[DifficultyLevelOut]:
+    require(principal, Action.VIEW_CATALOGUES)
     return [DifficultyLevelOut(level=item.level, meaning=item.meaning) for item in DIFFICULTY_GUIDE]
 
 
