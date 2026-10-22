@@ -192,7 +192,7 @@ the generated client are updated in the same PR as each endpoint.
 | Top bar | Coaching name; a coloured "Acting in <coaching>, stop" banner for platform admins |
 | Admin → Users & grants | List, invite (link shown once with a Copy button), grants, role, remove (with confirmation), reset link |
 | Admin → Coaching | Transfer ownership (Owner) |
-| Admin → Audit log | Filterable list with before/after |
+| Admin → Audit log | Newest first, with who, when and before/after. Filters: kind, dates (in the browser's time zone), and "Only this person" / "Only this record" buttons on each event. A platform admin who is not acting in a coaching reads the platform-level events |
 | Platform → Coachings | List, create coaching + Owner, rename, suspend/reactivate, "Act in" |
 | Profile | Link/unlink Google |
 

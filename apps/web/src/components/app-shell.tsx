@@ -15,12 +15,20 @@ function showsUsers(me: Me): boolean {
   return role === "OWNER" || role === "ADMIN" || me.acting_organization_id !== null;
 }
 
+/**
+ * Whether to show the Audit log link: the same people as Users & grants, and platform admins, who
+ * read platform-level events when they are not acting in a coaching. A hint, like the above.
+ */
+function showsAudit(me: Me): boolean {
+  return showsUsers(me) || me.is_platform_admin;
+}
+
 /** Whether to show the Coachings link: the platform admin's own screen. A hint, like the above. */
 function showsCoachings(me: Me): boolean {
   return me.is_platform_admin;
 }
 
-export type Page = "home" | "users" | "coachings";
+export type Page = "home" | "users" | "coachings" | "audit";
 
 const ITEM = "block rounded-md px-3 py-2";
 const CURRENT = "bg-zinc-100 font-medium dark:bg-zinc-800";
@@ -106,6 +114,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "users" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Users &amp; grants
+                </Link>
+              </li>
+            )}
+            {showsAudit(me) && (
+              <li>
+                <Link
+                  href="/admin/audit"
+                  aria-current={current === "audit" ? "page" : undefined}
+                  className={`${ITEM} ${current === "audit" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Audit log
                 </Link>
               </li>
             )}
