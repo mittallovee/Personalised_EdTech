@@ -186,6 +186,17 @@ export default function ProfilePage() {
                   </p>
                 )}
               </>
+            ) : server.status === "loading" ? (
+              <p className="mt-1 text-sm text-zinc-500">Checking whether Google is available…</p>
+            ) : server.status === "failed" ? (
+              <div className="mt-1 space-y-2">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Could not check whether Google sign-in is available.
+                </p>
+                <button type="button" className={BUTTON} onClick={server.retry}>
+                  Try again
+                </button>
+              </div>
             ) : !server.google ? (
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Signing in with Google is not set up on this server.

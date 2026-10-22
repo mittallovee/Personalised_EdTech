@@ -7,14 +7,18 @@ const BUTTON =
 export function GoogleButton({
   label,
   busy,
+  disabled = false,
   onClick,
 }: {
   label: string;
+  /** This button's own request is under way. */
   busy: boolean;
+  /** Another request on the page is under way, so nothing else may be started. */
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" className={BUTTON} disabled={busy} onClick={onClick}>
+    <button type="button" className={BUTTON} disabled={busy || disabled} onClick={onClick}>
       {busy ? "Going to Google…" : label}
     </button>
   );

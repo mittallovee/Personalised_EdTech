@@ -359,3 +359,69 @@ test("linking or unlinking after the session has ended sends you to sign in", as
     await expect(page).toHaveURL(/\/login$/);
   }
 });
+
+test("the Profile page does not claim Google is off while it is still finding out", async ({
+  browser,
+  baseURL,
+}) => {
+  // Codex review on PR #27: "not set up" must only be said when the server really said so.
+  const { context } = await signedInOwner(browser, baseURL!, `Gwait ${unique()}`);
+  const page = await context.newPage();
+  let calls = 0;
+  await page.route("**/api/v1/auth/methods", async (route) => {
+    calls += 1;
+    if (calls === 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow answer...
+      return route.fulfill(error("INTERNAL_ERROR", "Something went wrong.", 500)); // ...then a failure
+    }
+    return route.fulfill({ json: { password: true, google: true } });
+  });
+
+  await page.goto("/profile");
+  const methods = page.getByRole("list", { name: "Sign-in methods" });
+  await expect(methods).toBeVisible();
+  await expect(methods).not.toContainText("not set up on this server"); // still waiting
+  await expect(methods).toContainText("Could not check whether Google sign-in is available");
+  await expect(methods).not.toContainText("not set up on this server"); // a failure is not "off"
+
+  await methods.getByRole("button", { name: "Try again" }).click();
+
+  await expect(page.getByRole("form", { name: "Link a Google account" })).toBeVisible();
+});
+
+test("while one way of activating is under way the other cannot be started", async ({
+  browser,
+  baseURL,
+}) => {
+  // Codex review on PR #27: both use the same one-time link, so they must not run together.
+  const adminContext = await browser.newContext();
+  const { token } = await createCoaching(adminContext.request, baseURL!, `Gbusy ${unique()}`);
+  await adminContext.close();
+  const page = await (await browser.newContext()).newPage();
+  await googleIsOn(page);
+  await page.route("**/api/v1/auth/google/start-activation", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return route.fulfill({ json: { authorization_url: FAKE_GOOGLE } });
+  });
+  await fakeGoogle(page);
+  await page.goto(`/activate#${token}`);
+
+  await page.getByRole("button", { name: "Continue with Google instead" }).click();
+
+  await expect(page.getByRole("button", { name: "Save and sign in" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Going to Google…" })).toBeDisabled();
+});
+
+test("while Google sign-in is under way the password button waits", async ({ page }) => {
+  await googleIsOn(page);
+  await page.route("**/api/v1/auth/google/start", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return route.fulfill({ json: { authorization_url: FAKE_GOOGLE } });
+  });
+  await fakeGoogle(page);
+  await page.goto("/login");
+
+  await page.getByRole("button", { name: "Sign in with Google" }).click();
+
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeDisabled();
+});

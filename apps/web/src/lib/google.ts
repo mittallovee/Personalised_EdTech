@@ -8,28 +8,50 @@ import { api, errorMessage } from "@/lib/api";
 
 const NETWORK = "Cannot reach the server. Check your connection and try again.";
 
+export interface AuthMethods {
+  password: boolean;
+  /** True only when the server has said Google is set up; false while loading, on failure, or off. */
+  google: boolean;
+  /** Whether `google` is the server's answer yet: pages that explain "off" must wait for "ready". */
+  status: "loading" | "ready" | "failed";
+  retry: () => void;
+}
+
 /**
  * Which ways of signing in this server offers (`GET /auth/methods`). Google is hidden until the
  * server says it is set up; until the answer arrives, or if it cannot be had, only the password is
- * shown, which always works.
+ * shown, which always works. `status` tells a page whether `google: false` is the server's answer
+ * or just "not known yet".
  */
-export function useAuthMethods(): { password: boolean; google: boolean } {
+export function useAuthMethods(): AuthMethods {
   const [methods, setMethods] = useState({ password: true, google: false });
+  const [status, setStatus] = useState<AuthMethods["status"]>("loading");
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     api()
       .GET("/api/v1/auth/methods")
       .then(({ data }) => {
-        if (!cancelled && data) setMethods(data);
+        if (cancelled) return;
+        if (data) {
+          setMethods(data);
+          setStatus("ready");
+        } else {
+          setStatus("failed");
+        }
       })
       .catch(() => {
-        // Keep the password-only default: the sign-in page must work without this answer.
+        if (!cancelled) setStatus("failed");
       });
     return () => {
       cancelled = true;
     };
-  }, []);
-  return methods;
+  }, [attempt]);
+  function retry() {
+    setStatus("loading");
+    setAttempt((n) => n + 1);
+  }
+  return { ...methods, status, retry };
 }
 
 /**

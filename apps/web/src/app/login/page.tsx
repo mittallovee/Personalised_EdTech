@@ -100,7 +100,7 @@ export default function LoginPage() {
         )}
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || googleBusy}
           className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
         >
           {busy ? "Signing in…" : "Sign in"}
@@ -111,6 +111,7 @@ export default function LoginPage() {
             <GoogleButton
               label="Sign in with Google"
               busy={googleBusy}
+              disabled={busy}
               onClick={() => void signInWithGoogle()}
             />
           </>
