@@ -818,7 +818,7 @@
           "identity"
         ],
         "summary": "Where Google sends the browser back",
-        "description": "Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`. Every failure (an unknown or replayed flow, a Google account nobody linked or already linked, no access any more, Google refusing) is the same redirect, to `/login?google=failed` (to `/profile?google=failed` when linking), so nothing is revealed.",
+        "description": "Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`. Every failure (an unknown or replayed flow, a Google account nobody linked or already linked, no access any more, Google refusing) is the same redirect, to `/login?google=failed` (to `/profile?google=failed` when linking, to `/activate?google=failed` when activating), so nothing is revealed.",
         "operationId": "google_callback_api_v1_auth_google_callback_get",
         "parameters": [
           {
@@ -2976,7 +2976,7 @@
           "token": {
             "type": "string",
             "title": "Token",
-            "description": "Shown only now. The web app turns it into `<app address>/activate#<token>`. Any earlier link of the same kind for this member stops working."
+            "description": "Shown only now. The web app turns it into `<app address>/activate#<token>` for an activation link, and `<app address>/activate#<token>.reset` for a password-reset link (the mark tells the page not to offer Google, which cannot use a reset link). Any earlier link of the same kind for this member stops working."
           },
           "expires_at": {
             "type": "string",

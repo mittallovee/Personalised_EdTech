@@ -226,8 +226,8 @@ def my_login_methods(
         " new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`."
         " Every failure (an unknown or replayed flow, a Google account nobody linked or already"
         " linked, no access any more, Google refusing) is the same redirect, to"
-        " `/login?google=failed` (to `/profile?google=failed` when linking), so nothing is"
-        " revealed."
+        " `/login?google=failed` (to `/profile?google=failed` when linking, to"
+        " `/activate?google=failed` when activating), so nothing is revealed."
     ),
     status_code=status.HTTP_303_SEE_OTHER,
     response_class=RedirectResponse,
@@ -246,7 +246,9 @@ def google_callback(
     state: str | None = None,
 ) -> RedirectResponse:
     google = _google(request)
-    finished = google_service.Finished(google_service.SIGN_IN_FAILED_PATH)
+    # Even if nothing can be processed (Google switched off while the person was away), a failure
+    # goes back to the page the person started on.
+    finished = google_service.failure_for_state(state)
     if google is not None:
         limiter: LoginRateLimiter = request.app.state.login_limiter
         client_ip = client_address(request)

@@ -330,3 +330,17 @@ def test_starting_too_often_is_slowed_down(settings: Settings, google: StandInGo
         ]
 
     assert codes == [200, 200, 200, 429]
+
+
+def test_a_sign_in_that_took_too_long_returns_to_the_sign_in_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    member = make_member(owner_db, "OWNER")
+    link_google(owner_db, member.user_id, "sub-1")
+    google.accounts["code-1"] = identity("sub-1")
+    state = start(client)
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(text("UPDATE oauth_flows SET expires_at = now() - interval '1 second'"))
+    client.cookies.clear()
+
+    assert call_back(client, state) == FAILED

@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { GoogleButton, OrDivider } from "@/components/google-button";
 import { api, errorMessage } from "@/lib/api";
+import { goToGoogle, useAuthMethods, useGoogleResult } from "@/lib/google";
+import { parseLinkFragment, type ParsedLink } from "@/lib/links";
 
 const MIN_LENGTH = 12; // the API enforces it too; this only saves a round trip
 
@@ -17,17 +20,37 @@ const FIELD =
  */
 export default function ActivatePage() {
   const router = useRouter();
-  const [token, setToken] = useState<string | null | undefined>(undefined); // undefined = reading
+  const [link, setLink] = useState<ParsedLink | null | undefined>(undefined); // undefined = reading
+  const token = link === undefined ? undefined : link?.token || null;
+  const isReset = link?.kind === "reset";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const methods = useAuthMethods();
+  const googleResult = useGoogleResult();
 
   useEffect(() => {
     const fromLink = window.location.hash.slice(1);
     window.history.replaceState(null, "", window.location.pathname);
     // Reading the address bar is only possible in the browser, after the first render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToken(fromLink || null);
+    setLink(fromLink ? parseLinkFragment(fromLink) : null);
   }, []);
+
+  async function continueWithGoogle() {
+    if (!token) return;
+    setGoogleBusy(true);
+    setError(null);
+    const message = await goToGoogle(() =>
+      api().POST("/api/v1/auth/google/start-activation", {
+        body: { return_origin: window.location.origin, link_token: token },
+      }),
+    );
+    if (message) {
+      setError(message);
+      setGoogleBusy(false);
+    }
+  }
 
   async function activate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,8 +94,9 @@ export default function ActivatePage() {
         </div>
         {token === null ? (
           <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
-            This page needs the full link your coaching admin sent you. Open that link again, or ask
-            for a new one.
+            {googleResult === "failed"
+              ? "We could not finish setting up your account with Google. Open the link your coaching admin sent you again and try once more. A link works once and for a limited time, so if it no longer works, ask them for a new one."
+              : "This page needs the full link your coaching admin sent you. Open that link again, or ask for a new one."}
           </p>
         ) : (
           <form onSubmit={activate} className="space-y-5">
@@ -109,11 +133,22 @@ export default function ActivatePage() {
             )}
             <button
               type="submit"
-              disabled={busy || !token}
+              disabled={busy || googleBusy || !token}
               className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
             >
               {busy ? "Saving…" : "Save and sign in"}
             </button>
+            {methods.google && !isReset && (
+              <>
+                <OrDivider />
+                <GoogleButton
+                  label="Continue with Google instead"
+                  busy={googleBusy}
+                  disabled={busy}
+                  onClick={() => void continueWithGoogle()}
+                />
+              </>
+            )}
           </form>
         )}
       </div>

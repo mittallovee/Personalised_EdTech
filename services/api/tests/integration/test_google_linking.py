@@ -39,6 +39,7 @@ UNLINK = "/api/v1/auth/google/unlink"
 LINK_FAILED = "/profile?google=failed"
 LINKED = "/profile?google=linked"
 SIGN_IN_FAILED = "/login?google=failed"
+LINK_SIGNED_OUT = "/login?google=link-failed"
 
 pytestmark = pytest.mark.usefixtures("empty_google_tables")
 
@@ -286,7 +287,9 @@ def test_losing_the_session_or_access_while_at_google_stops_the_link(
     state = state_of(start_link(client, headers))  # the person leaves for Google...
     spoil(client, headers, member, owner_db)  # ...and meanwhile loses the session or access
 
-    assert call_back(client, state) == LINK_FAILED
+    # The person can no longer use the app, so the Profile page would only bounce them to sign-in
+    # and lose the explanation: the failure goes to the sign-in page, which can explain it.
+    assert call_back(client, state) == LINK_SIGNED_OUT
 
     assert linked_subjects(owner_db, member.user_id) == []
 
@@ -300,7 +303,8 @@ def test_the_browser_that_did_not_start_the_flow_cannot_finish_it(
     victim = new_browser(client)
     sign_in(victim, make_member(owner_db, "ADMIN").email)
 
-    assert call_back(victim, state) == SIGN_IN_FAILED  # no pending cookie of this flow
+    # No pending cookie of this flow: it fails, back on the page it began on, and links nothing.
+    assert call_back(victim, state) == LINK_FAILED
 
     assert linked_subjects(owner_db, member.user_id) == []
 
@@ -474,6 +478,36 @@ def test_a_link_waits_for_a_sign_out_in_progress(
     assert linked_subjects(owner_db, member.user_id) == []
 
 
+def test_a_sign_out_that_lands_while_the_link_is_waiting_is_still_explained_on_the_sign_in_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """The session looks fine when the callback first checks it, then dies before the link locks it.
+
+    The database function answers "nothing linked" for that, as it does for a Google account that
+    belongs to someone else, so the callback must look again to tell the two apart.
+    """
+    member, headers = signed_in_member(client, owner_db)
+    google.accounts["code-1"] = identity("sub-mine")
+    state = state_of(start_link(client, headers))
+    outcome: dict[str, str] = {}
+
+    def callback() -> None:
+        outcome["location"] = call_back(client, state)
+
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(
+            text("UPDATE sessions SET revoked_at = now() WHERE user_id = :u"), {"u": member.user_id}
+        )  # the sign-out is mid-way, so the callback's first look still sees a live session
+        worker = threading.Thread(target=callback)
+        worker.start()
+        worker.join(timeout=1.0)
+        assert "location" not in outcome  # the link is waiting for the sign-out to finish
+    worker.join(timeout=10.0)
+
+    assert outcome["location"] == LINK_SIGNED_OUT
+    assert linked_subjects(owner_db, member.user_id) == []
+
+
 def test_unlinking_records_what_was_removed_in_before(
     client: TestClient, google: StandInGoogle, owner_db: Database
 ) -> None:
@@ -549,4 +583,46 @@ def test_a_throttled_link_callback_still_goes_to_the_profile_page(
         location = call_back(client, state_of(started))  # the third: over the limit
 
     assert location == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []
+
+
+def test_a_link_that_took_too_long_still_returns_to_the_profile_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: the expired flow and its cookie are gone, the page must still fit."""
+    member, headers = signed_in_member(client, owner_db)
+    state = state_of(start_link(client, headers))
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(text("UPDATE oauth_flows SET expires_at = now() - interval '1 second'"))
+    client.cookies.delete("qb_google_flow", path="/api/v1/auth/google")  # expired in the browser
+
+    assert call_back(client, state) == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []
+
+
+def test_the_kind_of_flow_in_the_state_only_chooses_the_failure_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """The prefix of the state is visible to anyone; it must grant nothing and survive nonsense."""
+    member, headers = signed_in_member(client, owner_db)
+    state = state_of(start_link(client, headers))
+    prefix, _, rest = state.partition(".")
+
+    # A forged or unknown prefix without a matching flow: the generic sign-in failure.
+    assert call_back(new_browser(client), f"x.{rest}") == SIGN_IN_FAILED
+    assert call_back(new_browser(client), "no-prefix-at-all") == SIGN_IN_FAILED
+    # Someone else's browser, claiming the link prefix, links nothing.
+    assert call_back(new_browser(client), state) == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []
+    assert prefix
+
+
+def test_google_turned_off_while_the_person_is_away_still_returns_to_the_profile_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    member, headers = signed_in_member(client, owner_db)
+    state = state_of(start_link(client, headers))
+    client.app.state.google = None  # type: ignore[attr-defined]
+
+    assert call_back(client, state) == LINK_FAILED
     assert linked_subjects(owner_db, member.user_id) == []

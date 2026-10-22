@@ -84,8 +84,13 @@ def call_back(client: TestClient, state: str, code: str | None = "code-1") -> st
     return response.headers["location"]
 
 
-def assert_signed_out_after_failure(client: TestClient, location: str) -> None:
-    assert location == FAILED  # one answer for every failure
+ACTIVATION_FAILED = "/activate?google=failed"
+
+
+def assert_signed_out_after_failure(
+    client: TestClient, location: str, expected: str = FAILED
+) -> None:
+    assert location == expected  # one answer for every failure of a kind of flow
     assert "qb_session" not in client.cookies
     assert client.get("/api/v1/me").status_code == 401
 

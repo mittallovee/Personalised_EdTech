@@ -23,6 +23,7 @@ from tests.integration.conftest import (
     make_member,
 )
 from tests.integration.google_support import (
+    ACTIVATION_FAILED,
     StandInGoogle,
     assert_signed_out_after_failure,
     call_back,
@@ -32,7 +33,13 @@ from tests.integration.google_support import (
     start_activation,
     state_of,
 )
-from tests.integration.test_link_redemption import invite_owner, redeem, reset_link, token_of
+from tests.integration.test_link_redemption import (
+    NEW_PASSWORD,
+    invite_owner,
+    redeem,
+    reset_link,
+    token_of,
+)
 
 pytestmark = pytest.mark.usefixtures("empty_google_tables")
 
@@ -246,7 +253,7 @@ def test_a_link_spoiled_while_at_google_stops_the_activation(
     state = state_of(start_activation(client, token_of(created)))  # the person leaves for Google...
     spoil(owner_db, org_of(created))  # ...and meanwhile the link or their place is taken away
 
-    assert_signed_out_after_failure(client, call_back(client, state))
+    assert_signed_out_after_failure(client, call_back(client, state), ACTIVATION_FAILED)
 
     assert linked_accounts(owner_db) == 0
     assert user_status(owner_db, owner_of(created)) == "INVITED"
@@ -261,7 +268,7 @@ def test_the_link_used_with_a_password_while_at_google_stops_the_activation(
     with TestClient(client.app) as elsewhere:  # the same link is redeemed with a password first
         assert redeem(elsewhere, token_of(created)) == (200, "")
 
-    assert_signed_out_after_failure(client, call_back(client, state))
+    assert_signed_out_after_failure(client, call_back(client, state), ACTIVATION_FAILED)
     assert linked_accounts(owner_db) == 0
 
 
@@ -274,7 +281,7 @@ def test_a_google_account_linked_to_someone_else_cannot_activate_another_person(
     google.accounts["code-1"] = identity("sub-taken")
     state = state_of(start_activation(client, token_of(created)))
 
-    assert_signed_out_after_failure(client, call_back(client, state))
+    assert_signed_out_after_failure(client, call_back(client, state), ACTIVATION_FAILED)
 
     assert linked_accounts(owner_db) == 1  # still only the existing person's
     assert user_status(owner_db, owner_of(created)) == "INVITED"
@@ -412,3 +419,77 @@ def test_a_removal_that_revokes_the_link_does_not_deadlock_with_a_waiting_activa
     assert "error" not in outcome, outcome.get("error")
     assert outcome["row"] is None
     assert user_status(owner_db, owner_of(created)) == "INVITED"
+
+
+def test_someone_activated_with_google_can_later_get_a_password_with_a_reset_link(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """The setup guide promises this, so it is checked: an admin's reset link adds a password to an
+    account that was activated with Google, which keeps its Google account."""
+    created = invite_owner(client, owner_db)
+    google.accounts["code-1"] = identity("sub-owner")
+    assert call_back(client, state_of(start_activation(client, token_of(created)))) == "/"
+    with owner_db.transaction(TenantContext(organization_id=org_of(created))) as session:
+        membership_id = session.scalar(
+            text("SELECT id FROM memberships WHERE organization_id = :org"),
+            {"org": org_of(created)},
+        )
+        link = issue_account_link(
+            session,
+            organization_id=org_of(created),
+            membership_id=membership_id,
+            user_id=owner_of(created),
+            purpose=LinkPurpose.RESET,
+            created_by=owner_of(created),
+        )
+
+    assert redeem(client, link.token) == (200, "")
+
+    email: str = created["owner"]["email"]  # type: ignore[index]
+    with TestClient(client.app) as other:
+        login = other.post(
+            "/api/v1/auth/login", json={"email": email, "password": NEW_PASSWORD}, headers=ORIGIN
+        )
+        assert login.status_code == 200
+    assert linked_accounts(owner_db) == 1  # Google is still linked
+
+
+def test_cancelling_at_google_while_activating_sends_the_person_back_to_the_activation_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: the invitee has no password, so the sign-in page cannot help."""
+    created = invite_owner(client, owner_db)
+    state = state_of(start_activation(client, token_of(created)))
+
+    location = call_back(client, state, code=None)  # Google sent an error, no code
+
+    assert location == ACTIVATION_FAILED
+    assert user_status(owner_db, owner_of(created)) == "INVITED"
+    assert redeem(client, token_of(created))[0] == 200  # the link was not spent
+
+
+def test_an_activation_that_took_too_long_still_returns_to_the_activation_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: after ten minutes both the flow and its cookie are gone, but the
+    person must still be sent to the page whose advice fits."""
+    created = invite_owner(client, owner_db)
+    state = state_of(start_activation(client, token_of(created)))
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(text("UPDATE oauth_flows SET expires_at = now() - interval '1 second'"))
+    client.cookies.clear()  # the browser dropped the cookie when it expired
+
+    assert call_back(client, state) == ACTIVATION_FAILED
+    assert redeem(client, token_of(created))[0] == 200  # the link is untouched
+
+
+def test_google_turned_off_while_the_person_is_away_still_returns_to_the_activation_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: Google may be switched off and the API restarted mid-flow."""
+    created = invite_owner(client, owner_db)
+    state = state_of(start_activation(client, token_of(created)))
+    client.app.state.google = None  # type: ignore[attr-defined]
+
+    assert call_back(client, state) == ACTIVATION_FAILED
+    assert redeem(client, token_of(created))[0] == 200  # the link is untouched

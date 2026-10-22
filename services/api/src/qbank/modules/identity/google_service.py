@@ -7,6 +7,7 @@ person nobody linked fails, and never creates or merges an account.
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 import structlog
@@ -44,8 +45,17 @@ CALLBACK_PATH = "/api/v1/auth/google/callback"
 # person is already using (the web app proxies /api, ADR-0014).
 SIGNED_IN_PATH = "/"
 SIGN_IN_FAILED_PATH = "/login?google=failed"
+ACTIVATION_FAILED_PATH = "/activate?google=failed"
 LINKED_PATH = "/profile?google=linked"
+# The `state` Google hands back starts with a letter saying which kind of flow it belongs to. It is
+# visible to anyone and grants nothing: it is used only to pick which page a *failure* returns to,
+# for the case where the flow and its cookie have already expired and nothing else is known.
+_STATE_KIND = {"SIGN_IN": "s", "ACTIVATE": "a", "LINK": "l"}
 LINK_FAILED_PATH = "/profile?google=failed"
+# A link that failed because the person can no longer use the app (signed out, session ended,
+# removed, coaching suspended, disabled): the Profile page would only bounce them to the sign-in
+# page and lose the explanation, so the sign-in page explains it.
+LINK_SIGNED_OUT_PATH = "/login?google=link-failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +70,25 @@ class Finished:
 
     path: str
     login: service.LoginResult | None = None
+
+
+def _failure_path(purpose: str | None) -> str:
+    """Where a failed flow of this kind returns to: the page whose advice fits the person."""
+    return {"LINK": LINK_FAILED_PATH, "ACTIVATE": ACTIVATION_FAILED_PATH}.get(
+        purpose or "", SIGN_IN_FAILED_PATH
+    )
+
+
+def _purpose_from_state(state: str | None) -> str | None:
+    """The kind of flow a `state` claims to belong to; only ever used to choose a failure page."""
+    kind = (state or "").partition(".")[0]
+    return next((purpose for purpose, letter in _STATE_KIND.items() if letter == kind), None)
+
+
+def failure_for_state(state: str | None) -> Finished:
+    """The failure outcome for a callback that cannot be processed at all (Google switched off,
+    say), on the page the `state` says the person started from."""
+    return Finished(_failure_path(_purpose_from_state(state)))
 
 
 def redirect_uri(return_origin: str) -> str:
@@ -77,6 +106,7 @@ def _start(
     database: Database,
     google: GoogleClient,
     origin: str,
+    purpose: str,
     begin: Callable[[Session, dict[str, object]], bool],
     context: TenantContext = NO_CONTEXT,
 ) -> StartedFlow | None:
@@ -84,12 +114,8 @@ def _start(
 
     ``begin`` returns False when the flow must not start; then nothing is stored.
     """
-    cookie_value, state, nonce, verifier = (
-        new_token(),
-        new_token(),
-        new_token(),
-        new_code_verifier(),
-    )
+    cookie_value, nonce, verifier = new_token(), new_token(), new_code_verifier()
+    state = f"{_STATE_KIND[purpose]}.{new_token()}"
     flow = {
         "id": new_id(),
         "cookie": hash_token(cookie_value),
@@ -125,7 +151,7 @@ def start_sign_in(
         )
         return True
 
-    started = _start(database, google, origin, begin)
+    started = _start(database, google, origin, "SIGN_IN", begin)
     assert started is not None  # noqa: S101  (begin never refuses a sign-in)
     return started
 
@@ -154,7 +180,7 @@ def start_activation(
         )
         return bool(usable)
 
-    started = _start(database, google, origin, begin)
+    started = _start(database, google, origin, "ACTIVATE", begin)
     if started is None:
         log.info("google_activation_refused", reason="link_not_usable")
         raise Unauthenticated(service.LINK_INVALID, code="LINK_INVALID")
@@ -181,9 +207,12 @@ def finish(
     the flow was for is then checked afresh, because minutes may have passed (a removal or
     suspension stops the flow).
     """
+    # Used if the flow cannot be found (it may have expired, with its cookie): the `state` still
+    # says which page the person started on.
+    unknown = failure_for_state(state)
     if not cookie or not state:
         log.info("google_flow_failed", reason="missing_cookie_or_state")
-        return Finished(SIGN_IN_FAILED_PATH)
+        return unknown
     with database.transaction(NO_CONTEXT) as session:
         flow = session.execute(
             text("SELECT * FROM auth_oauth_take(:cookie, :state)"),
@@ -191,8 +220,8 @@ def finish(
         ).first()
     if flow is None:
         log.info("google_flow_failed", reason="no_usable_flow")
-        return Finished(SIGN_IN_FAILED_PATH)
-    failed = Finished(LINK_FAILED_PATH if flow.purpose == "LINK" else SIGN_IN_FAILED_PATH)
+        return unknown
+    failed = Finished(_failure_path(flow.purpose))
     if throttled:
         # Too many callbacks from this address. The flow is used up (it cannot be retried), but the
         # person is still sent to the page the flow began on, and Google is not asked.
@@ -214,7 +243,7 @@ def finish(
 
     with database.transaction(NO_CONTEXT) as session:
         result: service.LoginResult | None = None
-        linked = False
+        linked: Literal["linked", "failed", "signed_out"] = "failed"
         if flow.purpose == "SIGN_IN":
             result = _sign_in(session, settings, identity, request_id)
         elif flow.purpose == "ACTIVATE":
@@ -222,8 +251,10 @@ def finish(
         elif flow.purpose == "LINK":
             linked = _link(session, flow.id, flow.user_id, flow.session_id, identity, request_id)
     if flow.purpose == "LINK":
-        log.info("google_link_finished", user_id=str(flow.user_id), linked=linked)
-        return Finished(LINKED_PATH) if linked else failed
+        log.info("google_link_finished", user_id=str(flow.user_id), outcome=linked)
+        if linked == "signed_out":
+            return Finished(LINK_SIGNED_OUT_PATH)
+        return Finished(LINKED_PATH) if linked == "linked" else failed
     if result is None:
         log.info("google_flow_failed", reason="not_allowed", purpose=flow.purpose)
         return failed
@@ -274,6 +305,21 @@ def _activate(
     return result
 
 
+def _session_alive(session: Session, user_id: UUID, session_id: UUID) -> bool:
+    """Whether this sign-in is still valid (not signed out, revoked or expired)."""
+    apply_tenant_context(session, TenantContext(user_id=user_id))
+    return bool(
+        session.scalar(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM sessions s WHERE s.id = :sid AND s.user_id = :uid"
+                " AND s.revoked_at IS NULL AND s.idle_expires_at > now()"
+                " AND s.absolute_expires_at > now())"
+            ),
+            {"sid": session_id, "uid": user_id},
+        )
+    )
+
+
 def _link(
     session: Session,
     flow_id: UUID,
@@ -281,24 +327,30 @@ def _link(
     session_id: UUID,
     identity: GoogleIdentity,
     request_id: str | None,
-) -> bool:
+) -> Literal["linked", "failed", "signed_out"]:
     """Link this Google account to the signed-in person who started the flow.
 
     Checked afresh in this transaction: the person still has access (the check every request
     makes), and the session that started the flow is still theirs and valid (the database function
-    locks it). A Google account that belongs to anyone is refused.
+    locks it). A Google account that belongs to anyone is refused. "signed_out" means the person
+    can no longer use the app at all, which changes where the browser should go.
+
+    The first look at the session is not locked, so a sign-out can land after it. The database
+    function then waits for that sign-out and links nothing, exactly as it does for a Google account
+    that belongs to someone else. Looking again once it has answered tells the two apart: it has
+    waited for the lock, so the second look sees the sign-out.
     """
     apply_tenant_context(session, TenantContext(user_id=user_id))
     principal = service.load_principal(session, user_id, session_id)
-    if principal is None:
-        return False
+    if principal is None or not _session_alive(session, user_id, session_id):
+        return "signed_out"
     apply_tenant_context(session, principal.tenant_context)
     linked = session.scalar(
         text("SELECT auth_google_link(:flow, :subject, :email)"),
         {"flow": flow_id, "subject": identity.subject, "email": identity.email},
     )
     if linked is None:
-        return False
+        return "failed" if _session_alive(session, user_id, session_id) else "signed_out"
     record_event(
         session,
         action="GOOGLE_LINKED",
@@ -310,7 +362,7 @@ def _link(
         request_id=request_id,
         after={"provider": "google"},
     )
-    return True
+    return "linked"
 
 
 def start_link(
@@ -375,7 +427,7 @@ def start_link(
         outcome.append(str(result))
         return bool(result == "STARTED")
 
-    started = _start(database, google, origin, begin, principal.tenant_context)
+    started = _start(database, google, origin, "LINK", begin, principal.tenant_context)
     if started is None:
         if outcome == ["ALREADY_LINKED"]:
             raise Conflict(
