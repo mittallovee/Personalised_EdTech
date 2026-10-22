@@ -90,10 +90,15 @@ def assert_signed_out_after_failure(client: TestClient, location: str) -> None:
     assert client.get("/api/v1/me").status_code == 401
 
 
+ACTIVATION_START = "/api/v1/auth/google/start-activation"
+
+
 def start_activation(client: TestClient, link_token: str | None) -> Response:
     """Start a flow that activates an invited account with Google. The pending cookie is kept."""
-    body = {"purpose": "ACTIVATE", "return_origin": ORIGIN["Origin"], "link_token": link_token}
-    return client.post(START, json=body, headers=ORIGIN)
+    body: dict[str, str] = {"return_origin": ORIGIN["Origin"]}
+    if link_token is not None:
+        body["link_token"] = link_token
+    return client.post(ACTIVATION_START, json=body, headers=ORIGIN)
 
 
 def state_of(response: Response) -> str:

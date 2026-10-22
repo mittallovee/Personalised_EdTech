@@ -144,7 +144,7 @@ def test_the_owner_activates_with_google_and_needs_no_password(
 def test_starting_needs_the_activation_link(client: TestClient) -> None:
     response = start_activation(client, None)
 
-    assert response.status_code == 422
+    assert response.status_code == 400  # MALFORMED_REQUEST: link_token is missing
     assert "qb_google_flow" not in client.cookies
 
 

@@ -6,13 +6,18 @@ from fastapi.responses import RedirectResponse
 from qbank.core.clientip import client_address
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
-from qbank.core.errors import NotFound, TooManyRequests, ValidationFailed
+from qbank.core.errors import NotFound, TooManyRequests
 from qbank.core.ratelimit import LoginRateLimiter
 from qbank.core.security import hash_token
 from qbank.modules.identity import google_service
 from qbank.modules.identity.api import get_settings_from_app, set_auth_cookies
 from qbank.modules.identity.google import GoogleClient
-from qbank.modules.identity.schemas import AuthMethods, GoogleStartRequest, GoogleStartResponse
+from qbank.modules.identity.schemas import (
+    AuthMethods,
+    GoogleActivationStartRequest,
+    GoogleStartRequest,
+    GoogleStartResponse,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
 
@@ -42,6 +47,20 @@ def _limit(request: Request, what: str) -> None:
         )
 
 
+def _set_flow_cookie(
+    response: Response, settings: Settings, started: google_service.StartedFlow
+) -> None:
+    response.set_cookie(
+        FLOW_COOKIE,
+        started.cookie_value,
+        max_age=FLOW_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",  # Google's redirect back is a top-level GET, which Lax allows
+        path=FLOW_COOKIE_PATH,
+    )
+
+
 @router.get(
     "/auth/methods",
     summary="Which sign-in methods are on",
@@ -56,16 +75,10 @@ def auth_methods(request: Request) -> AuthMethods:
     summary="Start signing in with Google",
     description=(
         "Returns the Google address to send the browser to, and sets a short-lived HttpOnly cookie"
-        " that only this browser can finish the flow with. `SIGN_IN` works only for a Google"
-        " account somebody already linked. `ACTIVATE` takes the `link_token` of an activation"
-        " link, which is checked before leaving for Google, and binds the Google account to the"
-        " person that link was made for. Nothing else is ever created."
+        " that only this browser can finish the flow with. Nothing is created: signing in works"
+        " only for a Google account somebody already linked."
     ),
     responses={
-        401: {
-            "description": "`ACTIVATE` only: the activation link is unknown, used, replaced,"
-            " expired, or its membership or coaching is no longer active (`LINK_INVALID`)"
-        },
         404: {"description": "Google sign-in is not set up on this server (`GOOGLE_DISABLED`)"},
         422: {
             "description": "`return_origin` is not an allowed web address"
@@ -84,31 +97,55 @@ def start_google(
     google = _google(request)
     if google is None:
         raise NotFound("Google sign-in is not turned on.", code="GOOGLE_DISABLED")
-    if body.purpose == "ACTIVATE":
-        if not body.link_token:
-            raise ValidationFailed("An activation link is needed to activate with Google.")
-        # Counted per client address and per link, exactly like redeeming the link with a password.
-        limiter: LoginRateLimiter = request.app.state.login_limiter
-        wait = limiter.check(client_address(request), f"link:{hash_token(body.link_token)}")
-        if wait:
-            raise TooManyRequests(
-                "Too many attempts. Please wait and try again.", retry_after_seconds=wait
-            )
-        started = google_service.start_activation(
-            database, settings, google, body.return_origin, body.link_token
+    _limit(request, "google-start")
+    started = google_service.start_sign_in(database, settings, google, body.return_origin)
+    _set_flow_cookie(response, settings, started)
+    return GoogleStartResponse(authorization_url=started.authorization_url)
+
+
+@router.post(
+    "/auth/google/start-activation",
+    summary="Start activating an account with Google",
+    description=(
+        "Like `POST /auth/google/start`, for a person who has an activation link and would rather"
+        " use Google than set a password. The link is checked before leaving for Google, and"
+        " again when Google calls back; the Google account is then bound to the person the link"
+        " was made for. Nothing else is ever created."
+    ),
+    responses={
+        401: {
+            "description": "The activation link is unknown, used, replaced, expired, or its"
+            " membership or coaching is no longer active (`LINK_INVALID`)"
+        },
+        404: {"description": "Google sign-in is not set up on this server (`GOOGLE_DISABLED`)"},
+        422: {
+            "description": "`return_origin` is not an allowed web address"
+            " (`RETURN_ORIGIN_NOT_ALLOWED`)"
+        },
+        429: {"description": "Too many attempts; see the Retry-After header"},
+    },
+)
+def start_google_activation(
+    body: GoogleActivationStartRequest,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    settings: Annotated[Settings, Depends(get_settings_from_app)],
+) -> GoogleStartResponse:
+    google = _google(request)
+    if google is None:
+        raise NotFound("Google sign-in is not turned on.", code="GOOGLE_DISABLED")
+    # Counted per client address and per link, exactly like redeeming the link with a password.
+    limiter: LoginRateLimiter = request.app.state.login_limiter
+    wait = limiter.check(client_address(request), f"link:{hash_token(body.link_token)}")
+    if wait:
+        raise TooManyRequests(
+            "Too many attempts. Please wait and try again.", retry_after_seconds=wait
         )
-    else:
-        _limit(request, "google-start")
-        started = google_service.start_sign_in(database, settings, google, body.return_origin)
-    response.set_cookie(
-        FLOW_COOKIE,
-        started.cookie_value,
-        max_age=FLOW_MAX_AGE_SECONDS,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",  # Google's redirect back is a top-level GET, which Lax allows
-        path=FLOW_COOKIE_PATH,
+    started = google_service.start_activation(
+        database, settings, google, body.return_origin, body.link_token
     )
+    _set_flow_cookie(response, settings, started)
     return GoogleStartResponse(authorization_url=started.authorization_url)
 
 
