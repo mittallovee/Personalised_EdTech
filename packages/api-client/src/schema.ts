@@ -146,6 +146,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/google/start-activation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start activating an account with Google
+         * @description Like `POST /auth/google/start`, for a person who has an activation link and would rather use Google than set a password. The link is checked before leaving for Google, and again when Google calls back; the Google account is then bound to the person the link was made for. Nothing else is ever created.
+         */
+        post: operations["start_google_activation_api_v1_auth_google_start_activation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/google/callback": {
         parameters: {
             query?: never;
@@ -638,6 +658,20 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorInfo"];
+        };
+        /** GoogleActivationStartRequest */
+        GoogleActivationStartRequest: {
+            /**
+             * Return Origin
+             * @description The web address the person is on; must be one of ALLOWED_ORIGINS.
+             * @example http://localhost:3000
+             */
+            return_origin: string;
+            /**
+             * Link Token
+             * @description The part after # in the activation link.
+             */
+            link_token: string;
         };
         /** GoogleStartRequest */
         GoogleStartRequest: {
@@ -1312,6 +1346,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GoogleStartResponse"];
+                };
+            };
+            /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Google sign-in is not set up on this server (`GOOGLE_DISABLED`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `return_origin` is not an allowed web address (`RETURN_ORIGIN_NOT_ALLOWED`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many attempts; see the Retry-After header */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_google_activation_api_v1_auth_google_start_activation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleActivationStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoogleStartResponse"];
+                };
+            };
+            /** @description The activation link is unknown, used, replaced, expired, or its membership or coaching is no longer active (`LINK_INVALID`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website) */

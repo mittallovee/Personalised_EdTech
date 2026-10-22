@@ -94,18 +94,21 @@ Rules that hold everywhere:
   short-lived HttpOnly cookie, which stops "login CSRF". Google's ID token is verified with `joserfc`, the
   JOSE library of the Authlib project (Authlib's own `authlib.jose` is deprecated in its favour); the
   token exchange is one HTTPS call to Google's fixed address.
-- The flow starts with `POST /api/v1/auth/google/start {purpose, return_origin, link_token?}`, which returns
-  the Google address to go to. Being a POST, it passes the Origin check.
+- The flow starts with a POST, one endpoint per purpose, which returns the Google address to go to. Being a
+  POST, it passes the Origin check. (One endpoint per purpose, not one with a `purpose` switch, because the
+  contract check treats widening an existing field to more values as a breaking change, and a body per
+  purpose says exactly what each needs.)
   - `return_origin` must be in `ALLOWED_ORIGINS`, so the same setup works on `localhost:3000` and on
     `qb.loveemittal.online`.
   - The API stores the pending flow server-side: a hash of `state`, PKCE verifier, nonce, purpose, and for
     `ACTIVATE` the account link's ID, for `LINK` the signed-in user. It expires after 10 minutes, and its
     random secret goes in the pending cookie (stored only as a hash, next to `state`'s hash: a callback needs both).
-  - `purpose` is one of three:
-    - `SIGN_IN` needs nothing else;
-    - `ACTIVATE` needs the activation `link_token`, which the page reads from the `#` part, so the token
-      is checked **before** leaving for Google;
-    - `LINK` needs a session, the CSRF header and the account's current `password` **in the same request**.
+  - The purposes:
+    - `SIGN_IN`, `POST /auth/google/start {purpose, return_origin}`, needs nothing else;
+    - `ACTIVATE`, `POST /auth/google/start-activation {return_origin, link_token}`, needs the activation
+      `link_token`, which the page reads from the `#` part, so the token is checked **before** leaving for
+      Google;
+    - `LINK` (8c, its own endpoint) needs a session, the CSRF header and the account's current `password` **in the same request**.
       The API verifies the password right there: wrong passwords count towards the sign-in lockout and
       rate limits, and session age never counts as proof. Only accounts that have a password can start
       `LINK`, which is fine because an account can't link a second Google account anyway.
@@ -157,7 +160,7 @@ written to audit events or logs.
 ## 7. API (all under `/api/v1`)
 
 Changes need a session and the CSRF header, except the endpoints for signed-out people. Those are sign-in,
-`POST /auth/links/redeem`, and `POST /auth/google/start` with purpose `SIGN_IN`/`ACTIVATE`. Like M1's
+`POST /auth/links/redeem`, `POST /auth/google/start` and `POST /auth/google/start-activation`. Like M1's
 login, they are protected by the Origin allow-list, rate limits, and a one-time secret (the link token or
 the OAuth `state` + cookie). The Google callback is a GET from Google: it changes nothing unless the pending
 cookie and `state` match.
@@ -177,7 +180,7 @@ cookie and `state` match.
 | `POST /organization/transfer-ownership` | To an active admin who has activated; names the expected Owner and sends `If-Match` with **the Owner's membership** revision (not the coaching's: only the platform may write the coaching row, and ownership is held on the membership). A second, simultaneous transfer gets `412` |
 | `POST /auth/links/redeem` | Activate or reset with a link token (no session; see above) |
 | `GET /auth/methods` | Which sign-in methods are on (hides the Google button when off) |
-| `POST /auth/google/start` · `GET /auth/google/callback` · `POST /auth/google/unlink` | §5 |
+| `POST /auth/google/start` · `POST /auth/google/start-activation` · `GET /auth/google/callback` · `POST /auth/google/unlink` (and the start endpoint for `LINK`, 8c) | §5 |
 | `GET /audit-events` | Coaching (or platform) audit log, filters: actor, entity, time; paginated |
 
 New error codes are added to `error-codes.md`, for example `LINK_INVALID`, `ROLE_CHANGED` (409) and

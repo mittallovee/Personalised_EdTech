@@ -55,5 +55,16 @@ class GoogleStartRequest(BaseModel):
     )
 
 
+class GoogleActivationStartRequest(BaseModel):
+    return_origin: str = Field(
+        max_length=200,
+        description="The web address the person is on; must be one of ALLOWED_ORIGINS.",
+        examples=["http://localhost:3000"],
+    )
+    link_token: str = Field(
+        min_length=20, max_length=100, description="The part after # in the activation link."
+    )
+
+
 class GoogleStartResponse(BaseModel):
     authorization_url: str = Field(description="Send the person's browser here.")
