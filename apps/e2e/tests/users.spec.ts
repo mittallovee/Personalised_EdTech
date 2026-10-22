@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { invite, person, setPassword, signedInOwner, unique } from "./helpers";
+import { csrfOf, invite, person, setPassword, signedInOwner, unique } from "./helpers";
 
 // M2 (A-01, B-05, B-06, B-09, B-10): the Owner invites people, gives faculty their grants, and
 // makes links, on the Users & grants screen.
@@ -96,4 +96,21 @@ test("an email that already has an account is refused with a clear message", asy
   await expect(
     owner.getByRole("form", { name: "Invite someone" }).getByRole("alert"),
   ).toContainText("already exists");
+});
+
+test("inviting after the session has ended sends you to sign in", async ({ browser, baseURL }) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Ended Users ${unique()}`);
+  const owner = await context.newPage();
+  await owner.goto("/admin/users");
+  await expect(owner.getByRole("form", { name: "Invite someone" })).toBeVisible();
+  const ended = await context.request.post("/api/v1/auth/logout", {
+    headers: { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) },
+  });
+  expect(ended.ok()).toBe(true);
+
+  await owner.fill('input[name="display_name"]', "Nobody");
+  await owner.fill('input[name="email"]', `nobody-${unique()}@example.com`);
+  await owner.getByRole("button", { name: "Invite and make link" }).click();
+
+  await expect(owner).toHaveURL(/\/login$/);
 });

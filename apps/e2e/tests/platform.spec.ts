@@ -175,3 +175,35 @@ test("stopping acting after the session has ended sends you to sign in", async (
 
   await expect(staff).toHaveURL(/\/login$/);
 });
+
+test("creating a coaching or acting in one after the session has ended sends you to sign in", async ({
+  browser,
+  baseURL,
+}) => {
+  const name = `Ended Classes ${unique()}`;
+  await signedInOwner(browser, baseURL!, name);
+  for (const action of ["create", "act in"] as const) {
+    const staffContext = await platformAdminContext(browser, baseURL!);
+    const staff = await staffContext.newPage();
+    await staff.goto("/platform/coachings");
+    await expect(coaching(staff, name)).toBeVisible();
+    // The same sign-in ends elsewhere (another tab, or it expired).
+    const ended = await staffContext.request.post("/api/v1/auth/logout", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": await csrfOf(staffContext) },
+    });
+    expect(ended.ok()).toBe(true);
+
+    if (action === "create") {
+      await staff.fill('input[name="display_name"]', `Never Created ${unique()}`);
+      await staff.fill('input[name="owner_name"]', "Nobody");
+      await staff.fill('input[name="owner_email"]', `nobody-${unique()}@example.com`);
+      await staff
+        .getByRole("button", { name: "Create coaching and make the Owner's link" })
+        .click();
+    } else {
+      await coaching(staff, name).getByRole("button", { name: "Act in" }).click();
+    }
+
+    await expect(staff).toHaveURL(/\/login$/);
+  }
+});
