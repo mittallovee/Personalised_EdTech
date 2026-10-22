@@ -17,9 +17,10 @@ export function api(): ApiClient {
         const path = new URL(request.url).pathname;
         if (response.status === 401 && !path.startsWith("/api/v1/auth/")) {
           // Not inside React, so no router here; a full page load also drops whatever the stale
-          // screen still held in memory.
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-          window.location.assign("/login");
+          // screen still held in memory. `replace` rather than `assign`, so the sign-in page takes
+          // the console's place in the history and Back cannot bring the old screen (and its data)
+          // back from the browser's memory.
+          window.location.replace("/login");
         }
       },
     });

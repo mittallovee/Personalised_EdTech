@@ -208,6 +208,30 @@ test("creating a coaching or acting in one after the session has ended sends you
   }
 });
 
+test("sending you to sign in replaces the console in the browser history", async ({
+  browser,
+  baseURL,
+}) => {
+  const name = `Back Classes ${unique()}`;
+  await signedInOwner(browser, baseURL!, name);
+  const staffContext = await platformAdminContext(browser, baseURL!);
+  const staff = await staffContext.newPage();
+  await staff.goto("/platform/coachings");
+  await expect(coaching(staff, name)).toBeVisible();
+  const entriesBefore = await staff.evaluate(() => window.history.length);
+  const ended = await staffContext.request.post("/api/v1/auth/logout", {
+    headers: { Origin: baseURL!, "X-CSRF-Token": await csrfOf(staffContext) },
+  });
+  expect(ended.ok()).toBe(true);
+
+  await coaching(staff, name).getByRole("button", { name: "Act in" }).click();
+  await expect(staff).toHaveURL(/\/login$/);
+
+  // Back must not be able to restore the console of the ended session (browsers may keep a
+  // page in memory for Back), so the sign-in page takes the console's place in the history.
+  expect(await staff.evaluate(() => window.history.length)).toBe(entriesBefore);
+});
+
 test("pressing Show more twice on the coachings list loads the next page once", async ({
   browser,
   baseURL,
