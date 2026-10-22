@@ -146,13 +146,22 @@ def upgrade() -> None:
             PERFORM set_config('app.org_id', flow.organization_id::text, true);
             SELECT * INTO link FROM account_links l WHERE l.id = flow.account_link_id FOR UPDATE;
             IF NOT FOUND OR link.purpose <> 'ACTIVATION' OR link.used_at IS NOT NULL
-               OR link.revoked_at IS NOT NULL OR link.expires_at <= now()
-               OR NOT EXISTS (
-                    SELECT 1 FROM memberships m JOIN organizations o ON o.id = m.organization_id
-                    JOIN users u ON u.id = m.user_id
-                    WHERE m.id = link.membership_id AND m.status = 'ACTIVE'
-                      AND o.status = 'ACTIVE' AND u.id = link.user_id AND u.status = 'INVITED'
-               ) THEN
+               OR link.revoked_at IS NOT NULL OR link.expires_at <= now() THEN
+                PERFORM set_config('app.org_id', coalesce(previous_org, ''), true);
+                RETURN;
+            END IF;
+            -- Lock the membership and the coaching while checking them (and until the caller's
+            -- transaction ends, so until the new session exists). A suspension or removal that is
+            -- half-done then makes this wait, and afterwards see its result: otherwise the session
+            -- could appear just after the suspension had revoked every session (Codex, PR #25).
+            PERFORM 1
+                FROM memberships m
+                JOIN organizations o ON o.id = m.organization_id
+                JOIN users u ON u.id = m.user_id
+                WHERE m.id = link.membership_id AND m.status = 'ACTIVE'
+                  AND o.status = 'ACTIVE' AND u.id = link.user_id AND u.status = 'INVITED'
+                FOR SHARE OF m, o;
+            IF NOT FOUND THEN
                 PERFORM set_config('app.org_id', coalesce(previous_org, ''), true);
                 RETURN;
             END IF;

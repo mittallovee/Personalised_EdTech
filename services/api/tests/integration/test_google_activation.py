@@ -1,5 +1,6 @@
 """M2 PR 8b: activating an invited account with Google instead of a password (B-02, B-04, T19)."""
 
+import threading
 from collections.abc import Callable, Iterator
 from uuid import UUID
 
@@ -326,3 +327,47 @@ def test_guessing_at_one_link_is_slowed_down(
         codes = [start_activation(client, "y" * 43).status_code for _ in range(4)]
 
     assert codes == [401, 401, 401, 429]
+
+
+@pytest.mark.parametrize(
+    "hold",
+    [
+        "UPDATE organizations SET status = 'SUSPENDED' WHERE id = :org",
+        "UPDATE memberships SET status = 'REMOVED' WHERE organization_id = :org",
+    ],
+    ids=["suspension", "removal"],
+)
+def test_an_activation_waits_for_a_suspension_or_removal_in_progress(
+    client: TestClient, owner_db: Database, db: Database, hold: str
+) -> None:
+    """Codex review on PR #25: reading the coaching without a lock could let the activation use the
+    last committed ACTIVE version while the suspension is mid-way, and slip a session in after the
+    suspension has revoked the sessions. The activation must wait, then see the new state."""
+    created = invite_owner(client, owner_db)
+    assert start_activation(client, token_of(created)).status_code == 200
+    with owner_db.transaction(PLATFORM) as session:
+        flow_id = session.scalar(text("SELECT id FROM oauth_flows"))
+        session.execute(text("UPDATE oauth_flows SET used_at = now()"))  # as if taken
+
+    outcome: dict[str, object] = {}
+
+    def activate() -> None:
+        with db.transaction(NO_CONTEXT) as session:
+            outcome["row"] = session.execute(
+                text("SELECT * FROM auth_google_activate(:flow, 'sub-race', NULL)"),
+                {"flow": flow_id},
+            ).first()
+        outcome["done"] = True
+
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(text(hold), {"org": org_of(created)})  # the suspension is mid-way
+        worker = threading.Thread(target=activate)
+        worker.start()
+        worker.join(timeout=1.0)
+        assert "done" not in outcome  # still waiting for the suspension to finish
+    worker.join(timeout=10.0)
+
+    assert outcome.get("done") is True
+    assert outcome["row"] is None  # it saw the committed change and activated nobody
+    assert user_status(owner_db, owner_of(created)) == "INVITED"
+    assert linked_accounts(owner_db) == 0
