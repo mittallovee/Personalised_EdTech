@@ -34,6 +34,9 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `ALREADY_LINKED` | 409 | A Google account is already linked to this account; unlink it first to link another | M2 |
 | `NO_OTHER_LOGIN_METHOD` | 409 | Google can't be unlinked because it is the only way to sign in; the account needs a password first | M2 |
 | `GOOGLE_NOT_LINKED` | 404 | There is no linked Google account to unlink | M2 |
+| `HIERARCHY_INVALID` | 422 | A syllabus item was given the wrong kind of parent: a subject goes under a class, a chapter under a subject, a topic under a chapter, a subtopic under a topic, and a class has none | M3 |
+| `DUPLICATE_NAME` | 409 | Another item under the same parent already has this name (compared without regard to case or spacing) | M3 |
+| `PARENT_DEPRECATED` | 409 | The parent item is retired: nothing new goes under it, and an item under it cannot be restored until the parent is | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 
