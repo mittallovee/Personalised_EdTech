@@ -478,6 +478,36 @@ def test_a_link_waits_for_a_sign_out_in_progress(
     assert linked_subjects(owner_db, member.user_id) == []
 
 
+def test_a_sign_out_that_lands_while_the_link_is_waiting_is_still_explained_on_the_sign_in_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """The session looks fine when the callback first checks it, then dies before the link locks it.
+
+    The database function answers "nothing linked" for that, as it does for a Google account that
+    belongs to someone else, so the callback must look again to tell the two apart.
+    """
+    member, headers = signed_in_member(client, owner_db)
+    google.accounts["code-1"] = identity("sub-mine")
+    state = state_of(start_link(client, headers))
+    outcome: dict[str, str] = {}
+
+    def callback() -> None:
+        outcome["location"] = call_back(client, state)
+
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(
+            text("UPDATE sessions SET revoked_at = now() WHERE user_id = :u"), {"u": member.user_id}
+        )  # the sign-out is mid-way, so the callback's first look still sees a live session
+        worker = threading.Thread(target=callback)
+        worker.start()
+        worker.join(timeout=1.0)
+        assert "location" not in outcome  # the link is waiting for the sign-out to finish
+    worker.join(timeout=10.0)
+
+    assert outcome["location"] == LINK_SIGNED_OUT
+    assert linked_subjects(owner_db, member.user_id) == []
+
+
 def test_unlinking_records_what_was_removed_in_before(
     client: TestClient, google: StandInGoogle, owner_db: Database
 ) -> None:

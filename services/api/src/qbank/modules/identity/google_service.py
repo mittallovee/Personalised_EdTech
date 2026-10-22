@@ -334,6 +334,11 @@ def _link(
     makes), and the session that started the flow is still theirs and valid (the database function
     locks it). A Google account that belongs to anyone is refused. "signed_out" means the person
     can no longer use the app at all, which changes where the browser should go.
+
+    The first look at the session is not locked, so a sign-out can land after it. The database
+    function then waits for that sign-out and links nothing, exactly as it does for a Google account
+    that belongs to someone else. Looking again once it has answered tells the two apart: it has
+    waited for the lock, so the second look sees the sign-out.
     """
     apply_tenant_context(session, TenantContext(user_id=user_id))
     principal = service.load_principal(session, user_id, session_id)
@@ -345,7 +350,7 @@ def _link(
         {"flow": flow_id, "subject": identity.subject, "email": identity.email},
     )
     if linked is None:
-        return "failed"
+        return "failed" if _session_alive(session, user_id, session_id) else "signed_out"
     record_event(
         session,
         action="GOOGLE_LINKED",
