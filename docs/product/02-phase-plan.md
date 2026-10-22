@@ -98,5 +98,6 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 
 ## 8. Open questions
 
-None blocking. The next owner decision is approving the [M2 design note](../architecture/m2-design-note.md)
-(20 Oct: links copied by admins, no email; Google login in M2 with a setup guide).
+None blocking. M1 and M2 are built. Next: the owner checks M2 with the [M2 demo](../operations/m2-demo.md)
+(and, optionally, turns on Google login with its [setup guide](../operations/google-login.md)). Then M3 starts
+with its design note for owner approval.

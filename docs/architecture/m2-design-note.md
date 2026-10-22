@@ -1,6 +1,6 @@
 # M2 Design Note — Identity & coaching admin
 
-> Status: **Draft for owner approval** · Milestone M2 of Phase 1 ([phase plan](../product/02-phase-plan.md))
+> Status: **Approved 20 Oct 2026 ("use your recommendations"); built** · Milestone M2 of Phase 1 ([phase plan](../product/02-phase-plan.md))
 > Requirements: A-04, A-05, A-06, A-07, B-02, B-04, B-05, B-06, B-08, B-09, B-10, I-03 (and grants from §2 of the
 > requirements) · ADRs 0005, 0006, 0014, **0015 (new)** · Builds on the [M1 design note](./m1-design-note.md)
 
