@@ -4,7 +4,7 @@ A multi-coaching platform where faculty create and import questions (PDF/Word/im
 solve and verify them, and reviewed questions are published into a versioned, searchable bank. Later phases add
 tests and papers, student apps, live exams, analytics, courses and personalized AI teaching on the same API.
 
-**Status:** Phase 1, milestone M1 (foundation) built; check it yourself with the [M1 demo](docs/operations/m1-demo.md).
+**Status:** Phase 1, milestones M1 (foundation) and M2 (identity & coaching admin) built; check them yourself with the [M1 demo](docs/operations/m1-demo.md) and the [M2 demo](docs/operations/m2-demo.md).
 Next: M2 (identity and coaching admin), [design note](docs/architecture/m2-design-note.md) awaiting approval. M1 design: [`docs/architecture/m1-design-note.md`](docs/architecture/m1-design-note.md).
 
 ## Documentation
@@ -52,6 +52,7 @@ Then view and test it:
    `QBANK_CHECK_EMAIL=you@example.com make restart-check`, which asks for your password and ends with `PASS`.
 
 The full M1 walkthrough, with what each check proves, is in [`docs/operations/m1-demo.md`](docs/operations/m1-demo.md).
+To try creating a coaching, inviting faculty, roles, grants and the audit log, follow [`docs/operations/m2-demo.md`](docs/operations/m2-demo.md).
 
 Useful addresses: API readiness http://localhost:8000/health/ready · API docs (local only)
 http://localhost:8000/api/docs. To open the app on your own domain, see
