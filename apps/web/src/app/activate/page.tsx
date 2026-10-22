@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { GoogleButton, OrDivider } from "@/components/google-button";
 import { api, errorMessage } from "@/lib/api";
-import { goToGoogle, useAuthMethods } from "@/lib/google";
+import { goToGoogle, useAuthMethods, useGoogleResult } from "@/lib/google";
 import { parseLinkFragment, type ParsedLink } from "@/lib/links";
 
 const MIN_LENGTH = 12; // the API enforces it too; this only saves a round trip
@@ -27,6 +27,7 @@ export default function ActivatePage() {
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const methods = useAuthMethods();
+  const googleResult = useGoogleResult();
 
   useEffect(() => {
     const fromLink = window.location.hash.slice(1);
@@ -93,8 +94,9 @@ export default function ActivatePage() {
         </div>
         {token === null ? (
           <p role="alert" className="text-sm text-zinc-600 dark:text-zinc-400">
-            This page needs the full link your coaching admin sent you. Open that link again, or ask
-            for a new one.
+            {googleResult === "failed"
+              ? "We could not finish setting up your account with Google. Open the link your coaching admin sent you again and try once more. A link works once and for a limited time, so if it no longer works, ask them for a new one."
+              : "This page needs the full link your coaching admin sent you. Open that link again, or ask for a new one."}
           </p>
         ) : (
           <form onSubmit={activate} className="space-y-5">

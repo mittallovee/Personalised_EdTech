@@ -23,6 +23,7 @@ from tests.integration.conftest import (
     make_member,
 )
 from tests.integration.google_support import (
+    ACTIVATION_FAILED,
     StandInGoogle,
     assert_signed_out_after_failure,
     call_back,
@@ -252,7 +253,7 @@ def test_a_link_spoiled_while_at_google_stops_the_activation(
     state = state_of(start_activation(client, token_of(created)))  # the person leaves for Google...
     spoil(owner_db, org_of(created))  # ...and meanwhile the link or their place is taken away
 
-    assert_signed_out_after_failure(client, call_back(client, state))
+    assert_signed_out_after_failure(client, call_back(client, state), ACTIVATION_FAILED)
 
     assert linked_accounts(owner_db) == 0
     assert user_status(owner_db, owner_of(created)) == "INVITED"
@@ -267,7 +268,7 @@ def test_the_link_used_with_a_password_while_at_google_stops_the_activation(
     with TestClient(client.app) as elsewhere:  # the same link is redeemed with a password first
         assert redeem(elsewhere, token_of(created)) == (200, "")
 
-    assert_signed_out_after_failure(client, call_back(client, state))
+    assert_signed_out_after_failure(client, call_back(client, state), ACTIVATION_FAILED)
     assert linked_accounts(owner_db) == 0
 
 
@@ -280,7 +281,7 @@ def test_a_google_account_linked_to_someone_else_cannot_activate_another_person(
     google.accounts["code-1"] = identity("sub-taken")
     state = state_of(start_activation(client, token_of(created)))
 
-    assert_signed_out_after_failure(client, call_back(client, state))
+    assert_signed_out_after_failure(client, call_back(client, state), ACTIVATION_FAILED)
 
     assert linked_accounts(owner_db) == 1  # still only the existing person's
     assert user_status(owner_db, owner_of(created)) == "INVITED"
@@ -451,3 +452,17 @@ def test_someone_activated_with_google_can_later_get_a_password_with_a_reset_lin
         )
         assert login.status_code == 200
     assert linked_accounts(owner_db) == 1  # Google is still linked
+
+
+def test_cancelling_at_google_while_activating_sends_the_person_back_to_the_activation_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: the invitee has no password, so the sign-in page cannot help."""
+    created = invite_owner(client, owner_db)
+    state = state_of(start_activation(client, token_of(created)))
+
+    location = call_back(client, state, code=None)  # Google sent an error, no code
+
+    assert location == ACTIVATION_FAILED
+    assert user_status(owner_db, owner_of(created)) == "INVITED"
+    assert redeem(client, token_of(created))[0] == 200  # the link was not spent

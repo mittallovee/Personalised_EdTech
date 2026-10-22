@@ -44,6 +44,7 @@ CALLBACK_PATH = "/api/v1/auth/google/callback"
 # person is already using (the web app proxies /api, ADR-0014).
 SIGNED_IN_PATH = "/"
 SIGN_IN_FAILED_PATH = "/login?google=failed"
+ACTIVATION_FAILED_PATH = "/activate?google=failed"
 LINKED_PATH = "/profile?google=linked"
 LINK_FAILED_PATH = "/profile?google=failed"
 
@@ -192,7 +193,13 @@ def finish(
     if flow is None:
         log.info("google_flow_failed", reason="no_usable_flow")
         return Finished(SIGN_IN_FAILED_PATH)
-    failed = Finished(LINK_FAILED_PATH if flow.purpose == "LINK" else SIGN_IN_FAILED_PATH)
+    # Back to the page the flow began on, whose advice fits: a person activating has no password
+    # yet, so the sign-in page could not help them.
+    failed = Finished(
+        {"LINK": LINK_FAILED_PATH, "ACTIVATE": ACTIVATION_FAILED_PATH}.get(
+            flow.purpose, SIGN_IN_FAILED_PATH
+        )
+    )
     if throttled:
         # Too many callbacks from this address. The flow is used up (it cannot be retried), but the
         # person is still sent to the page the flow began on, and Google is not asked.

@@ -226,8 +226,8 @@ def my_login_methods(
         " new session, as after `POST /auth/login`; for linking, to `/profile?google=linked`."
         " Every failure (an unknown or replayed flow, a Google account nobody linked or already"
         " linked, no access any more, Google refusing) is the same redirect, to"
-        " `/login?google=failed` (to `/profile?google=failed` when linking), so nothing is"
-        " revealed."
+        " `/login?google=failed` (to `/profile?google=failed` when linking, to"
+        " `/activate?google=failed` when activating), so nothing is revealed."
     ),
     status_code=status.HTTP_303_SEE_OTHER,
     response_class=RedirectResponse,

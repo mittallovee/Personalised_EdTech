@@ -67,6 +67,11 @@ export async function goToGoogle(
 ): Promise<string | null> {
   try {
     const { data, error, response } = await request();
+    if (error?.error.code === "LINK_INVALID") {
+      // Only activating can say this: the link is spent or expired, or it is a password-reset link,
+      // which Google cannot use. The password form on the same page still works for a reset link.
+      return "Google cannot use this link. If it is a password-reset link, set a new password below; otherwise ask your coaching admin for a new link.";
+    }
     if (!data) return errorMessage(error, response.status);
     // Only ever leave for an https address, whatever came back.
     if (new URL(data.authorization_url).protocol !== "https:") {

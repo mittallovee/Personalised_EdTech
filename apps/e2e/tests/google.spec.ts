@@ -457,3 +457,37 @@ test("after unlinking, a failed refresh does not leave Google shown as linked", 
   await expect(methods).not.toContainText("me@gmail.example");
   await expect(page.getByRole("button", { name: /Unlink/ })).toHaveCount(0);
 });
+
+test("after a failed Google activation the person is told to open their link again", async ({
+  page,
+}) => {
+  // Codex review on PR #27: the sign-in page's advice (use your password, link on Profile) does
+  // not fit someone who is still activating and has no password.
+  await page.goto("/activate?google=failed");
+
+  await expect(alerts(page)).toContainText("could not finish setting up your account with Google");
+  await expect(alerts(page)).toContainText("Open the link your coaching admin sent you again");
+  await expect(page).toHaveURL(/\/activate$/); // removed from the address, so a reload is clean
+});
+
+test("a link that Google cannot use says what to do, and the password form stays", async ({
+  browser,
+  baseURL,
+}) => {
+  const adminContext = await browser.newContext();
+  const { token } = await createCoaching(adminContext.request, baseURL!, `Ginval ${unique()}`);
+  await adminContext.close();
+  const page = await (await browser.newContext()).newPage();
+  await googleIsOn(page);
+  await page.route("**/api/v1/auth/google/start-activation", (route) =>
+    route.fulfill(error("LINK_INVALID", "This link is not valid any more.", 401)),
+  );
+  await page.goto(`/activate#${token}`);
+
+  await page.getByRole("button", { name: "Continue with Google instead" }).click();
+
+  await expect(alerts(page)).toContainText("password-reset link");
+  await expect(alerts(page)).toContainText("ask your coaching admin for a new link");
+  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole("button", { name: "Save and sign in" })).toBeEnabled();
+});
