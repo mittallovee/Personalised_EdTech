@@ -52,6 +52,8 @@ TABLE = {
     Action.TRANSFER_OWNERSHIP: (False, False, True, False, True),
     Action.VIEW_AUDIT_LOG: (False, True, True, True, True),
     Action.MANAGE_COACHINGS: (False, False, False, True, True),
+    Action.VIEW_CATALOGUES: (True, True, True, False, True),
+    Action.MANAGE_CATALOGUES: (False, True, True, False, True),
 }
 WHO = (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)
 

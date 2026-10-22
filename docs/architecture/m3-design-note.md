@@ -56,9 +56,10 @@ content as raw HTML").
   a label in English; others are optional and shown when the question's language has one, else English
   (never blank).
 - **Retire, don't delete.** A node can be *deprecated*: no one can pick it for a new question, but old
-  questions keep pointing to it and still read correctly. A node used by any question can never be
-  deleted (C-04). A deprecated parent does not deprecate its children automatically; the admin sees a
-  warning listing them.
+  questions keep pointing to it and still read correctly (C-04). **Syllabus items are never deleted at
+  all** (the database role has no delete right on them), so a saved question can never point at
+  nothing. Retiring a parent does not retire its children; nothing new can be added under a retired
+  item, and an item cannot be restored while its parent is still retired.
 - Admin and Owner (and a platform admin acting in the coaching) create, edit, reorder and deprecate nodes.
   Faculty only choose. Faculty never create syllabus items (spec-v1 taxonomy rule).
 
@@ -80,8 +81,9 @@ content as raw HTML").
   stable keys with English labels now.
 - **Difficulty 1–10** with a written guide shown beside the field (draft in the appendix). The guide
   text is a platform default for now; the owner approves its wording (§14).
-- **Languages:** the seven initial languages exist for every coaching. Adding more is a later admin
-  feature (M5, with translation); capability status (can the OCR or AI read it?) is not shown until then.
+- **Languages:** the seven initial languages are a fixed list in the code, the same for every coaching.
+  Letting a coaching add or switch off languages is a later admin feature (M5, with translation);
+  capability status (can the OCR or AI read it?) is not shown until then.
 
 ### 4.4 Excel / CSV import (C-03)
 Importing is a **preview, then apply** flow, so nothing changes until the admin has seen the result.
@@ -253,23 +255,24 @@ typeset. The author has a toggle to reveal the answer and solution. The preview 
 - Every create, checkpoint, archive/restore, catalogue change and import writes an **audit event**.
   Autosaves do not (they would bury the log); each revision row already records who and when.
 
-## 7. Database (migrations 0013 onwards)
+## 7. Database (migrations 0013 to 0016)
 
 All tables carry `organization_id`, `FORCE ROW LEVEL SECURITY` with the tenant policy, composite
 foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation test (T18 pattern).
 
 | Migration | Change |
 |---|---|
-| 0013 | `languages` (seeded with the seven for every coaching, and for each new one), `taxonomy_nodes` (kind, parent via composite key, state, sort), `taxonomy_labels`, `taxonomy_aliases`, `concepts`, `exams`, `sources`, `catalogue_imports` (stored preview for apply); Bloom is a database enumeration |
-| 0014 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
-| 0015 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
+| 0013 | **Built (PR 2a):** `taxonomy_nodes` (kind, parent referenced together with its kind, state, sort order, revision; sibling names unique) and `taxonomy_labels` (names in the other languages). The languages and Bloom levels are fixed lists in code, not tables |
+| 0014 | `concepts` and their labels and aliases, `exams`, `sources`, `catalogue_imports` (the stored preview that apply uses) |
+| 0015 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
+| 0016 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
 
 ## 8. API (all under `/api/v1`)
 
 | Method & path | Purpose |
 |---|---|
-| `GET /languages` · `GET /catalogues/bloom` · `GET /catalogues/difficulty-guide` | Fixed lists |
-| `GET /taxonomy/nodes` (filter by kind, parent, include retired) · `POST` · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Syllabus |
+| `GET /languages` · `GET /catalogues/bloom` · `GET /catalogues/difficulty-guide` | Fixed lists (built in PR 2a) |
+| `GET /taxonomy/nodes` (filter by kind, parent, state) · `GET /{id}` · `POST` · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Syllabus (built in PR 2a) |
 | `GET/POST /taxonomy/concepts` · `PATCH /{id}` · `/deprecate` · `/restore` | Concepts and aliases |
 | `GET/POST /exams` · `GET/POST /sources` (+ `PATCH`, `/deprecate`, `/restore`) | Exams, sources |
 | `GET /taxonomy/import-template` · `POST /taxonomy/imports` (file; creates the preview) · `GET /taxonomy/imports/{id}` · `POST /taxonomy/imports/{id}/apply` | Excel/CSV import |
@@ -281,8 +284,9 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `POST /assets/images` (multipart) · `GET /assets/{id}/content` | Images |
 | `GET/PUT /settings/answer-rules` | Answer limits |
 
-New error codes go in `error-codes.md` in the PR that introduces them, for example `NODE_IN_USE`,
-`HIERARCHY_INVALID`, `IMPORT_INVALID`, `IMPORT_STALE`, `ASSET_INVALID`, `CONTENT_TOO_LARGE`. A save with
+New error codes go in `error-codes.md` in the PR that introduces them: `HIERARCHY_INVALID`,
+`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID`, `IMPORT_STALE`, `ASSET_INVALID`
+and `CONTENT_TOO_LARGE` are planned. A save with
 findings is **not** an error (it is 200 with the findings); only unreadable or oversize content is 422.
 
 ## 9. Web
@@ -337,21 +341,22 @@ New dependencies, each reviewed for licence and known vulnerabilities and pinned
 | PR | Content |
 |---|---|
 | 1 | This design note + ADR-0016 (docs only) |
-| 2a | Taxonomy: migration 0013, syllabus nodes, concepts, exams, sources, languages, Bloom, difficulty guide; API; permissions; audit |
-| 2b | Taxonomy: Excel/CSV import (preview, apply) |
-| 2c | Web: Admin → Syllabus and Exams & sources, with browser tests |
+| 2a | **Done:** syllabus items (migration 0013), the fixed lists (languages, Bloom, difficulty guide), permissions, audit |
+| 2b | Concepts with aliases, exams and sources (migration 0014) |
+| 2c | Taxonomy: Excel/CSV import (preview, apply) |
+| 2d | Web: Admin → Syllabus and Exams & sources, with browser tests |
 | 3a | Question content domain: blocks, the nine validators, answer limits, findings; spec-v1 fixtures as tests (no database yet) |
-| 3b | Questions persistence: migration 0014, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |
+| 3b | Questions persistence: migration 0015, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |
 | 3c | `packages/content-renderer` (KaTeX) with Vitest safety tests; preview component |
 | 3d | Web: editor for SCQ, multiple-correct, integer, single digit, numerical; metadata pickers; findings panel; autosave |
 | 3e | Web: editor for matching, assertion–reason, multiple statement |
 | 3f | Web: visual equation editor (MathLive), inline equations |
-| 3g | Images: migration 0015, `core/storage.py`, upload, serving, crop, image blocks |
+| 3g | Images: migration 0016, `core/storage.py`, upload, serving, crop, image blocks |
 | 3h | Passages: API and editor |
 | 3i | Answer limits settings (API and admin screen) |
 | 4 | M3 demo notes and exit checks |
 
-The order can change if a PR grows past ~400 lines; split rather than stretch.
+The order can change if a PR grows past ~400 lines; split rather than stretch (2a was split from 2b this way).
 
 ## 13. Out of scope for M3
 

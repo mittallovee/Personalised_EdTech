@@ -76,6 +76,7 @@ modules = [
     "qbank.modules.health",
     "qbank.modules.identity",
     "qbank.modules.organizations",
+    "qbank.modules.taxonomy",
 ]
 ignore_imports = [
     "qbank.modules.** -> qbank.modules.*.public",

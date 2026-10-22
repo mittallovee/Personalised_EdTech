@@ -37,9 +37,14 @@ class Action(StrEnum):
     VIEW_AUDIT_LOG = "VIEW_AUDIT_LOG"
     # Platform only: create/rename/suspend coachings, make an Owner's reset link.
     MANAGE_COACHINGS = "MANAGE_COACHINGS"
+    # Read the syllabus, exams, sources and other lists a question refers to (M3).
+    VIEW_CATALOGUES = "VIEW_CATALOGUES"
+    # Add, rename and retire syllabus items, exams and sources; import them (M3).
+    MANAGE_CATALOGUES = "MANAGE_CATALOGUES"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
+_EVERYONE = frozenset(Role)
 
 # Which coaching roles may do each action inside their own coaching.
 _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
@@ -49,6 +54,8 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.TRANSFER_OWNERSHIP: frozenset({Role.OWNER}),
     Action.VIEW_AUDIT_LOG: _ADMINS,
     Action.MANAGE_COACHINGS: frozenset(),
+    Action.VIEW_CATALOGUES: _EVERYONE,
+    Action.MANAGE_CATALOGUES: _ADMINS,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).
