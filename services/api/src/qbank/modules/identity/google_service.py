@@ -46,6 +46,10 @@ SIGNED_IN_PATH = "/"
 SIGN_IN_FAILED_PATH = "/login?google=failed"
 ACTIVATION_FAILED_PATH = "/activate?google=failed"
 LINKED_PATH = "/profile?google=linked"
+# The `state` Google hands back starts with a letter saying which kind of flow it belongs to. It is
+# visible to anyone and grants nothing: it is used only to pick which page a *failure* returns to,
+# for the case where the flow and its cookie have already expired and nothing else is known.
+_STATE_KIND = {"SIGN_IN": "s", "ACTIVATE": "a", "LINK": "l"}
 LINK_FAILED_PATH = "/profile?google=failed"
 
 
@@ -63,6 +67,19 @@ class Finished:
     login: service.LoginResult | None = None
 
 
+def _failure_path(purpose: str | None) -> str:
+    """Where a failed flow of this kind returns to: the page whose advice fits the person."""
+    return {"LINK": LINK_FAILED_PATH, "ACTIVATE": ACTIVATION_FAILED_PATH}.get(
+        purpose or "", SIGN_IN_FAILED_PATH
+    )
+
+
+def _purpose_from_state(state: str | None) -> str | None:
+    """The kind of flow a `state` claims to belong to; only ever used to choose a failure page."""
+    kind = (state or "").partition(".")[0]
+    return next((purpose for purpose, letter in _STATE_KIND.items() if letter == kind), None)
+
+
 def redirect_uri(return_origin: str) -> str:
     return f"{return_origin}{CALLBACK_PATH}"
 
@@ -78,6 +95,7 @@ def _start(
     database: Database,
     google: GoogleClient,
     origin: str,
+    purpose: str,
     begin: Callable[[Session, dict[str, object]], bool],
     context: TenantContext = NO_CONTEXT,
 ) -> StartedFlow | None:
@@ -85,12 +103,8 @@ def _start(
 
     ``begin`` returns False when the flow must not start; then nothing is stored.
     """
-    cookie_value, state, nonce, verifier = (
-        new_token(),
-        new_token(),
-        new_token(),
-        new_code_verifier(),
-    )
+    cookie_value, nonce, verifier = new_token(), new_token(), new_code_verifier()
+    state = f"{_STATE_KIND[purpose]}.{new_token()}"
     flow = {
         "id": new_id(),
         "cookie": hash_token(cookie_value),
@@ -126,7 +140,7 @@ def start_sign_in(
         )
         return True
 
-    started = _start(database, google, origin, begin)
+    started = _start(database, google, origin, "SIGN_IN", begin)
     assert started is not None  # noqa: S101  (begin never refuses a sign-in)
     return started
 
@@ -155,7 +169,7 @@ def start_activation(
         )
         return bool(usable)
 
-    started = _start(database, google, origin, begin)
+    started = _start(database, google, origin, "ACTIVATE", begin)
     if started is None:
         log.info("google_activation_refused", reason="link_not_usable")
         raise Unauthenticated(service.LINK_INVALID, code="LINK_INVALID")
@@ -182,9 +196,12 @@ def finish(
     the flow was for is then checked afresh, because minutes may have passed (a removal or
     suspension stops the flow).
     """
+    # Used if the flow cannot be found (it may have expired, with its cookie): the `state` still
+    # says which page the person started on.
+    unknown = Finished(_failure_path(_purpose_from_state(state)))
     if not cookie or not state:
         log.info("google_flow_failed", reason="missing_cookie_or_state")
-        return Finished(SIGN_IN_FAILED_PATH)
+        return unknown
     with database.transaction(NO_CONTEXT) as session:
         flow = session.execute(
             text("SELECT * FROM auth_oauth_take(:cookie, :state)"),
@@ -192,14 +209,8 @@ def finish(
         ).first()
     if flow is None:
         log.info("google_flow_failed", reason="no_usable_flow")
-        return Finished(SIGN_IN_FAILED_PATH)
-    # Back to the page the flow began on, whose advice fits: a person activating has no password
-    # yet, so the sign-in page could not help them.
-    failed = Finished(
-        {"LINK": LINK_FAILED_PATH, "ACTIVATE": ACTIVATION_FAILED_PATH}.get(
-            flow.purpose, SIGN_IN_FAILED_PATH
-        )
-    )
+        return unknown
+    failed = Finished(_failure_path(flow.purpose))
     if throttled:
         # Too many callbacks from this address. The flow is used up (it cannot be retried), but the
         # person is still sent to the page the flow began on, and Google is not asked.
@@ -382,7 +393,7 @@ def start_link(
         outcome.append(str(result))
         return bool(result == "STARTED")
 
-    started = _start(database, google, origin, begin, principal.tenant_context)
+    started = _start(database, google, origin, "LINK", begin, principal.tenant_context)
     if started is None:
         if outcome == ["ALREADY_LINKED"]:
             raise Conflict(

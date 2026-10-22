@@ -300,7 +300,8 @@ def test_the_browser_that_did_not_start_the_flow_cannot_finish_it(
     victim = new_browser(client)
     sign_in(victim, make_member(owner_db, "ADMIN").email)
 
-    assert call_back(victim, state) == SIGN_IN_FAILED  # no pending cookie of this flow
+    # No pending cookie of this flow: it fails, back on the page it began on, and links nothing.
+    assert call_back(victim, state) == LINK_FAILED
 
     assert linked_subjects(owner_db, member.user_id) == []
 
@@ -550,3 +551,34 @@ def test_a_throttled_link_callback_still_goes_to_the_profile_page(
 
     assert location == LINK_FAILED
     assert linked_subjects(owner_db, member.user_id) == []
+
+
+def test_a_link_that_took_too_long_still_returns_to_the_profile_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: the expired flow and its cookie are gone, the page must still fit."""
+    member, headers = signed_in_member(client, owner_db)
+    state = state_of(start_link(client, headers))
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(text("UPDATE oauth_flows SET expires_at = now() - interval '1 second'"))
+    client.cookies.delete("qb_google_flow", path="/api/v1/auth/google")  # expired in the browser
+
+    assert call_back(client, state) == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []
+
+
+def test_the_kind_of_flow_in_the_state_only_chooses_the_failure_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """The prefix of the state is visible to anyone; it must grant nothing and survive nonsense."""
+    member, headers = signed_in_member(client, owner_db)
+    state = state_of(start_link(client, headers))
+    prefix, _, rest = state.partition(".")
+
+    # A forged or unknown prefix without a matching flow: the generic sign-in failure.
+    assert call_back(new_browser(client), f"x.{rest}") == SIGN_IN_FAILED
+    assert call_back(new_browser(client), "no-prefix-at-all") == SIGN_IN_FAILED
+    # Someone else's browser, claiming the link prefix, links nothing.
+    assert call_back(new_browser(client), state) == LINK_FAILED
+    assert linked_subjects(owner_db, member.user_id) == []
+    assert prefix

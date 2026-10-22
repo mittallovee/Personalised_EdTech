@@ -466,3 +466,18 @@ def test_cancelling_at_google_while_activating_sends_the_person_back_to_the_acti
     assert location == ACTIVATION_FAILED
     assert user_status(owner_db, owner_of(created)) == "INVITED"
     assert redeem(client, token_of(created))[0] == 200  # the link was not spent
+
+
+def test_an_activation_that_took_too_long_still_returns_to_the_activation_page(
+    client: TestClient, google: StandInGoogle, owner_db: Database
+) -> None:
+    """Codex review on PR #27: after ten minutes both the flow and its cookie are gone, but the
+    person must still be sent to the page whose advice fits."""
+    created = invite_owner(client, owner_db)
+    state = state_of(start_activation(client, token_of(created)))
+    with owner_db.transaction(PLATFORM) as session:
+        session.execute(text("UPDATE oauth_flows SET expires_at = now() - interval '1 second'"))
+    client.cookies.clear()  # the browser dropped the cookie when it expired
+
+    assert call_back(client, state) == ACTIVATION_FAILED
+    assert redeem(client, token_of(created))[0] == 200  # the link is untouched
