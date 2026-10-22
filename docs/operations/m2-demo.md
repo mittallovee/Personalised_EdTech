@@ -28,7 +28,7 @@ docker compose run --rm migrate qbank create-platform-admin --email you@example.
 | Fill in the coaching name, the Owner's name and email, then press **Create coaching and make the Owner's link** | The coaching appears as **Active**. A box shows the Owner's activation link **once**, with a **Copy** button |
 | Copy the link. Open it in the **private window** | **Set your password**; choose one of at least 12 characters, twice, then **Save and sign in** |
 | | You land on Home as "Welcome, <Owner name>"; the top bar shows the **coaching's name** |
-| Open the same link again in another private window | "This link is invalid or expired" (a link works once) |
+| Open the same link again in another private window, type a password (12 or more characters) twice and press **Save and sign in** | The page shows the form first, because it only asks the server when you submit. The server then refuses: "This link is not valid any more. Ask your coaching admin for a new one." (a link works once) |
 
 ## 2. Invite people and give grants (B-05, grants)
 
@@ -107,6 +107,6 @@ To run them on your PC instead, see [apps/e2e/README.md](../../apps/e2e/README.m
 | Symptom | Fix |
 |---|---|
 | "Too many attempts" | The API limits sign-in and link attempts per address; wait a few minutes (or see the 429 note in the e2e README) |
-| An activation link says invalid | It was already used, replaced by a newer one, older than 24 hours (reset links: 1 hour), or the person was removed. Make a new one with **Users & grants** |
+| "This link is not valid any more" | It was already used, replaced by a newer one, older than 24 hours (reset links: 1 hour), or the person was removed. Make a new one with **Users & grants** |
 | The private window shares your sign-in | Close all private windows, then open one fresh, or use a second browser |
 | Anything else | `docker compose ps`, `docker compose logs --tail 100 api`, and send the output |
