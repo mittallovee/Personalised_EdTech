@@ -90,15 +90,17 @@ Rules that hold everywhere:
 
 ## 5. Google login (B-02, B-04, ADR-0015)
 
-- OpenID Connect "authorization code" flow with PKCE, `state` and `nonce`, via Authlib. The pending flow is
-  bound to a short-lived HttpOnly cookie, which stops "login CSRF".
+- OpenID Connect "authorization code" flow with PKCE, `state` and `nonce`. The pending flow is bound to a
+  short-lived HttpOnly cookie, which stops "login CSRF". Google's ID token is verified with `joserfc`, the
+  JOSE library of the Authlib project (Authlib's own `authlib.jose` is deprecated in its favour); the
+  token exchange is one HTTPS call to Google's fixed address.
 - The flow starts with `POST /api/v1/auth/google/start {purpose, return_origin, link_token?}`, which returns
   the Google address to go to. Being a POST, it passes the Origin check.
   - `return_origin` must be in `ALLOWED_ORIGINS`, so the same setup works on `localhost:3000` and on
     `qb.loveemittal.online`.
   - The API stores the pending flow server-side: a hash of `state`, PKCE verifier, nonce, purpose, and for
     `ACTIVATE` the account link's ID, for `LINK` the signed-in user. It expires after 10 minutes, and its
-    random ID goes in the pending cookie.
+    random secret goes in the pending cookie (stored only as a hash, next to `state`'s hash: a callback needs both).
   - `purpose` is one of three:
     - `SIGN_IN` needs nothing else;
     - `ACTIVATE` needs the activation `link_token`, which the page reads from the `#` part, so the token
@@ -146,7 +148,7 @@ composite foreign keys `(organization_id, …)` (ADR-0005). The runtime role sti
 | 0007 | `auth_redeem_link(token_hash, password_hash)`: the whole redemption in one step, plus a policy that finds a link only by its token hash (PR 4) |
 | 0008 | `auth_member_emails(user_ids)`: the sign-in emails of members of the current coaching only, for the member list (PR 5a) |
 | 0009 | `auth_revoke_member_sessions(user_id)` and `auth_release_email(user_id)`: ending a removed member's sessions, and freeing the email of one who never activated (PR 6a) |
-| 0010 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; lookup by subject and use of a flow through definer functions |
+| 0010 | `external_identities (user_id, provider, subject, email_at_link, linked_at)`, unique `(provider, subject)` (one Google account → one user) and unique `(user_id, provider)` (one Google account per user); `oauth_flows (id, cookie_hash, state_hash, code_verifier, nonce, purpose, account_link_id, user_id, session_id, return_origin, expires_at, used_at)`; no privileges for the runtime role: flows are started, used once, and looked up by subject only through definer functions. Built over 8a (tables, sign-in), 8b (`ACTIVATE`) and 8c (`LINK`, unlink) as migrations 0010, 0011 and 0012 |
 
 Every change also writes an `audit_events` row in the same transaction: actor, acting-as-platform flag,
 action (e.g. `MEMBER_ROLE_CHANGED`, same style as M1's `USER_SIGNED_OUT`), target, before and after. Tokens, hashes and passwords are never
@@ -240,7 +242,10 @@ available, so the screens only show or hide buttons.
 | 6c | Web: role, remove and transfer on the Users & grants screen, with browser tests |
 | 7a | Web: platform console (coachings list, create, rename, suspend/reactivate, "Act in") and the acting banner |
 | 7b | Web: audit log page |
-| 8 | Google login + linking (migration 0010) + `docs/operations/google-login.md` setup guide |
+| 8a | Google login, part 1: migration 0010 (tables, sign-in functions), Google client, `GET /auth/methods`, `POST /auth/google/start` and the callback for `SIGN_IN` (split from 8 to keep PRs small) |
+| 8b | Google login, part 2: `ACTIVATE` (continue with Google instead of a password); migration 0011 |
+| 8c | Google login, part 3: `LINK` (needs the password in the same request) and `POST /auth/google/unlink`; migration 0012 |
+| 8d | Web: "Sign in with Google", "Continue with Google" on `/activate`, profile link/unlink, and `docs/operations/google-login.md` setup guide |
 | 9 | M2 demo notes and exit checks |
 
 ## 12. Decisions for the owner

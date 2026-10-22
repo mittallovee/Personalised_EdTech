@@ -6,7 +6,7 @@ from functools import lru_cache
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # services/api/ — the folder holding alembic.ini and migrations/.
@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     login_attempts_per_email: int = Field(default=10, ge=1)
     login_rate_window_seconds: int = Field(default=300, ge=1)
 
+    # Google sign-in (B-02) is off until both are set; see docs/operations/google-login.md. The
+    # secret never appears in logs or reprs (SecretStr) and must never be committed.
+    google_client_id: str | None = None
+    google_client_secret: SecretStr | None = None
+
     # Web addresses allowed to send changes (POST/PUT/PATCH/DELETE) from a browser; see
     # core/origin.py. JSON list, e.g. ALLOWED_ORIGINS='["https://app.example.com"]'.
     allowed_origins: list[str] = Field(default=["http://localhost:3000"], min_length=1)
@@ -67,7 +72,7 @@ class Settings(BaseSettings):
         default=[IPv4Network("127.0.0.1/32"), IPv6Network("::1/128")]
     )
 
-    @field_validator("client_ip_header", mode="before")
+    @field_validator("client_ip_header", "google_client_id", "google_client_secret", mode="before")
     @classmethod
     def _blank_means_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
@@ -82,6 +87,12 @@ class Settings(BaseSettings):
                     f"ALLOWED_ORIGINS entries must look like https://host[:port], got {origin!r}"
                 )
         return [without_default_port(origin) for origin in normalised]
+
+    @model_validator(mode="after")
+    def _google_needs_both_values(self) -> Settings:
+        if (self.google_client_id is None) != (self.google_client_secret is None):
+            raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together")
+        return self
 
     @model_validator(mode="after")
     def _refuse_unsafe_production_settings(self) -> Settings:

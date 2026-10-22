@@ -17,6 +17,8 @@ from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
 from qbank.modules.identity.authenticator import SessionCookieAuthenticator
+from qbank.modules.identity.google import GoogleOidc
+from qbank.modules.identity.google_api import router as google_router
 from qbank.modules.organizations.api import router as organizations_router
 from qbank.modules.organizations.members_api import router as members_router
 from qbank.modules.organizations.ownership_api import router as ownership_router
@@ -52,11 +54,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         window_seconds=settings.login_rate_window_seconds,
     )
 
+    # Google sign-in is available only when its client ID and secret are configured (B-02).
+    app.state.google = (
+        GoogleOidc(settings.google_client_id, settings.google_client_secret.get_secret_value())
+        if settings.google_client_id and settings.google_client_secret
+        else None
+    )
+
     install_origin_check(app, settings.allowed_origins)  # added first, so it runs inside logging
     install_request_logging(app)
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(identity_router)
+    app.include_router(google_router)
     app.include_router(audit_router)
     app.include_router(organizations_router)
     app.include_router(members_router)

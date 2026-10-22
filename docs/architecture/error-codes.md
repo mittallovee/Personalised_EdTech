@@ -28,6 +28,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `INVALID_NEW_OWNER` | 409 | Ownership can only go to an admin of the coaching who is active and has activated their account | M2 |
 | `NOT_FACULTY` | 409 | Grants were set for an Owner or admin, who already hold every grant | M2 |
 | `MEMBER_REMOVED` | 409 | The person is no longer a member of the coaching | M2 |
+| `GOOGLE_DISABLED` | 404 | Sign in with Google is not set up on this server (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) | M2 |
+| `RETURN_ORIGIN_NOT_ALLOWED` | 422 | The `return_origin` sent to start a Google flow is not in `ALLOWED_ORIGINS` | M2 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 

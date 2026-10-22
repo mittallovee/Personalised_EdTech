@@ -67,6 +67,9 @@ services:
       # (apps/e2e) make all their requests from one address, so CI raises these for them.
       LOGIN_ATTEMPTS_PER_IP: ${LOGIN_ATTEMPTS_PER_IP:-20}
       LOGIN_ATTEMPTS_PER_EMAIL: ${LOGIN_ATTEMPTS_PER_EMAIL:-10}
+      # Sign in with Google is off while these are empty (docs/operations/google-login.md).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

@@ -47,7 +47,7 @@ def to_me(principal: Principal) -> Me:
     )
 
 
-def _set_auth_cookies(response: Response, settings: Settings, result: service.LoginResult) -> None:
+def set_auth_cookies(response: Response, settings: Settings, result: service.LoginResult) -> None:
     """Session cookie: HttpOnly (scripts cannot read it). CSRF cookie: readable by our web app.
 
     SameSite=Lax keeps the cookies off cross-site sub-requests while normal links into the app still
@@ -92,7 +92,7 @@ def login(
             "Too many sign-in attempts. Please wait and try again.", retry_after_seconds=wait
         )
     result = service.login(database, settings, body.email, body.password, request.state.request_id)
-    _set_auth_cookies(response, settings, result)
+    set_auth_cookies(response, settings, result)
     return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
 
 
@@ -129,7 +129,7 @@ def redeem_link(
     result = service.redeem_link(
         database, settings, body.token, body.password, request.state.request_id
     )
-    _set_auth_cookies(response, settings, result)
+    set_auth_cookies(response, settings, result)
     return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
 
 

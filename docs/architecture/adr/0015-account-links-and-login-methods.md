@@ -17,8 +17,10 @@ Google login (B-02) must never take over an account just because the email addre
     `password_credentials`. It re-checks that the membership and the coaching are active, sets the
     password and marks the link used in one transaction. A reset also ends the person's sessions.
 - **Google (OpenID Connect).**
-  - The flow is authorization code with PKCE, `state` and `nonce`, using Authlib, with the pending flow
-    bound to a short-lived HttpOnly cookie.
+  - The flow is authorization code with PKCE, `state` and `nonce`, with the pending flow bound to a
+    short-lived HttpOnly cookie. Google's ID token is verified with `joserfc` (the JOSE library of the
+    Authlib project, which deprecated its own `authlib.jose` in favour of it), after one HTTPS call to
+    Google's token address.
   - Accounts are matched only by `(provider, subject)` in `external_identities`. A sign-in with no linked
     account fails; it never creates or merges an account.
   - Google is linked only by someone who already proves control of the account: while redeeming an

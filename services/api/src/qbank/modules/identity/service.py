@@ -130,7 +130,7 @@ def login(
                 },
             )
         else:
-            result = _start_session(session, settings, found.user_id, request_id)
+            result = start_session(session, settings, found.user_id, request_id)
             if result is None:
                 failure = "no_active_access"
 
@@ -141,7 +141,7 @@ def login(
     return result
 
 
-def _start_session(
+def start_session(
     session: Session, settings: Settings, user_id: UUID, request_id: str | None
 ) -> LoginResult | None:
     apply_tenant_context(session, TenantContext(user_id=user_id))
@@ -299,7 +299,7 @@ def redeem_link(
         result, purpose = None, None
         if redeemed is not None:
             purpose = redeemed.purpose
-            result = _start_session(session, settings, redeemed.user_id, request_id)
+            result = start_session(session, settings, redeemed.user_id, request_id)
             record_event(
                 session,
                 action="ACCOUNT_ACTIVATED"

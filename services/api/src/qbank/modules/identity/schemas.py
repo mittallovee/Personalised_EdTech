@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -38,3 +39,21 @@ class RedeemLinkRequest(BaseModel):
     password: str = Field(
         min_length=12, max_length=128, description="The new password (at least 12 characters)."
     )
+
+
+class AuthMethods(BaseModel):
+    password: bool = Field(description="Sign-in with email and password is always available.")
+    google: bool = Field(description="Google sign-in is set up on this server; show its button.")
+
+
+class GoogleStartRequest(BaseModel):
+    purpose: Literal["SIGN_IN"] = Field(description="What the person is doing at Google.")
+    return_origin: str = Field(
+        max_length=200,
+        description="The web address the person is on; must be one of ALLOWED_ORIGINS.",
+        examples=["http://localhost:3000"],
+    )
+
+
+class GoogleStartResponse(BaseModel):
+    authorization_url: str = Field(description="Send the person's browser here.")

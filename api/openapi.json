@@ -354,6 +354,198 @@
         ]
       }
     },
+    "/api/v1/auth/methods": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Which sign-in methods are on",
+        "description": "For the sign-in page: hides the Google button while Google is not set up.",
+        "operationId": "auth_methods_api_v1_auth_methods_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthMethods"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/start": {
+      "post": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Start signing in with Google",
+        "description": "Returns the Google address to send the browser to, and sets a short-lived HttpOnly cookie that only this browser can finish the flow with. Nothing is created: signing in works only for a Google account somebody already linked.",
+        "operationId": "start_google_api_v1_auth_google_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStartResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `ORIGIN_NOT_ALLOWED` (sent from another website)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Google sign-in is not set up on this server (`GOOGLE_DISABLED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`return_origin` is not an allowed web address (`RETURN_ORIGIN_NOT_ALLOWED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; see the Retry-After header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/callback": {
+      "get": {
+        "tags": [
+          "identity"
+        ],
+        "summary": "Where Google sends the browser back",
+        "description": "Not called by our web app. On success the browser is redirected to the home page with a new session, as after `POST /auth/login`. Every failure (an unknown or replayed flow, a Google account nobody linked, no access any more, Google refusing) is the same redirect to `/login?google=failed`, so nothing is revealed.",
+        "operationId": "google_callback_api_v1_auth_google_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Redirect to the home page, or to `/login?google=failed`"
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit-events": {
       "get": {
         "tags": [
@@ -2646,6 +2838,26 @@
         ],
         "title": "AuditEventPage"
       },
+      "AuthMethods": {
+        "properties": {
+          "password": {
+            "type": "boolean",
+            "title": "Password",
+            "description": "Sign-in with email and password is always available."
+          },
+          "google": {
+            "type": "boolean",
+            "title": "Google",
+            "description": "Google sign-in is set up on this server; show its button."
+          }
+        },
+        "type": "object",
+        "required": [
+          "password",
+          "google"
+        ],
+        "title": "AuthMethods"
+      },
       "ChangeRole": {
         "properties": {
           "expected_role": {
@@ -2805,6 +3017,45 @@
         ],
         "title": "ErrorResponse",
         "type": "object"
+      },
+      "GoogleStartRequest": {
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "const": "SIGN_IN",
+            "title": "Purpose",
+            "description": "What the person is doing at Google."
+          },
+          "return_origin": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Return Origin",
+            "description": "The web address the person is on; must be one of ALLOWED_ORIGINS.",
+            "examples": [
+              "http://localhost:3000"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "purpose",
+          "return_origin"
+        ],
+        "title": "GoogleStartRequest"
+      },
+      "GoogleStartResponse": {
+        "properties": {
+          "authorization_url": {
+            "type": "string",
+            "title": "Authorization Url",
+            "description": "Send the person's browser here."
+          }
+        },
+        "type": "object",
+        "required": [
+          "authorization_url"
+        ],
+        "title": "GoogleStartResponse"
       },
       "Grant": {
         "type": "string",
