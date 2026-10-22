@@ -618,7 +618,7 @@ export interface paths {
         put?: never;
         /**
          * Add a syllabus item
-         * @description Owner and admins. A subject goes under a class, a chapter under a subject, a topic under a chapter and a subtopic under a topic; a class has no parent.
+         * @description Owner and admins. A subject goes under a class, a chapter under a subject, a topic under a chapter and a subtopic under a topic; a class has no parent. Send an `Idempotency-Key` so a retry after a lost response returns the same item instead of failing.
          */
         post: operations["create_node_api_v1_taxonomy_nodes_post"];
         delete?: never;
@@ -3659,7 +3659,10 @@ export interface operations {
     create_node_api_v1_taxonomy_nodes_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3705,7 +3708,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A sibling has this name (`DUPLICATE_NAME`) or the parent is retired (`PARENT_DEPRECATED`) */
+            /** @description A sibling has this name (`DUPLICATE_NAME`), the parent is retired (`PARENT_DEPRECATED`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`) */
             409: {
                 headers: {
                     [name: string]: unknown;

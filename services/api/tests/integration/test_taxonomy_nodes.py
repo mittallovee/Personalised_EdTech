@@ -425,6 +425,47 @@ def test_two_admins_adding_the_same_name_at_once_leave_exactly_one(
 # --- Who may do what (T26) ---------------------------------------------------------------------
 
 
+def test_retrying_a_create_with_the_same_key_returns_the_same_item(
+    client: TestClient, owner_db: Database, team: dict[str, Member], admin_headers: dict[str, str]
+) -> None:
+    headers = {**admin_headers, "Idempotency-Key": "retry-1"}
+    body = {"kind": "CLASS", "name": "Class 11", "labels": {"hi": "कक्षा 11"}}
+
+    first = client.post(NODES, json=body, headers=headers)
+    retry = client.post(NODES, json=body, headers=headers)  # the first answer was "lost"
+
+    assert (first.status_code, retry.status_code) == (201, 201)
+    assert retry.json()["id"] == first.json()["id"]
+    assert len(client.get(NODES).json()["data"]) == 1
+    assert len(audit(owner_db, team["owner"].org_id, "TAXONOMY_NODE_CREATED")) == 1
+
+
+def test_the_same_key_with_a_different_body_is_refused(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    headers = {**admin_headers, "Idempotency-Key": "retry-2"}
+    client.post(NODES, json={"kind": "CLASS", "name": "Class 11"}, headers=headers)
+
+    other = client.post(NODES, json={"kind": "CLASS", "name": "Class 12"}, headers=headers)
+
+    assert (other.status_code, other.json()["error"]["code"]) == (409, "IDEMPOTENCY_KEY_REUSED")
+    assert [node["name"] for node in client.get(NODES).json()["data"]] == ["Class 11"]
+
+
+def test_a_failed_create_does_not_use_up_its_key(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    headers = {**admin_headers, "Idempotency-Key": "retry-3"}
+    client.post(NODES, json={"kind": "CLASS", "name": "Class 11"}, headers=admin_headers)
+    clash = client.post(NODES, json={"kind": "CLASS", "name": "class 11"}, headers=headers)
+
+    fixed = client.post(NODES, json={"kind": "CLASS", "name": "Class 12"}, headers=headers)
+
+    assert clash.status_code == 409
+    # The refused attempt was rolled back with its claim, so the key is free for a corrected body.
+    assert (fixed.status_code, fixed.json()["name"]) == (201, "Class 12")
+
+
 def test_faculty_read_but_cannot_change_the_syllabus(
     client: TestClient, team: dict[str, Member], admin_headers: dict[str, str]
 ) -> None:

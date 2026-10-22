@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from qbank.core.auth import Principal
 from qbank.core.errors import Conflict, MalformedRequest, NotFound, ValidationFailed
 from qbank.core.etag import require_if_match
+from qbank.core.idempotency import claim
+from qbank.core.ids import new_id
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
@@ -189,8 +191,31 @@ def _lock_parent(session: Session, parent_id: UUID) -> TaxonomyNode:
 
 
 def create_node(
-    session: Session, principal: Principal, body: CreateNode, *, request_id: str | None
+    session: Session,
+    principal: Principal,
+    body: CreateNode,
+    *,
+    idempotency_key: str | None,
+    request_id: str | None,
 ) -> TaxonomyNode:
+    """Add an item. A retry with the ``idempotency_key`` of an earlier, identical request returns
+    that item instead of failing with ``DUPLICATE_NAME`` because the first attempt worked."""
+    organization_id = _organization_id(principal)
+    node_id = new_id()
+    if idempotency_key is not None:
+        node_id = claim(
+            session,
+            actor_user_id=principal.user_id,
+            operation="create_taxonomy_node",
+            key=idempotency_key,
+            # The coaching is part of the request: a platform admin's key never reaches into
+            # another coaching they acted in.
+            body={**body.model_dump(mode="json"), "organization_id": str(organization_id)},
+            new_resource_id=node_id,
+        )
+        existing = session.get(TaxonomyNode, node_id)
+        if existing is not None:
+            return existing
     expected = PARENT_KIND[body.kind]
     parent: TaxonomyNode | None = None
     if expected is None:
@@ -211,8 +236,8 @@ def create_node(
             )
         if parent.state != "ACTIVE":
             raise Conflict("The parent item is retired.", code="PARENT_DEPRECATED")
-    organization_id = _organization_id(principal)
     node = TaxonomyNode(
+        id=node_id,
         organization_id=organization_id,
         kind=body.kind,
         parent_id=parent.id if parent else None,

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
 from qbank.core.etag import IfMatchHeader, etag
+from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
 from qbank.modules.taxonomy import service
@@ -130,14 +131,16 @@ def get_node(
     summary="Add a syllabus item",
     description=(
         "Owner and admins. A subject goes under a class, a chapter under a subject, a topic under"
-        " a chapter and a subtopic under a topic; a class has no parent."
+        " a chapter and a subtopic under a topic; a class has no parent. Send an `Idempotency-Key`"
+        " so a retry after a lost response returns the same item instead of failing."
     ),
     responses={
         **_DENIED,
         **_NOT_FOUND,
         409: {
-            "description": "A sibling has this name (`DUPLICATE_NAME`) or the parent is retired"
-            " (`PARENT_DEPRECATED`)"
+            "description": "A sibling has this name (`DUPLICATE_NAME`), the parent is retired"
+            " (`PARENT_DEPRECATED`), or the Idempotency-Key was used for a different request"
+            " (`IDEMPOTENCY_KEY_REUSED`)"
         },
         422: {"description": "Wrong kind of parent (`HIERARCHY_INVALID`)"},
     },
@@ -148,10 +151,17 @@ def create_node(
     request: Request,
     response: Response,
     database: Annotated[Database, Depends(get_database)],
+    idempotency_key: Annotated[str | None, IdempotencyKeyHeader] = None,
 ) -> NodeOut:
     require(principal, Action.MANAGE_CATALOGUES)
     with database.transaction(principal.tenant_context) as session:
-        node = service.create_node(session, principal, body, request_id=request.state.request_id)
+        node = service.create_node(
+            session,
+            principal,
+            body,
+            idempotency_key=idempotency_key,
+            request_id=request.state.request_id,
+        )
         result = service.describe(session, [node])[0]
         response.headers["ETag"] = etag(node.revision)
     response.headers["Location"] = f"/api/v1/taxonomy/nodes/{result.id}"
