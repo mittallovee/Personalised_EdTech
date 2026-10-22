@@ -40,7 +40,7 @@ docker compose run --rm migrate qbank create-platform-admin --email you@example.
 | **Invite someone**: name, email, role Faculty → **Invite and make link** | The person is listed as **Invited**, with **No grants**, and their link is shown once |
 | Open that link in a second browser; set a password | They are signed in as faculty. They have **no** "Users & grants" menu item; opening `/admin/users` says "You don't have access" |
 | Back as Owner: **Edit grants** for that person, tick **Quality check** and **Approve**, **Save grants** | The list shows "Grants: Approve, Quality check" |
-| **Password-reset link** for that person | A link is shown once (valid 1 hour). Opening it lets them choose a new password and ends their old sign-ins |
+| **Password-reset link** for that person | A link is shown once (valid 1 hour). To finish it, the person opens the link, types a new password (12 or more characters) twice and presses **Save and sign in**. Only then are their old sign-ins ended: opening the link alone changes nothing |
 
 ## 3. Roles, removal and ownership (B-08, B-09)
 
@@ -91,8 +91,10 @@ Open the latest pull request on GitHub → **Checks**. All seven must be green:
 | Secret scan | No passwords or keys were committed |
 | Python dependencies (pip-audit), Web dependencies (pnpm audit) | No known-vulnerable libraries |
 
-To run them on your PC instead, see [apps/e2e/README.md](../../apps/e2e/README.md) and
-`make check` in the README.
+You can run part of this on your PC: `make check` in the README runs the backend, API-contract
+freshness and web checks, and [apps/e2e/README.md](../../apps/e2e/README.md) runs the browser tests.
+That is **not** all seven: the breaking-change comparison against `main`, the secret scan and the two
+dependency audits run only on GitHub, so rely on the Checks page for those.
 
 ## What M2 does not have
 
