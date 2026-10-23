@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
@@ -10,7 +11,23 @@ from qbank.modules.taxonomy.catalogues import LANGUAGE_TAGS
 NodeKind = Literal["CLASS", "SUBJECT", "CHAPTER", "TOPIC", "SUBTOPIC"]
 NodeState = Literal["ACTIVE", "DEPRECATED"]
 
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+def no_control_characters(text: str) -> str:
+    """Refuse control characters (NUL, newline, tab, bell...). PostgreSQL cannot store NUL, and the
+    others would break a one-line name in a picker. Zero-width joiners (category Cf), which Indian
+    scripts need, are not control characters and stay allowed."""
+    if any(unicodedata.category(char) == "Cc" for char in text):
+        raise ValueError("Control characters (such as a new line or tab) are not allowed.")
+    return text
+
+
+# Text that is stored and shown on one line: names, labels, aliases, short codes, search words.
+OneLine = Annotated[str, AfterValidator(no_control_characters)]
+Name = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+    AfterValidator(no_control_characters),
+]
 
 
 def _other_languages(labels: dict[str, str]) -> dict[str, str]:
@@ -79,7 +96,11 @@ class DifficultyLevelOut(BaseModel):
     meaning: str
 
 
-ShortCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+ShortCode = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=20),
+    AfterValidator(no_control_characters),
+]
 SourceKind = Literal["BOOK", "MODULE", "TEST_SERIES", "PYQ_PAPER", "OTHER"]
 
 

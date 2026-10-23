@@ -18,6 +18,7 @@ from qbank.modules.taxonomy.schemas import (
     ConceptPage,
     CreateConcept,
     NodeState,
+    OneLine,
     UpdateConcept,
 )
 
@@ -50,7 +51,7 @@ def list_concepts(
     database: Annotated[Database, Depends(get_database)],
     subject_id: UUID | None = None,
     concept_state: Annotated[NodeState | None, Query(alias="state")] = None,
-    q: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+    q: Annotated[OneLine | None, Query(min_length=1, max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     cursor: Annotated[str | None, Query(max_length=MAX_CURSOR_LENGTH)] = None,
 ) -> ConceptPage:
