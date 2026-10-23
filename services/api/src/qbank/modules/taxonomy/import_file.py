@@ -122,11 +122,13 @@ def _spreadsheet_lines(data: bytes) -> list[list[str]]:
 
 
 def _sheet_lines(sheet: Any) -> list[list[str]]:
+    # The sheet's declared size is ignored: a file can declare it too small and hide cells, or too
+    # large and make the reader pad every row. Without it, rows are exactly as wide as their
+    # content, so a populated cell past the column limit (or a formula anywhere) is always seen.
+    sheet.reset_dimensions()
     lines: list[list[str]] = []
-    # One column more than allowed is read, so content past the limit is seen and refused (not
-    # dropped), and a formula there cannot hide. Blank rows count: a file that declares a million
-    # empty rows is refused, not walked.
-    for row in sheet.iter_rows(max_col=MAX_COLUMNS + 1):
+    # Blank rows count too: a file that declares a million empty rows is refused, not walked.
+    for row in sheet.iter_rows():
         if len(lines) > MAX_ROWS + 1:
             raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
         for cell in row:
@@ -135,7 +137,9 @@ def _sheet_lines(sheet: Any) -> list[list[str]]:
                     "The file has cells with formulas, which are not accepted. Copy the cells"
                     " and paste them as values, then try again."
                 )
-        lines.append([_text(cell.value) for cell in row])
+        if any(cell.value is not None for cell in row[MAX_COLUMNS:]):
+            raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
+        lines.append([_text(cell.value) for cell in row[:MAX_COLUMNS]])
     return lines
 
 
@@ -143,6 +147,8 @@ def _from_lines(lines: list[list[str]]) -> Table:
     """Header names in lower case, blank rows dropped, over-long cells refused."""
     if not lines:
         raise ImportFileInvalid("The file has no rows.")
+    if any(len(cell) > MAX_CELL_CHARS for cell in lines[0]):
+        raise ImportFileInvalid(f"A column name is longer than {MAX_CELL_CHARS} characters.")
     columns = [name.lower() for name in lines[0]]
     while columns and not columns[-1]:
         columns.pop()

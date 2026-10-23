@@ -1,6 +1,7 @@
 """M3 PR 2c-1: reading an uploaded syllabus file safely (C-03, T25). Synthetic files only."""
 
 import io
+import re
 import zipfile
 
 import pytest
@@ -160,9 +161,13 @@ def test_a_row_wider_than_the_header_is_refused_in_both_formats() -> None:
 
 
 def test_content_in_columns_beyond_the_limit_is_refused_even_for_a_formula() -> None:
-    far = [None] * import_file.MAX_COLUMNS  # the 41st column
-    assert "Row 2" in refused(xlsx(["kind"], ["CLASS", *far[1:], "hidden"]))
-    assert "formulas" in refused(xlsx(["kind"], ["CLASS", *far[1:], "=1+1"]))
+    blanks = [None] * (import_file.MAX_COLUMNS - 1)
+    for position in (0, 1, 20):  # the 41st column and some way past it
+        assert "more than 40 columns" in refused(
+            xlsx(["kind"], ["CLASS", *blanks, *[None] * position, "x"])
+        )
+        assert "formulas" in refused(xlsx(["kind"], ["CLASS", *blanks, *[None] * position, "=1+1"]))
+    read_table(xlsx(["kind"], ["CLASS", *blanks]))  # empty cells out there do not matter
 
 
 def test_a_spreadsheet_whose_sheet_xml_is_damaged_is_refused_not_a_server_error() -> None:
@@ -175,3 +180,21 @@ def test_a_spreadsheet_whose_sheet_xml_is_damaged_is_refused_not_a_server_error(
                 content = b"<worksheet><sheetData><row><c r="  # cut off in the middle
             target.writestr(member, content)
     assert "valid .xlsx" in refused(damaged.getvalue())
+
+
+def test_a_spreadsheet_cannot_hide_cells_by_declaring_a_small_size() -> None:
+    good = io.BytesIO(xlsx(["kind"], ["CLASS", *[None] * 59, "hidden"]))
+    lying = io.BytesIO()
+    with zipfile.ZipFile(good) as source, zipfile.ZipFile(lying, "w") as target:
+        for member in source.infolist():
+            content = source.read(member)
+            if member.filename == "xl/worksheets/sheet1.xml":
+                content = re.sub(rb"<dimension[^>]*/>", b'<dimension ref="A1:B2"/>', content)
+            target.writestr(member, content)
+    assert "more than 40 columns" in refused(lying.getvalue())
+
+
+@pytest.mark.parametrize("data", [b"kind," + b"x" * 2001 + b"\nCLASS,a\n"])
+def test_the_header_cells_have_the_length_cap_too(data: bytes) -> None:
+    assert "column name" in refused(data)
+    assert "column name" in refused(xlsx(["kind", "x" * 2001], ["CLASS", "a"]))
