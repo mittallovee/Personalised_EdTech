@@ -1,7 +1,9 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from qbank.core.db import Base
@@ -137,3 +139,21 @@ class ConceptAlias(Base):
     subject_id: Mapped[UUID]
     alias: Mapped[str] = mapped_column(String(200))
     alias_key: Mapped[str] = mapped_column(String(400), primary_key=True)
+
+
+class CatalogueImport(Base):
+    """A syllabus import the admin has previewed: the checked rows, kept until applied."""
+
+    __tablename__ = "catalogue_imports"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    file_name: Mapped[str] = mapped_column(String(200))
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(20), default="PREVIEWED")  # or APPLIED
+    counts: Mapped[dict[str, int]] = mapped_column(JSONB)
+    base_fingerprint: Mapped[str] = mapped_column(String(64))  # the syllabus the preview saw
+    rows: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

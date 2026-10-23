@@ -26,6 +26,7 @@ from qbank.modules.taxonomy.api import catalogues as catalogues_router
 from qbank.modules.taxonomy.api import router as taxonomy_router
 from qbank.modules.taxonomy.catalogue_api import exams_router, sources_router
 from qbank.modules.taxonomy.concepts_api import router as concepts_router
+from qbank.modules.taxonomy.import_api import router as import_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -78,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(catalogues_router)
     app.include_router(taxonomy_router)
     app.include_router(concepts_router)
+    app.include_router(import_router)
     app.include_router(exams_router)
     app.include_router(sources_router)
     install_openapi(app)
