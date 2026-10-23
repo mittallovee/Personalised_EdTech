@@ -117,6 +117,14 @@ export default function SyllabusPage() {
     })();
   }, []);
 
+  /**
+   * Reload a level after a change to it, but only if that level is still the one on screen. An
+   * answer that arrives after the person has moved on must not put the old level back.
+   */
+  function reloadIfStillHere(parent: Node | null) {
+    if (hereId.current === (parent?.id ?? null)) void load(parent, null);
+  }
+
   /** "Show more": one request at a time, so pressing it twice does not load the page twice. */
   async function showMore() {
     if (moreInFlight.current || !nextCursor) return;
@@ -131,6 +139,7 @@ export default function SyllabusPage() {
   function goTo(depth: number) {
     if (depth === path.length) return; // already here
     setPath((current) => current.slice(0, depth));
+    setNextCursor(null);
     setOpen(null);
     setNotice(null);
     setNewName("");
@@ -141,6 +150,7 @@ export default function SyllabusPage() {
 
   function enter(node: Node) {
     setPath((current) => [...current, node]);
+    setNextCursor(null);
     setOpen(null);
     setNotice(null);
     setNewName("");
@@ -155,6 +165,7 @@ export default function SyllabusPage() {
   /** Run one change to an item; a stale revision reloads the list instead of overwriting. */
   async function change(
     node: Node,
+    parent: Node | null,
     run: () => Promise<{ data?: Node; error?: unknown; response: Response }>,
     done: (updated: Node) => void,
   ) {
@@ -168,7 +179,7 @@ export default function SyllabusPage() {
       } else if (result.response.status === 412) {
         setItemError({ id: node.id, message: STALE });
         setOpen(null);
-        void load(here, null);
+        reloadIfStillHere(parent);
       } else {
         setItemError({
           id: node.id,
@@ -188,6 +199,7 @@ export default function SyllabusPage() {
   ) =>
     change(
       node,
+      here,
       () =>
         api().PATCH("/api/v1/taxonomy/nodes/{node_id}", {
           params: { path: { node_id: node.id }, header: { "If-Match": ifMatch(node.revision) } },
@@ -196,13 +208,14 @@ export default function SyllabusPage() {
       (updated) => {
         setOpen(null);
         setNotice(`${updated.name} was saved.`);
-        void load(here, null); // a new order or name can move it: the server's order decides
+        reloadIfStillHere(here); // a new order or name can move it: the server's order decides
       },
     );
 
   const setRetired = (node: Node, retire: boolean) =>
     change(
       node,
+      here,
       () =>
         api().POST(
           retire
@@ -245,7 +258,7 @@ export default function SyllabusPage() {
         // Only if the person is still on the level it was added to; the server's order decides
         // where the new item shows.
         if (hereId.current === parentId) {
-          void load(here, null);
+          reloadIfStillHere(here);
           setNewName("");
           setNewOrder(String(data.sort_order + 1));
         }
@@ -355,7 +368,7 @@ export default function SyllabusPage() {
             ))}
           </ul>
         )}
-        {nextCursor && (
+        {nextCursor && state === "ready" && (
           <button
             type="button"
             onClick={() => void showMore()}
