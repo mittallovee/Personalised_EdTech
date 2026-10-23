@@ -413,6 +413,16 @@ def test_siblings_cannot_share_a_name_but_cousins_can(
     assert other_subject["name"] == "Physics"  # the same name under another class is fine
 
 
+def test_a_syllabus_name_that_grows_too_long_once_normalised_is_a_422_not_a_500(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    ligatures = "\ufb03" * 200  # 200 characters, 600 once expanded to letters
+
+    response = client.post(NODES, json={"kind": "CLASS", "name": ligatures}, headers=admin_headers)
+
+    assert (response.status_code, response.json()["error"]["code"]) == (422, "NAME_TOO_LONG")
+
+
 def test_two_admins_adding_the_same_name_at_once_leave_exactly_one(
     client: TestClient, team: dict[str, Member], admin_headers: dict[str, str]
 ) -> None:

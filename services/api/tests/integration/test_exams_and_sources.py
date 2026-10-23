@@ -185,6 +185,24 @@ def test_a_name_cannot_be_used_twice_however_it_is_spelled(
     assert (clash.status_code, clash.json()["error"]["code"]) == (409, "DUPLICATE_NAME")
 
 
+@BOTH
+def test_a_name_that_grows_too_long_once_normalised_is_a_422_not_a_500(
+    client: TestClient, admin_headers: dict[str, str], kind: Kind
+) -> None:
+    ligatures = "\ufb03" * 200  # 200 characters, 600 once expanded to letters
+    item = add(client, admin_headers, kind, FIRST)
+
+    created = client.post(kind.path, json=kind.body(ligatures), headers=admin_headers)
+    renamed = client.patch(
+        f"{kind.path}/{item['id']}",
+        json={"name": ligatures},
+        headers={**admin_headers, **if_match(item)},
+    )
+
+    assert [r.status_code for r in (created, renamed)] == [422, 422]
+    assert created.json()["error"]["code"] == "NAME_TOO_LONG"
+
+
 def test_the_same_source_name_may_be_used_for_different_kinds(
     client: TestClient, admin_headers: dict[str, str]
 ) -> None:

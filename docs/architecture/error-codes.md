@@ -37,6 +37,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `HIERARCHY_INVALID` | 422 | A syllabus item was given the wrong kind of parent: a subject goes under a class, a chapter under a subject, a topic under a chapter, a subtopic under a topic, and a class has none | M3 |
 | `DUPLICATE_NAME` | 409 | Another syllabus item under the same parent, or another exam, or another source of the same kind, already has this name (compared without regard to case or spacing) | M3 |
 | `PARENT_DEPRECATED` | 409 | The parent item is retired: nothing new goes under it, and an item under it cannot be restored until the parent is | M3 |
+| `NAME_TOO_LONG` | 422 | A name is too long once its special characters are written out in full for comparing names (for example a ligature becomes three letters) | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in); wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 
