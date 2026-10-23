@@ -54,7 +54,7 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 ### Hardening track (added 23 Oct 2026, owner-approved)
 
 Industry practices the platform was missing, found in a review of the repository on 23 Oct. They are
-defined as requirements **K-01 to K-15** in [01-requirements](./01-requirements.md) (section K; the `H-xx` IDs
+defined as requirements **K-01 to K-17** in [01-requirements](./01-requirements.md) (section K; the `H-xx` IDs
 there belong to the AI platform). They are not product features and do not start Phase 2. Each is its own
 small pull request. The first batch (K-01 to K-05) is built **now, before the rest of M3**, because it is cheap and
 protects everything built after it. The rest are placed before the milestone or screen that needs them.
@@ -63,7 +63,8 @@ protects everything built after it. The rest are placed before the milestone or 
 |---|---|---|---|---|
 | K-01 | **Dependabot**: GitHub proposes dependency updates as PRs every week | Now | None | `.github/dependabot.yml` merged; first update PRs appear |
 | K-02 | **Code scanning (Semgrep)**: scan our own Python and TypeScript for vulnerability patterns, in CI | Now | None | New CI job green on `main`; findings triaged, none ignored silently |
-| K-03 | **Backups and a tested restore**: dump a database, restore it into a fresh one, compare tables and tenant-isolation policies | Now | Choose where real backups are stored when hosting is chosen (M7) | Backup and restore scripts + CI "restore drill" job green; written targets for how much data may be lost and how long recovery may take |
+| K-03 | **Backup and restore tooling**: dump a database, restore it into a fresh one, compare tables and tenant-isolation policies | Now | None | Backup and restore scripts + CI "restore drill" job green; written targets for how much data may be lost and how long recovery may take |
+| K-16 | **Real scheduled backups**: daily database and file backups to an off-machine place, and a real restore of real data tested | **Before the first real coaching uses the app (M4)** | **Owner chooses the destination** (for example an S3-compatible bucket, a cloud drive or an external disk kept elsewhere) | Backups run daily without anyone remembering; one real restore done and written down |
 | K-04 | **Property-based tests (Hypothesis)**: generate thousands of odd inputs for the import reader and plan engine; later the answer checker and question validators (M3 3a) | Now (reader, plan engine); validators with 3a | None | Properties pass in CI; a deliberately broken reader is caught |
 | K-05 | **GitHub settings checklist**: branch protection, required checks, no force-push to `main`, secret-scanning push protection | Now | **Owner applies the settings** (this session cannot see or change them) and confirms | `docs/operations/github-settings.md` merged; owner confirms each setting |
 | K-10 | **Import threat model + ADR**: the Excel/CSV import already parses untrusted files inside the API process (with size, row and archive limits); decide whether that stays or moves to a separate low-resource worker | **Before the import screen (M3 PR 2d-3)**, right after K-01 to K-05 | None | ADR accepted; if it says move, the worker is built before the screen |
@@ -71,14 +72,15 @@ protects everything built after it. The rest are placed before the milestone or 
 | K-06 | **Monitoring**: error tracking, metrics and tracing as decided in ADR-0010 | Before the first real coaching uses the app (M4 "first real use") | Sentry account/DSN when ready | Errors and slow requests visible without asking a user |
 | K-07 | **Migration safety linter** (squawk) in CI, and a **staging** rehearsal of migrations on a copy of real-shaped data | Linter with M4; staging with M7 hosting | Choose hosting (M7) | Unsafe migration is rejected in CI; rehearsal documented |
 | K-08 | **Load tests (k6)** for search and listing on a one-lakh-question fixture | M4 (search exit criterion) | None | Scripts in repo; p95 numbers recorded |
-| K-11 | **Uploads/AI threat model** and parsing of untrusted documents in a **separate low-resource worker** | Before M6 (document uploads) | None | Threat model reviewed; worker built |
+| K-11 | **AI threat model**: provider prompts, one-off user prompts, AI-generated text and corrections, key handling | **Before M5** | None | Threat model reviewed; its test cases feed K-14 |
+| K-17 | **Uploads threat model** and parsing of untrusted documents in a **separate low-resource worker** | Before M6 (document uploads) | None | Threat model reviewed; worker built |
 | K-12 | **Feature flags**: ship a feature switched off | Before M5 | None | Small flag mechanism with tests |
 | K-13 | **Service targets and alerts (SLOs)**: written uptime and speed targets with alerts | M7 | Agree the targets | Targets documented; alerts fire in a test |
 | K-14 | **AI evaluation harness**: known-good examples scored on a fake provider on every PR (checks the plumbing); **any prompt or model change must also show a real-provider score** on the same examples before merge; cost tracking; prompt-injection tests | Start of M5 | Provide sample questions with known answers; accept a small API cost per prompt/model change | Harness runs in CI; the PR template asks for the real score on prompt/model changes |
-| K-15 | **Privacy review** of data export and deletion for India's DPDP Act | Before any student data (P4); a draft earlier | **A lawyer must confirm** the details; Claude drafts only | Draft in `docs/`; legal sign-off recorded |
+| K-15 | **Privacy review** of data export and deletion for India's DPDP Act (already applies to faculty data) | Draft by M4; **sign-off before the first feature that deletes originals (P2) or exports a coaching's data (P3)**, and before any student data (P4) | **A lawyer must confirm** the details; Claude drafts only | Draft in `docs/`; legal sign-off recorded before those features ship |
 
 Claude cannot do, and the table does not claim to do: change GitHub settings (K-05), create accounts or pick
-hosting (K-06, K-07, M7), or give legal advice (K-15).
+hosting (K-06, K-07, K-16, M7), or give legal advice (K-15).
 
 ## 4. Proposed technology stack (not final, owner to confirm)
 
