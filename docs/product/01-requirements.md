@@ -191,6 +191,35 @@ Admins/Owner hold all grants implicitly.
 | J-05 | Courses, live classes, recorded sessions | P7 |
 | J-06 | Personalized AI teaching and concept videos | P8 |
 
+### K. Engineering practices (hardening)
+
+Industry practices found missing in a repository review on 23 Oct 2026 and approved by the owner. They add no product
+feature and do not start Phase 2; each is its own small pull request. Order, owner actions and timing are in the
+[phase plan](./02-phase-plan.md#hardening-track-added-23-oct-2026-owner-approved). They put the non-functional
+requirements N-02, N-03, N-06, N-07, N-10 and N-12 into practice.
+
+| ID | Requirement | Phase | Origin |
+|---|---|---|---|
+| K-01 | Automatic dependency-update pull requests (Dependabot) for Python, web, GitHub Actions and Docker | P1 | R |
+| K-02 | Code scanning of our own Python and TypeScript for vulnerability patterns (Semgrep) in CI; findings triaged, none ignored silently | P1 | R |
+| K-03 | Backup and restore tooling: scripts, a CI "restore drill" (dump, restore into a fresh database, compare tables and tenant-isolation policies), and written targets for acceptable data loss and recovery time (N-06). Real scheduled backups are K-16 | P1 | R |
+| K-04 | Property-based tests (Hypothesis) for the import reader and plan engine | P1 | R |
+| K-05 | GitHub settings checklist: branch protection, required checks, no force-push to `main`, secret-scanning push protection (applied by the owner) | P1 | R |
+| K-06 | Monitoring in practice: error tracking, metrics and tracing as decided in ADR-0010, before the first real coaching uses the app (N-07) | P1 | R |
+| K-07 | Migration safety linter in CI | P1 | R |
+| K-08 | Load tests (k6) for search and listing on a one-lakh-question fixture (N-03) | P1 | R |
+| K-09 | Accessibility checks (axe) inside the browser tests (N-10) | P1 | R |
+| K-10 | Threat model and an ADR for the taxonomy/Excel import, which already parses untrusted files in the API process: keep in-request with documented limits, or move to a separate low-resource worker. Done before the import screen (M3 PR 2d-3) is built | P1 | R |
+| K-11 | Threat model for AI input and output (provider prompts, one-off user prompts, AI-generated text and corrections, keys), before M5 | P1 | R |
+| K-12 | Feature flags: ship a feature switched off | P1 | R |
+| K-13 | Written service targets (uptime, speed) and alerts (SLOs) | P1 | R |
+| K-14 | AI evaluation harness: known-good examples scored on a fake provider on every PR; any change to a prompt or model must show a real-provider score on the same examples before merge; cost tracking; prompt-injection tests | P1 | R |
+| K-15 | Privacy review of data export and deletion for India's DPDP Act (N-12): drafted by M4, confirmed by a lawyer before the first feature that deletes originals (P2) or exports a coaching's data (P3), and before any student data (P4) | P1 | R |
+| K-16 | Daily database and file backups to an off-machine destination chosen by the owner, with a real restore of real data tested, before the first real coaching uses the app (N-06; M4 "first real use") | P1 | R |
+| K-17 | Threat model for document uploads and parsing of untrusted documents in a separate low-resource worker, before M6 | P1 | R |
+| K-18 | Property-based tests (Hypothesis) for the answer checker and the question validators, built with the validators (M3 PR 3a) | P1 | R |
+| K-19 | Staging rehearsal of database migrations on a copy of real-shaped data, once hosting exists (M7) | P1 | R |
+
 ---
 
 ## 4. Non-functional requirements
