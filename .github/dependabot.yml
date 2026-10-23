@@ -50,8 +50,11 @@ updates:
       actions-minor-and-patch:
         update-types: [minor, patch]
 
-  - package-ecosystem: docker # base images in infra/docker/*.Dockerfile
-    directory: /infra/docker
+  - package-ecosystem: docker # base images in infra/docker/*.Dockerfile, and the service image
+    # (postgres) in the CI workflow, which the github-actions updater does not read
+    directories:
+      - /infra/docker
+      - /.github/workflows
     schedule:
       interval: weekly
       day: monday
