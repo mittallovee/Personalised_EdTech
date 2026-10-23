@@ -551,3 +551,85 @@ test("Show more of a level you left does not block Show more on the level you mo
   await page.getByRole("button", { name: "Show more" }).click();
   await expect(item(page, "Subject 101")).toBeVisible({ timeout: 3000 });
 });
+
+test("a slow retire does not close the edit you started on another row", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Two Rows ${unique()}`);
+  const csrf = await csrfOf(context);
+  const make = async (data: object) => {
+    const response = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data,
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  await make({ kind: "CLASS", name: "Class 11", sort_order: 1 });
+  await make({ kind: "CLASS", name: "Class 12", sort_order: 2 });
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes/*/deprecate", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow answer
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Retire" }).click();
+  await item(page, "Class 11").getByRole("button", { name: "Retire", exact: true }).last().click();
+
+  // While it is slow, start editing the other row.
+  await item(page, "Class 12").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Class 12").getByLabel("Name (English)").fill("Class 12 (draft)");
+
+  await expect(item(page, "Class 11")).toContainText("Retired");
+  await expect(item(page, "Class 12").getByLabel("Name (English)")).toHaveValue("Class 12 (draft)");
+});
+
+test("under a retired parent, a retired child cannot be restored first", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Restore Order ${unique()}`);
+  const csrf = await csrfOf(context);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": csrf };
+  const post = async (path: string, data?: object, revision?: number) => {
+    const response = await context.request.post(path, {
+      headers: revision ? { ...headers, "If-Match": `"rev-${revision}"` } : headers,
+      data,
+    });
+    expect(response.status()).toBeLessThan(300);
+    return (await response.json()) as { id: string; revision: number };
+  };
+  const cls = await post("/api/v1/taxonomy/nodes", {
+    kind: "CLASS",
+    name: "Class 11",
+    sort_order: 1,
+  });
+  const subject = await post("/api/v1/taxonomy/nodes", {
+    kind: "SUBJECT",
+    parent_id: cls.id,
+    name: "Physics",
+  });
+  const retiredSubject = await post(
+    `/api/v1/taxonomy/nodes/${subject.id}/deprecate`,
+    undefined,
+    subject.revision,
+  );
+  expect(retiredSubject.id).toBe(subject.id);
+  await post(`/api/v1/taxonomy/nodes/${cls.id}/deprecate`, undefined, cls.revision);
+
+  const page = await context.newPage();
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Physics")).toContainText("Retired");
+  await expect(item(page, "Physics").getByRole("button", { name: "Restore" })).toHaveCount(0);
+  await expect(item(page, "Physics")).toContainText("Restore its parent first.");
+  // The parent itself can be restored from the level above.
+  await page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("button", { name: "All classes" })
+    .click();
+  await item(page, "Class 11").getByRole("button", { name: "Restore" }).click();
+  await expect(item(page, "Class 11")).not.toContainText("Retired");
+});

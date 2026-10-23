@@ -21,6 +21,7 @@ export function SyllabusItem({
   node,
   languages,
   canManage,
+  canRestore,
   panel,
   busy,
   error,
@@ -33,6 +34,8 @@ export function SyllabusItem({
   node: Node;
   languages: Language[];
   canManage: boolean;
+  /** False under a retired parent: the server refuses to restore a child of a retired item. */
+  canRestore: boolean;
   panel: Panel;
   busy: boolean;
   error: string | null;
@@ -81,10 +84,15 @@ export function SyllabusItem({
               Retire
             </button>
           )}
-          {canManage && retired && (
+          {canManage && retired && canRestore && (
             <button type="button" disabled={busy} onClick={onRestore} className={BUTTON}>
               Restore
             </button>
+          )}
+          {canManage && retired && !canRestore && (
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+              Restore its parent first.
+            </span>
           )}
         </div>
       </div>

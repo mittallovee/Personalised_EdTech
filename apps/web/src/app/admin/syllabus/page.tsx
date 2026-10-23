@@ -153,6 +153,9 @@ export default function SyllabusPage() {
   const replace = (updated: Node) =>
     setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
 
+  /** Close the open panel only if it belongs to this item: another row's draft stays. */
+  const closePanelOf = (id: string) => setOpen((current) => (current?.id === id ? null : current));
+
   /** Run one change to an item; a stale revision reloads the list instead of overwriting. */
   async function change(
     node: Node,
@@ -171,7 +174,7 @@ export default function SyllabusPage() {
         done(result.data);
       } else if (result.response.status === 412) {
         setItemError({ id: node.id, message: STALE });
-        setOpen(null);
+        closePanelOf(node.id);
         void load(parent, null);
       } else {
         setItemError({
@@ -198,7 +201,7 @@ export default function SyllabusPage() {
           body: changes,
         }),
       (updated) => {
-        setOpen(null);
+        closePanelOf(updated.id);
         setNotice(`${updated.name} was saved.`);
         void load(here, null); // a new order or name can move it: the server's order decides
       },
@@ -217,7 +220,7 @@ export default function SyllabusPage() {
           },
         ),
       (updated) => {
-        setOpen(null);
+        closePanelOf(updated.id);
         setNotice(`${updated.name} was ${retire ? "retired" : "restored"}.`);
       },
     );
@@ -355,6 +358,7 @@ export default function SyllabusPage() {
                 node={node}
                 languages={languages}
                 canManage={canManage}
+                canRestore={here?.state !== "DEPRECATED"}
                 panel={open?.id === node.id ? open.panel : null}
                 busy={busyId === node.id}
                 error={itemError?.id === node.id ? itemError.message : null}
