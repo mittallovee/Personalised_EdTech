@@ -92,11 +92,20 @@ content as raw HTML").
 ### 4.4 Excel / CSV import (C-03)
 Importing is a **preview, then apply** flow, so nothing changes until the admin has seen the result.
 - **Upload** an `.xlsx` or `.csv` file. The server checks the content, not the file name (a real
-  spreadsheet or plain text), a size cap (5 MB), a row cap (20,000), and never evaluates formulas. The
-  reader opens the file in read-only mode and refuses an archive that expands beyond a fixed limit
-  (decompression-bomb guard).
-- The app offers a **template** to download. One row per item: `kind, path (Class 11 > Physics > Kinematics …),
-  label_en, label_hi …, aliases, sort`. A second sheet lists concepts: `subject path, label_en …, aliases`.
+  spreadsheet or plain text), a size cap (5 MB), a row cap (20,000), and never evaluates formulas. A
+  spreadsheet is read by a small **streaming reader of our own** (no spreadsheet library): one pass over
+  the sheet's XML in constant memory, with the limits on rows, cells per row and columns checked as it
+  goes, and an archive that would unpack beyond 20 MB refused first (decompression-bomb guard). A
+  library was tried first and replaced: it builds the whole sheet in memory and follows parts the file
+  points to, which review showed a crafted file can use to exhaust the server.
+- The app offers a **template** to download. It is **one sheet** (a CSV file is the same table): one row
+  per item with the columns `kind` (CLASS, SUBJECT, CHAPTER, TOPIC, SUBTOPIC or CONCEPT), `path`
+  (`Class 11 > Physics > Kinematics`; for a concept the subject's path and then the concept's name),
+  `sort`, `aliases` (concepts only, separated by `;`) and `label_hi`, `label_gu`, `label_bn`, `label_mr`,
+  `label_te`, `label_ta`. The English name is the last part of the path. (An earlier draft of this note
+  had a second sheet for concepts; one table is simpler and works the same for CSV.)
+- Only the **first sheet** is read. **Formulas are not accepted**: a spreadsheet with any is refused with
+  a message to paste the cells as values. A CSV must be UTF-8 and comma-separated.
 - The preview lists every row as *new*, *changed*, *unchanged* or *error* (with the row number and a
   plain reason), and totals. Rows are matched by their path in English, so uploading the same file twice
   changes nothing.
@@ -326,7 +335,7 @@ The browser holds no rules: the findings, limits and permissions come from the A
 | Spreadsheet/CSV formula injection when exporting later | Nothing is exported in M3 |
 
 New dependencies, each reviewed for licence and known vulnerabilities and pinned: backend **Pillow**
-(images), **openpyxl** (Excel, read-only), **python-multipart** (uploads); web **katex** and **mathlive**.
+(images), **defusedxml** (safe XML reading for the Excel import), **python-multipart** (uploads); web **katex** and **mathlive**.
 
 ## 11. Tests that prove M3
 
@@ -350,7 +359,7 @@ New dependencies, each reviewed for licence and known vulnerabilities and pinned
 | 1 | This design note + ADR-0016 (docs only) |
 | 2a | **Done:** syllabus items (migration 0013), the fixed lists (languages, Bloom, difficulty guide), permissions, audit |
 | 2b | **Exams and sources** (migration 0015), then concepts with labels and aliases (migration 0016), as two PRs |
-| 2c | Taxonomy: Excel/CSV import (preview, apply; migration 0017) |
+| 2c | Taxonomy: Excel/CSV import in two PRs. **2c-1 (built):** the safe file reader (`import_file.py`). **2c-2:** preview and apply (migration 0017, API) |
 | 2d | Web: Admin → Syllabus and Exams & sources, with browser tests |
 | 3a | Question content domain: blocks, the nine validators, answer limits, findings; spec-v1 fixtures as tests (no database yet) |
 | 3b | Questions persistence: migration 0018, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |
