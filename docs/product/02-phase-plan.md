@@ -51,6 +51,33 @@ OTP login, separate answer-key/solution file pairing, adaptive layout patterns, 
 knowledge-graph prerequisites/graph view, variants, diagram generation, MathML input, legacy .DOC, bulk
 edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers (P3); anything for students (P4+).
 
+### Hardening track (added 23 Oct 2026, owner-approved)
+
+Industry practices the platform was missing, found in a review of the repository on 23 Oct. They are
+not new product features and do not start Phase 2. Each is its own small pull request (H = hardening).
+The first batch (H1–H5) is built **now, before the rest of M3**, because it is cheap and protects
+everything built after it. The rest are placed where they must exist before something risky happens.
+
+| # | Practice (plain words) | When | Owner action needed | Done when |
+|---|---|---|---|---|
+| H1 | **Dependabot**: GitHub proposes dependency updates as PRs every week | Now | None | `.github/dependabot.yml` merged; first update PRs appear |
+| H2 | **Code scanning (Semgrep)**: scan our own Python and TypeScript for vulnerability patterns, in CI | Now | None | New CI job green on `main`; findings triaged, none ignored silently |
+| H3 | **Backups and a tested restore**: dump a database, restore it into a fresh one, compare tables and tenant-isolation policies | Now | Choose where real backups are stored when hosting is chosen (M7) | Backup and restore scripts + CI "restore drill" job green; written targets for how much data may be lost and how long recovery may take |
+| H4 | **Property-based tests (Hypothesis)**: generate thousands of odd inputs for the import reader and plan engine; later the answer checker and question validators (M3 3a) | Now (reader, plan engine); validators with 3a | None | Properties pass in CI; a deliberately broken reader is caught |
+| H5 | **GitHub settings checklist**: branch protection, required checks, no force-push to `main`, secret-scanning push protection | Now | **Owner applies the settings** (this session cannot see or change them) and confirms | `docs/operations/github-settings.md` merged; owner confirms each setting |
+| H6 | **Monitoring**: error tracking, metrics and tracing as decided in ADR-0010 | Before the first real coaching uses the app (M4 "first real use") | Sentry account/DSN when ready | Errors and slow requests visible without asking a user |
+| H7 | **Migration safety linter** (squawk) in CI, and a **staging** rehearsal of migrations on a copy of real-shaped data | Linter with M4; staging with M7 hosting | Choose hosting (M7) | Unsafe migration is rejected in CI; rehearsal documented |
+| H8 | **Load tests (k6)** for search and listing on a one-lakh-question fixture | M4 (search exit criterion) | None | Scripts in repo; p95 numbers recorded |
+| H9 | **Accessibility checks (axe)** inside the browser tests | With the next web PR after H1–H5 | None | Browser tests fail on serious accessibility violations |
+| H10 | **Threat model** for uploads, imports and AI, and untrusted-file parsing in a **separate low-resource worker** | Before M6 (uploads); import worker decision recorded as an ADR first | None | Threat model reviewed; ADR accepted; parsing worker built if the ADR says so |
+| H11 | **Feature flags**: ship a feature switched off | Before M5 | None | Small flag mechanism with tests |
+| H12 | **Service targets and alerts (SLOs)**: written uptime and speed targets with alerts | M7 | Agree the targets | Targets documented; alerts fire in a test |
+| H13 | **AI evaluation harness**: fixed known-good examples scored on every prompt or model change; cost tracking; prompt-injection tests | Start of M5 | Provide sample questions with known answers | Harness runs in CI against a fake provider; golden set scored against a real one on demand |
+| H14 | **Privacy review** of data export and deletion for India's DPDP Act | Before any student data (P4); a draft earlier | **A lawyer must confirm** the details; Claude drafts only | Draft in `docs/`; legal sign-off recorded |
+
+Claude cannot do, and the table does not claim to do: change GitHub settings (H5), create accounts or pick
+hosting (H6, H7, M7), or give legal advice (H14).
+
 ## 4. Proposed technology stack (not final, owner to confirm)
 
 | Concern | Proposal | Why |
@@ -100,4 +127,5 @@ edits, storage dashboard/original deletion, coaching copy (all P2); tests/papers
 
 None blocking. M1 and M2 are built. Next: the owner checks M2 with the [M2 demo](../operations/m2-demo.md)
 (and, optionally, turns on Google login with its [setup guide](../operations/google-login.md)). The [M3 design note](../architecture/m3-design-note.md)
-(question authoring) is drafted and awaits owner approval.
+(question authoring) is being built (the Syllabus screen is merged). The hardening track above
+(H1–H5) is built before the rest of M3.
