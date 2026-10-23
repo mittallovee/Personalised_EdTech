@@ -339,8 +339,13 @@ def _locked_concept(session: Session, concept_id: UUID) -> Concept:
     """The concept, locked after its subject (the order every writer uses)."""
     concept = get_concept(session, concept_id)
     _lock_subject(session, concept.subject_id)
+    # populate_existing: the concept was already read above, and without it the row we waited
+    # for would be thrown away in favour of that older copy (with the old revision).
     locked = session.scalars(
-        select(Concept).where(Concept.id == concept_id).with_for_update()
+        select(Concept)
+        .where(Concept.id == concept_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).first()
     if locked is None:
         raise NotFound("No such concept.")

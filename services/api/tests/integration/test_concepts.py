@@ -487,6 +487,45 @@ def test_concept_writes_wait_for_whoever_holds_the_subject(
     assert results == {"create": 201, "rename": 200}
 
 
+def test_two_changes_made_from_the_same_version_cannot_both_win(
+    client: TestClient,
+    owner_db: Database,
+    team: dict[str, Member],
+    admin_headers: dict[str, str],
+    physics: dict[str, Any],
+) -> None:
+    """Both changes are sent with the same ETag and wait for the subject. The one that gets the
+    lock second must see the first one's result (revision 2) and be refused with 412, not
+    overwrite it because it still remembers revision 1."""
+    subject = UUID(physics["subject"]["id"])
+    concept = add(client, admin_headers, physics["subject"], LAW)
+    results: list[int] = []
+
+    def rename(name: str) -> None:
+        response = client.patch(
+            f"{CONCEPTS}/{concept['id']}",
+            json={"name": name},
+            headers={**admin_headers, **if_match(concept)},
+        )
+        results.append(response.status_code)
+
+    workers = [threading.Thread(target=rename, args=(name,)) for name in ("First", "Second")]
+    with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
+        held = select(TaxonomyNode.id).where(TaxonomyNode.id == subject).with_for_update(read=True)
+        session.execute(held)
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(timeout=1.0)
+        assert results == []  # both have read revision 1 and wait for the subject
+    for worker in workers:
+        worker.join(timeout=10.0)
+
+    assert sorted(results) == [200, 412]
+    stored = client.get(f"{CONCEPTS}/{concept['id']}", headers=admin_headers).json()
+    assert stored["revision"] == 2
+
+
 # --- Retrying a create ---------------------------------------------------------------------------
 
 
