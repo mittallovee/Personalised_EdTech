@@ -48,3 +48,35 @@ class TaxonomyLabel(Base):
     node_id: Mapped[UUID] = mapped_column(primary_key=True)
     language: Mapped[str] = mapped_column(String(3), primary_key=True)
     label: Mapped[str] = mapped_column(String(200))
+
+
+class Exam(Base):
+    """An exam a past-year question comes from: JEE Main, NEET, CBSE..."""
+
+    __tablename__ = "exams"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    name: Mapped[str] = mapped_column(String(200))
+    name_key: Mapped[str] = mapped_column(String(400))  # ``name`` normalised; unique per coaching
+    short_code: Mapped[str | None] = mapped_column(String(20))
+    state: Mapped[str] = mapped_column(String(20), default="ACTIVE")
+    revision: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Source(Base):
+    """Where a question was taken from: a book, a module, a test series, a past-year paper."""
+
+    __tablename__ = "sources"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(200))
+    name_key: Mapped[str] = mapped_column(String(400))  # unique per coaching and kind
+    state: Mapped[str] = mapped_column(String(20), default="ACTIVE")
+    revision: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

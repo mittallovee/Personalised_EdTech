@@ -1,5 +1,6 @@
 """M3 PR 2a: the syllabus tree (C-01, C-04, C-10; tests T24, T26 and T30 for syllabus items)."""
 
+import base64
 import threading
 from collections.abc import Iterator
 from typing import Any
@@ -19,6 +20,7 @@ from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.taxonomy import service
+from qbank.modules.taxonomy.cursors import MAX_CURSOR_LENGTH
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import CreateNode, UpdateNode
 from tests.integration.conftest import (
@@ -413,6 +415,16 @@ def test_siblings_cannot_share_a_name_but_cousins_can(
     assert other_subject["name"] == "Physics"  # the same name under another class is fine
 
 
+def test_a_syllabus_name_that_grows_too_long_once_normalised_is_a_422_not_a_500(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    ligatures = "\ufb03" * 200  # 200 characters, 600 once expanded to letters
+
+    response = client.post(NODES, json={"kind": "CLASS", "name": ligatures}, headers=admin_headers)
+
+    assert (response.status_code, response.json()["error"]["code"]) == (422, "NAME_TOO_LONG")
+
+
 def test_two_admins_adding_the_same_name_at_once_leave_exactly_one(
     client: TestClient, team: dict[str, Member], admin_headers: dict[str, str]
 ) -> None:
@@ -758,6 +770,62 @@ def test_pages_follow_the_admins_order_and_a_damaged_cursor_is_a_400(
     assert [n["name"] for n in second["data"]] == ["D"]
     assert second["page"] == {"next_cursor": None, "has_more": False}
     assert client.get(NODES, params={"cursor": "not-a-cursor"}).status_code == 400
+
+
+def test_every_cursor_the_api_hands_out_is_accepted_even_after_long_non_latin_names(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    names = [letter * 200 for letter in ("\u0915", "\u0916", "\u0917")]  # Devanagari, 200 letters
+    for name in names:
+        add(client, admin_headers, "CLASS", name)
+
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        params: dict[str, Any] = {"limit": 1, **({"cursor": cursor} if cursor else {})}
+        page = client.get(NODES, params=params)
+        assert page.status_code == 200, page.text
+        seen += [node["name"] for node in page.json()["data"]]
+        cursor = page.json()["page"]["next_cursor"]
+        if cursor is None:
+            break
+        assert len(cursor) <= MAX_CURSOR_LENGTH  # every cursor fits the limit the API sets
+
+    assert seen == names
+
+
+def test_renaming_or_reordering_the_last_item_of_a_page_does_not_make_the_next_page_skip_items(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    items = {name: add(client, admin_headers, "CLASS", name) for name in ("A", "B", "C", "D", "E")}
+    first = client.get(NODES, params={"limit": 3}).json()  # A, B, C
+    third = items["C"]
+
+    client.patch(
+        f"{NODES}/{third['id']}",
+        json={"name": "Z", "sort_order": 50},  # moves to the end, by name and by order
+        headers={**admin_headers, **if_match(third)},
+    )
+    second = client.get(NODES, params={"cursor": first["page"]["next_cursor"]}).json()
+
+    assert [node["name"] for node in second["data"]] == ["D", "E", "Z"]
+
+
+def test_a_damaged_or_forged_cursor_is_a_400_for_the_syllabus_too(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    add(client, admin_headers, "CLASS", "Class 11")
+    too_long = (
+        base64.urlsafe_b64encode(b"\x01" + bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    )
+    too_short = base64.urlsafe_b64encode(b"short").decode().rstrip("=")
+
+    codes = [
+        client.get(NODES, params={"cursor": cursor}).status_code
+        for cursor in ("not-a-cursor", too_short, too_long)
+    ]
+
+    assert codes == [400, 400, 400]
 
 
 def test_every_change_is_in_the_audit_log_with_before_and_after(

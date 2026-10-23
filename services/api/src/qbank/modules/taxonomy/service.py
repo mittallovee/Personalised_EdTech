@@ -1,8 +1,5 @@
 """The syllabus tree (M3 design note §4.1): add, rename, order, retire and restore items."""
 
-import base64
-import binascii
-import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -13,13 +10,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
-from qbank.core.errors import Conflict, MalformedRequest, NotFound, ValidationFailed
+from qbank.core.errors import Conflict, NotFound, ValidationFailed
 from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
+from qbank.modules.taxonomy.cursors import encode_cursor
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import CreateNode, NodeOut, UpdateNode
 
@@ -49,35 +47,11 @@ def _organization_id(principal: Principal) -> UUID:
 # --- Reading ----------------------------------------------------------------------------------
 
 
-def _encode_position(node: TaxonomyNode) -> str:
-    raw = json.dumps([node.sort_order, node.name_key, str(node.id)]).encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-
-def decode_position(cursor: str) -> tuple[int, str, UUID]:
-    """Inverse of ``next_cursor``; a damaged cursor is a 400, never a 500."""
-    invalid = MalformedRequest("The page cursor is not valid. Start again from the first page.")
-    try:
-        data = json.loads(base64.urlsafe_b64decode((cursor + "=" * (-len(cursor) % 4)).encode()))
-    except binascii.Error, UnicodeDecodeError, ValueError:
-        raise invalid from None
-    if not (
-        isinstance(data, list)
-        and len(data) == 3
-        and isinstance(data[0], int)
-        and not isinstance(data[0], bool)
-        and isinstance(data[1], str)
-        and isinstance(data[2], str)
-    ):
-        raise invalid
-    try:
-        return data[0], data[1], UUID(data[2])
-    except ValueError:
-        raise invalid from None
-
-
 def next_cursor(nodes: Sequence[TaxonomyNode], has_more: bool) -> str | None:
-    return _encode_position(nodes[-1]) if has_more and nodes else None
+    if not (has_more and nodes):
+        return None
+    last = nodes[-1]
+    return encode_cursor(last.sort_order, last.name_key, last.id)
 
 
 def list_nodes(
@@ -89,7 +63,10 @@ def list_nodes(
     limit: int,
     after: tuple[int, str, UUID] | None,
 ) -> tuple[list[TaxonomyNode], bool]:
-    """In the admin's order (sort order, then name). Returns the page and whether more follow."""
+    """In the admin's order (sort order, then name), after the position ``after`` (a cursor).
+
+    Returns the page and whether more follow.
+    """
     query = select(TaxonomyNode).order_by(
         TaxonomyNode.sort_order, TaxonomyNode.name_key, TaxonomyNode.id
     )

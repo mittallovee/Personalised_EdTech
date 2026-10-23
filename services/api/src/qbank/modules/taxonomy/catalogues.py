@@ -10,6 +10,8 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from qbank.core.errors import ValidationFailed
+
 
 @dataclass(frozen=True, slots=True)
 class Language:
@@ -79,10 +81,22 @@ DIFFICULTY_GUIDE: tuple[DifficultyLevel, ...] = (
 _SPACES = re.compile(r"\s+")
 
 
+# The most a normalised name may be (the database column holds this many characters).
+MAX_NAME_KEY_LENGTH = 400
+
+
 def name_key(name: str) -> str:
     """A name in the form used to compare names: Unicode-normalised, case-folded, single spaces.
 
     "Newton's  Laws" and "newton's laws" compare equal; it never merges names that differ in
-    letters or digits.
+    letters or digits. Normalising can make a name longer (a ligature becomes three letters), so
+    a name that is short enough as typed can still be refused here, with a clear message.
     """
-    return _SPACES.sub(" ", unicodedata.normalize("NFKC", name)).strip().casefold()
+    key = _SPACES.sub(" ", unicodedata.normalize("NFKC", name)).strip().casefold()
+    if len(key) > MAX_NAME_KEY_LENGTH:
+        raise ValidationFailed(
+            "This name is too long once its special characters are written out in full."
+            " Please shorten it.",
+            code="NAME_TOO_LONG",
+        )
+    return key

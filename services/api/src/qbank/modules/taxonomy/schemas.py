@@ -77,3 +77,58 @@ class BloomLevelOut(BaseModel):
 class DifficultyLevelOut(BaseModel):
     level: int = Field(ge=1, le=10)
     meaning: str
+
+
+ShortCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+SourceKind = Literal["BOOK", "MODULE", "TEST_SERIES", "PYQ_PAPER", "OTHER"]
+
+
+class CreateExam(BaseModel):
+    name: Name = Field(examples=["JEE Main"])
+    short_code: ShortCode | None = Field(default=None, examples=["JEEM"])
+
+
+class UpdateExam(BaseModel):
+    name: Name | None = None
+    short_code: ShortCode | None = Field(
+        default=None, description="Send null to remove the short code; leave it out to keep it."
+    )
+
+
+class ExamOut(BaseModel):
+    id: UUID
+    name: str
+    short_code: str | None
+    state: NodeState = Field(description="DEPRECATED exams cannot be chosen for new questions.")
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExamPage(BaseModel):
+    data: list[ExamOut]
+    page: PageInfo
+
+
+class CreateSource(BaseModel):
+    kind: SourceKind
+    name: Name = Field(examples=["HC Verma, Concepts of Physics"])
+
+
+class UpdateSource(BaseModel):
+    name: Name | None = Field(default=None, description="The kind never changes.")
+
+
+class SourceOut(BaseModel):
+    id: UUID
+    kind: SourceKind
+    name: str
+    state: NodeState = Field(description="DEPRECATED sources cannot be chosen for new questions.")
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourcePage(BaseModel):
+    data: list[SourceOut]
+    page: PageInfo

@@ -11,6 +11,7 @@ from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
 from qbank.modules.taxonomy import service
 from qbank.modules.taxonomy.catalogues import BLOOM_LEVELS, DIFFICULTY_GUIDE, LANGUAGES
+from qbank.modules.taxonomy.cursors import MAX_CURSOR_LENGTH, decode_cursor
 from qbank.modules.taxonomy.schemas import (
     BloomLevelOut,
     CreateNode,
@@ -91,10 +92,10 @@ def list_nodes(
     parent_id: UUID | None = None,
     node_state: Annotated[NodeState | None, Query(alias="state")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-    cursor: Annotated[str | None, Query(max_length=300)] = None,
+    cursor: Annotated[str | None, Query(max_length=MAX_CURSOR_LENGTH)] = None,
 ) -> NodePage:
     require(principal, Action.VIEW_CATALOGUES)
-    after = service.decode_position(cursor) if cursor is not None else None
+    after = decode_cursor(cursor) if cursor is not None else None
     with database.transaction(principal.tenant_context) as session:
         rows, has_more = service.list_nodes(
             session, kind=kind, parent_id=parent_id, state=node_state, limit=limit, after=after
@@ -142,7 +143,10 @@ def get_node(
             " (`PARENT_DEPRECATED`), or the Idempotency-Key was used for a different request"
             " (`IDEMPOTENCY_KEY_REUSED`)"
         },
-        422: {"description": "Wrong kind of parent (`HIERARCHY_INVALID`)"},
+        422: {
+            "description": "Wrong kind of parent (`HIERARCHY_INVALID`) or a name that is too long"
+            " once normalised for comparing (`NAME_TOO_LONG`)"
+        },
     },
 )
 def create_node(
@@ -176,6 +180,9 @@ def create_node(
         **_NOT_FOUND,
         **_STALE,
         409: {"description": "A sibling has this name (`DUPLICATE_NAME`)"},
+        422: {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)"
+        },
     },
 )
 def update_node(
