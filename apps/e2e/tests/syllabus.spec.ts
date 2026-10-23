@@ -800,3 +800,80 @@ test("an old Show more is not offered while the list is being reloaded after a c
   await expect(items).toHaveCount(100);
   await expect(page.getByRole("button", { name: "Show more" })).toBeVisible();
 });
+
+test("a Show more still pending when the list is reloaded does not block the new Show more", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Same Level Lock ${unique()}`);
+  const csrf = await csrfOf(context);
+  for (let n = 1; n <= 201; n++) {
+    const created = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data: { kind: "CLASS", name: `Class ${String(n).padStart(3, "0")}`, sort_order: n },
+    });
+    expect(created.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  let slowOnce = true;
+  await page.route(
+    (url) => url.pathname === "/api/v1/taxonomy/nodes" && url.searchParams.has("cursor"),
+    async (route) => {
+      if (slowOnce) {
+        slowOnce = false;
+        await new Promise((resolve) => setTimeout(resolve, 6000)); // the first one hangs
+      }
+      await route.continue();
+    },
+  );
+  await page.goto("/admin/syllabus");
+  const items = page.getByRole("list", { name: "Syllabus items" }).getByRole("listitem");
+  await expect(items).toHaveCount(100);
+  await page.getByRole("button", { name: "Show more" }).click(); // pending for a long time
+
+  // A save reloads the list from the start while that request is still pending.
+  await item(page, "Class 002").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Class 002").getByLabel("Order (smaller comes first)").fill("3");
+  await item(page, "Class 002").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Class 002 was saved.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show more" })).toBeVisible();
+  await page.getByRole("button", { name: "Show more" }).click();
+  await expect(items).toHaveCount(200, { timeout: 3000 });
+});
+
+test("a refused change is told to you even when the item has moved to another page", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Moved Away ${unique()}`);
+  const csrf = await csrfOf(context);
+  for (let n = 1; n <= 101; n++) {
+    const created = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data: { kind: "CLASS", name: `Class ${String(n).padStart(3, "0")}`, sort_order: n },
+    });
+    expect(created.status()).toBe(201);
+  }
+  const first = await context.newPage();
+  await first.goto("/admin/syllabus");
+  await expect(item(first, "Class 001")).toBeVisible();
+
+  // Another tab moves Class 001 to the end, beyond the first page.
+  const second = await context.newPage();
+  await second.goto("/admin/syllabus");
+  await item(second, "Class 001").getByRole("button", { name: "Edit" }).click();
+  await item(second, "Class 001").getByLabel("Order (smaller comes first)").fill("500");
+  await item(second, "Class 001").getByRole("button", { name: "Save" }).click();
+  await expect(second.getByText("Class 001 was saved.")).toBeVisible();
+
+  // The first tab's change to it is refused; the item is no longer on that page.
+  await item(first, "Class 001").getByRole("button", { name: "Edit" }).click();
+  await item(first, "Class 001").getByLabel("Name (English)").fill("Class 001 (old)");
+  await item(first, "Class 001").getByRole("button", { name: "Save" }).click();
+  // Once the list has been reloaded (the item is gone from it) the refusal must still be shown.
+  await expect(item(first, "Class 001")).toHaveCount(0);
+  await expect(first.getByText("Class 002", { exact: false }).first()).toBeVisible();
+  expect(await first.locator("main").getByRole("alert").allTextContents()).toEqual([
+    expect.stringContaining("Someone else changed this"),
+  ]);
+});

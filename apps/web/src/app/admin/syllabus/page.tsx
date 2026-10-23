@@ -41,6 +41,8 @@ export default function SyllabusPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Shown for the page, not a row: after the reload the refused item may be on another page.
+  const [stale, setStale] = useState(false);
   const [newName, setNewName] = useState("");
   const [newOrder, setNewOrder] = useState("0");
   const [adding, setAdding] = useState(false);
@@ -55,7 +57,8 @@ export default function SyllabusPage() {
   const level = useRef(0);
   // The parent of the level on screen, for refreshing it when a late answer comes in.
   const hereRef = useRef<Node | null>(null);
-  // The level that has a "Show more" request on its way, if any.
+  // The list (its generation) that has a "Show more" request on its way, if any. A full reload
+  // starts a new list, so a request still pending for the old one no longer holds anything up.
   const moreInFlight = useRef<number | null>(null);
 
   const here = path.at(-1) ?? null;
@@ -127,7 +130,7 @@ export default function SyllabusPage() {
 
   /** "Show more": one request at a time per level, so pressing it twice loads the page once. */
   async function showMore() {
-    const mine = level.current;
+    const mine = generation.current;
     if (moreInFlight.current === mine || !nextCursor) return;
     moreInFlight.current = mine;
     try {
@@ -143,6 +146,7 @@ export default function SyllabusPage() {
     changing.current = false; // a change still on its way answers for the level just left
     setBusyId(null);
     setPath(next);
+    setStale(false);
     setNextCursor(null);
     setOpen(null);
     setNotice(null);
@@ -193,6 +197,7 @@ export default function SyllabusPage() {
     const parent = here;
     setBusyId(node.id);
     setItemError(null);
+    setStale(false);
     try {
       const result = await run();
       if (level.current !== mine) {
@@ -203,7 +208,7 @@ export default function SyllabusPage() {
         replace(result.data);
         done(result.data);
       } else if (result.response.status === 412) {
-        setItemError({ id: node.id, message: STALE });
+        setStale(true);
         closePanelOf(node.id);
         void load(parent, null);
       } else {
@@ -359,6 +364,11 @@ export default function SyllabusPage() {
       <h2 className="mt-4 text-lg font-medium">{title}</h2>
       <div className="mt-4 max-w-2xl space-y-4">
         {notice && <StatusNotice>{notice}</StatusNotice>}
+        {stale && (
+          <p role="alert" className={ALERT}>
+            {STALE}
+          </p>
+        )}
         {state === "denied" && (
           <p role="alert" className={ALERT}>
             You don&apos;t have access to the syllabus.
