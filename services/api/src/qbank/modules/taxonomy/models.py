@@ -80,3 +80,60 @@ class Source(Base):
     revision: Mapped[int] = mapped_column(default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Concept(Base):
+    """An idea a question is about, belonging to one subject of the syllabus."""
+
+    __tablename__ = "concepts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "subject_id", "subject_kind"],
+            ["taxonomy_nodes.organization_id", "taxonomy_nodes.id", "taxonomy_nodes.kind"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    subject_id: Mapped[UUID]
+    subject_kind: Mapped[str] = mapped_column(String(20), default="SUBJECT")
+    name: Mapped[str] = mapped_column(String(200))  # the English name
+    name_key: Mapped[str] = mapped_column(String(400))  # unique within the subject
+    state: Mapped[str] = mapped_column(String(20), default="ACTIVE")
+    revision: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConceptLabel(Base):
+    """The name of a concept in one language other than English."""
+
+    __tablename__ = "concept_labels"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "concept_id"], ["concepts.organization_id", "concepts.id"]
+        ),
+    )
+
+    organization_id: Mapped[UUID]
+    concept_id: Mapped[UUID] = mapped_column(primary_key=True)
+    language: Mapped[str] = mapped_column(String(3), primary_key=True)
+    label: Mapped[str] = mapped_column(String(200))
+
+
+class ConceptAlias(Base):
+    """Another way to say a concept's name; names one concept within its subject."""
+
+    __tablename__ = "concept_aliases"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "concept_id", "subject_id"],
+            ["concepts.organization_id", "concepts.id", "concepts.subject_id"],
+        ),
+    )
+
+    organization_id: Mapped[UUID]
+    concept_id: Mapped[UUID] = mapped_column(primary_key=True)
+    subject_id: Mapped[UUID]
+    alias: Mapped[str] = mapped_column(String(200))
+    alias_key: Mapped[str] = mapped_column(String(400), primary_key=True)

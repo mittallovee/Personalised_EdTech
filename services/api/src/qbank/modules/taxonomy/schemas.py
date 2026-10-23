@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
@@ -10,7 +11,23 @@ from qbank.modules.taxonomy.catalogues import LANGUAGE_TAGS
 NodeKind = Literal["CLASS", "SUBJECT", "CHAPTER", "TOPIC", "SUBTOPIC"]
 NodeState = Literal["ACTIVE", "DEPRECATED"]
 
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+def no_control_characters(text: str) -> str:
+    """Refuse control characters (NUL, newline, tab, bell...). PostgreSQL cannot store NUL, and the
+    others would break a one-line name in a picker. Zero-width joiners (category Cf), which Indian
+    scripts need, are not control characters and stay allowed."""
+    if any(unicodedata.category(char) == "Cc" for char in text):
+        raise ValueError("Control characters (such as a new line or tab) are not allowed.")
+    return text
+
+
+# Text that is stored and shown on one line: names, labels, aliases, short codes, search words.
+OneLine = Annotated[str, AfterValidator(no_control_characters)]
+Name = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+    AfterValidator(no_control_characters),
+]
 
 
 def _other_languages(labels: dict[str, str]) -> dict[str, str]:
@@ -79,7 +96,11 @@ class DifficultyLevelOut(BaseModel):
     meaning: str
 
 
-ShortCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20)]
+ShortCode = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=20),
+    AfterValidator(no_control_characters),
+]
 SourceKind = Literal["BOOK", "MODULE", "TEST_SERIES", "PYQ_PAPER", "OTHER"]
 
 
@@ -131,4 +152,40 @@ class SourceOut(BaseModel):
 
 class SourcePage(BaseModel):
     data: list[SourceOut]
+    page: PageInfo
+
+
+# The aliases of a concept: other ways to say its name. Capped so a picker stays readable.
+Aliases = Annotated[list[Name], Field(max_length=10)]
+
+
+class CreateConcept(BaseModel):
+    subject_id: UUID = Field(description="The subject this concept belongs to; it never changes.")
+    name: Name = Field(description="The English name.", examples=["Newton's second law"])
+    labels: Labels = Field(default_factory=dict)
+    aliases: Aliases = Field(default_factory=list, examples=[["Newton's 2nd law"]])
+
+
+class UpdateConcept(BaseModel):
+    name: Name | None = None
+    labels: Labels | None = Field(
+        default=None, description="Replaces all the other-language names when sent."
+    )
+    aliases: Aliases | None = Field(default=None, description="Replaces all the aliases when sent.")
+
+
+class ConceptOut(BaseModel):
+    id: UUID
+    subject_id: UUID
+    name: str
+    labels: dict[str, str]
+    aliases: list[str] = Field(description="In alphabetical order.")
+    state: NodeState = Field(description="DEPRECATED concepts cannot be chosen for new questions.")
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConceptPage(BaseModel):
+    data: list[ConceptOut]
     page: PageInfo
