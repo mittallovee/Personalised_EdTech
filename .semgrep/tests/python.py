@@ -58,6 +58,12 @@ LONG = """ALTER ROLE app
     CONNECTION LIMIT 5
     BYPASSRLS;"""
 # ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_VALUE = "ALTER ROLE app PASSWORD 'safe;value' BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_NAME = 'ALTER ROLE "odd;name" BYPASSRLS'
+# ruleid: qbank-no-rls-bypass
+STRAY_QUOTE = "ALTER ROLE app -- don't forget\n    BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
 FORMATTED = f"ALTER ROLE {ROLE} WITH BYPASSRLS"
 # ruleid: qbank-no-rls-bypass
 OFF = "SET row_security = off"

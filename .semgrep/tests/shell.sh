@@ -36,6 +36,10 @@ ALTER ROLE app
     BYPASSRLS;
 SQL
 # ruleid: qbank-no-rls-bypass-infra
+psql -c "ALTER ROLE app PASSWORD 'safe;value' BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass-infra
+psql -c "ALTER ROLE \"odd;name\" BYPASSRLS"
+# ruleid: qbank-no-rls-bypass-infra
 psql -c "SET row_security = off"
 # ok: qbank-no-rls-bypass-infra
 psql -c "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS;"
