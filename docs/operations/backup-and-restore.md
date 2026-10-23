@@ -70,7 +70,7 @@ PGHOST=localhost PGUSER="$POSTGRES_USER" PGPASSWORD="$POSTGRES_PASSWORD" PG_DOCK
 ```
 
 The script checks the file against its checksum first and stops if it does not match. The new database gets the old one's
-encoding and locale, its `ALTER DATABASE ... SET` settings and its connect permissions, which the backup carries, and not
+encoding and locale, its `ALTER DATABASE ... SET` settings (also those set for one role in it) and its connect permissions, which the backup carries, and not
 this server's defaults. (The database comment is not restored.) It stops at the first error and leaves a half-restored
 database in place so you can look at it.
 

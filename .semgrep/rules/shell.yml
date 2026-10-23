@@ -3,7 +3,8 @@
 # a statement is read to the next semicolon, however long, whatever its line breaks or indentation,
 # and a semicolon inside a quoted value ('a;b' or "a;b"), a $$dollar-quoted$$ string or a -- / /* */
 # comment does not end it (the plain scan to the first semicolon is kept too, so a stray quote can only widen
-# what is caught). Comments may also sit between the words CREATE/ALTER and ROLE/USER. Not handled: backslash escapes
+# what is caught). Comments may also sit between the words CREATE/ALTER and ROLE/USER. Not handled (a regex cannot count nesting or
+# know the string syntax in use): nested /* /* */ */ comments that contain a semicolon, and backslash escapes
 # inside E'...' strings. This rule is the third layer: the
 # tenant-isolation tests run as the restricted role and would fail if it could bypass row-level security,
 # and ensure-app-role.sh creates the runtime roles with NOBYPASSRLS. The price is a false alarm when a statement has no closing semicolon and the word

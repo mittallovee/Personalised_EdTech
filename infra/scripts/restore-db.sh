@@ -38,6 +38,9 @@ roles="$({
   # whose future objects get privileges: ALTER DEFAULT PRIVILEGES FOR ROLE role ...
   printf '%s\n' "$header" | sed -n -E \
     's/^ALTER DEFAULT PRIVILEGES FOR ROLE ("[^"]+"|[A-Za-z0-9_$]+) .*/\1/p'
+  # whose settings are kept for this database: ALTER ROLE role IN DATABASE name SET ...
+  printf '%s\n' "$header" | sed -n -E \
+    's/^ALTER ROLE ("[^"]+"|[A-Za-z0-9_$]+) IN DATABASE .*/\1/p'
 } | tr -d '"' | sort -u | grep -vx 'PUBLIC' || true)"
 if [ -n "$roles" ]; then
   missing="$(printf '%s\n' "$roles" \
@@ -70,7 +73,8 @@ if [ -n "$exists" ]; then
 fi
 
 # The new database gets the old one's encoding and locale (a server with other defaults would behave
-# differently: sorting, case rules), and afterwards its per-database settings and connect permissions.
+# differently: sorting, case rules), and afterwards its per-database settings (also those set for one role
+# in this database) and connect permissions.
 # The backup names the old database in these statements; the new name replaces it.
 new_name="$(echo "SELECT quote_ident(:'target')" | pg_tool psql -X -At -v "target=$target")"
 create_line="$(printf '%s\n' "$header" | grep -m1 -E '^CREATE DATABASE ' || true)"
@@ -81,7 +85,7 @@ if [ -n "$create_options" ]; then
   create_sql="CREATE DATABASE $new_name $create_options"
   while IFS= read -r line; do
     properties+="${line/" DATABASE $old_name "/" DATABASE $new_name "}"$'\n'
-  done < <(printf '%s\n' "$header" | grep -E "^(ALTER DATABASE|GRANT .* ON DATABASE|REVOKE .* ON DATABASE) " || true)
+  done < <(printf '%s\n' "$header" | grep -E "^(ALTER DATABASE|ALTER ROLE .* IN DATABASE|GRANT .* ON DATABASE|REVOKE .* ON DATABASE) " || true)
 else
   # Not seen with pg_restore 16 or later, which always names one; kept for any other client.
   echo "Warning: this backup has no database properties (made without --create); using this server's defaults." >&2

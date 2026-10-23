@@ -338,8 +338,8 @@ def test_restore_stops_when_the_worker_role_is_not_a_member_of_the_app_role(
 def test_restore_gives_the_new_database_the_properties_of_the_old_one(
     tmp_path: Path, restored_name: str
 ) -> None:
-    """Encoding and locale, per-database settings and who may connect come from the backup, not
-    from the server it is restored onto (whose defaults can differ)."""
+    """Encoding and locale, per-database settings (also those for one role) and who may connect
+    come from the backup, not from the server it is restored onto (whose defaults can differ)."""
     source = f"qbank_props_{secrets.token_hex(6)}"
     role = f"qbank_props_{secrets.token_hex(4)}"
     server = make_url(ADMIN_URL).set(drivername="postgresql").render_as_string(hide_password=False)
@@ -349,7 +349,10 @@ def test_restore_gives_the_new_database_the_properties_of_the_old_one(
         query = """
             SELECT pg_encoding_to_char(encoding), datcollate, datctype, datacl::text,
                    (SELECT setconfig FROM pg_db_role_setting
-                    WHERE setdatabase = d.oid AND setrole = 0)
+                    WHERE setdatabase = d.oid AND setrole = 0),
+                   (SELECT array_agg(r.rolname || ' ' || s.setconfig::text ORDER BY r.rolname)
+                    FROM pg_db_role_setting s JOIN pg_roles r ON r.oid = s.setrole
+                    WHERE s.setdatabase = d.oid)
             FROM pg_database d WHERE datname = %s"""
         with psycopg.connect(server) as conn:
             row = conn.execute(query, (database,)).fetchone()
@@ -382,6 +385,11 @@ def test_restore_gives_the_new_database_the_properties_of_the_old_one(
                     sql.Identifier(source), sql.Identifier(role)
                 )
             )
+            conn.execute(
+                sql.SQL("ALTER ROLE {} IN DATABASE {} SET work_mem = '8MB'").format(
+                    sql.Identifier(role), sql.Identifier(source)
+                )
+            )
         result = _run("backup-db.sh", dump, env=_connection_env(source))
         assert result.returncode == 0, result.stderr
         result = _run("restore-db.sh", dump, restored_name, env=_connection_env("postgres"))
@@ -390,6 +398,9 @@ def test_restore_gives_the_new_database_the_properties_of_the_old_one(
         original, restored = properties(source), properties(restored_name)
         assert original[1] == original[2] == locale != default[0]  # the test is not vacuous
         assert original[4] == ["statement_timeout=45s"] and role in str(original[3])
+        assert original[5] == [
+            f"{role} {{work_mem=8MB}}"
+        ]  # a setting for one role in this database
         # Same encoding, locale, setting and permissions. The access list names the database's
         # owner, which is the role that ran the restore: the same one here.
         assert restored == original
