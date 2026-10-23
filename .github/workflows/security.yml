@@ -2,8 +2,9 @@ name: Security
 
 # Known-vulnerability checks on the libraries we ship (standards §7). Runs on every PR, on main,
 # and weekly, because a new advisory can appear for code that has not changed.
-# Code scanning of our own Python is ruff's `S` (bandit) rules in the Backend job; the secret
-# scan is in ci.yml. GitHub CodeQL needs a paid plan for private repositories, so it is not used.
+# Code scanning of our own code: Semgrep below (our rules in .semgrep/ plus public community
+# rule packs) and ruff's `S` (bandit) rules in the Backend job; the secret scan is in ci.yml.
+# GitHub CodeQL needs a paid plan for private repositories, so it is not used.
 on:
   pull_request:
   push:
@@ -48,3 +49,31 @@ jobs:
       # Libraries that end up in the running app (pnpm-lock.yaml); moderate severity or worse fails.
       # Developer-only tools (linters, test runners) are left out: they never reach users.
       - run: pnpm audit --prod --audit-level moderate
+
+  code-scan:
+    name: Code scanning (Semgrep)
+    runs-on: ubuntu-latest
+    env:
+      # Pinned: a new Semgrep release can change what is found. Dependabot does not manage this
+      # line, so move it by hand when you want newer rules and engine.
+      SEMGREP: semgrep==1.182.1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+      # Our own rules (.semgrep/rules) must still catch what their test files say they catch.
+      - name: Our rules pass their own tests
+        run: uvx --from "$SEMGREP" semgrep --test --config .semgrep/rules .semgrep/tests
+      # Our rules apply to the whole repository (each limits itself to its own folders).
+      - name: Scan with our rules (AGENTS.md "Never" list)
+        run: >-
+          uvx --from "$SEMGREP" semgrep scan --metrics=off --disable-version-check --error
+          --config .semgrep/rules
+      # Public community packs for common vulnerability patterns. Tests, end-to-end tests and
+      # generated code are left out: they build inputs on purpose or are not ours to change.
+      - name: Scan with community rule packs
+        run: >-
+          uvx --from "$SEMGREP" semgrep scan --metrics=off --disable-version-check --error
+          --config p/python --config p/typescript --config p/react --config p/owasp-top-ten
+          --exclude tests --exclude apps/e2e --exclude .semgrep --exclude packages/api-client/src

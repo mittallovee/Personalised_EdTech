@@ -175,12 +175,22 @@ backend:  ruff check · ruff format --check · mypy · import-linter
 web:      pnpm lint · typecheck · vitest · build · api-client regenerated == committed
 e2e:      docker compose up --build → Playwright (Chromium) browser tests; report kept on failure
 security: secret scan (gitleaks) · ruff S rules (in backend) · dependency audit (pip-audit on uv.lock,
-          pnpm audit --prod), also weekly. CodeQL needs a paid plan for private repos: not used.
+          pnpm audit --prod), also weekly · Semgrep code scan: our rules in .semgrep/ (tests included)
+          plus community packs. CodeQL needs a paid plan for private repos: not used.
 updates:  Dependabot opens one pull request a week per ecosystem (Python, web, GitHub Actions, Docker
           images) in .github/dependabot.yml; patch and minor updates are grouped, a major update stands
           alone. Such a PR is reviewed and merged like any other: CI must be green, and a major update
           needs the owner's decision.
 ```
+
+### Semgrep findings
+
+A finding fails the build. Fix the code. If it is a false alarm, silence that one line with a comment
+that names the rule and gives the reason, for example
+`# nosemgrep: qbank-no-float-column -- mirrors a vendor field we only read`; the reason is reviewed like
+code. Never switch a rule off to get green. New project rules go in `.semgrep/rules/` with a test case
+for both a line that must be flagged and one that must not (`.semgrep/tests/`); run
+`uvx --from semgrep semgrep --test --config .semgrep/rules .semgrep/tests`.
 
 ## 11. Definition of Done (per story / PR)
 
