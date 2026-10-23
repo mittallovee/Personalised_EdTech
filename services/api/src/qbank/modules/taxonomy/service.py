@@ -17,6 +17,7 @@ from qbank.core.errors import Conflict, MalformedRequest, NotFound, ValidationFa
 from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
+from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
@@ -200,6 +201,7 @@ def create_node(
 ) -> TaxonomyNode:
     """Add an item. A retry with the ``idempotency_key`` of an earlier, identical request returns
     that item instead of failing with ``DUPLICATE_NAME`` because the first attempt worked."""
+    require(principal, Action.MANAGE_CATALOGUES)
     organization_id = _organization_id(principal)
     node_id = new_id()
     if idempotency_key is not None:
@@ -313,6 +315,7 @@ def update_node(
     request_id: str | None,
 ) -> TaxonomyNode:
     """Rename, reorder or change the other-language names, refusing stale changes (If-Match)."""
+    require(principal, Action.MANAGE_CATALOGUES)
     node = _locked_node(session, node_id)
     require_if_match(if_match, node.revision)
     labels = _current_labels(session, node.id)
@@ -362,6 +365,7 @@ def set_state(
     Retiring never touches the item's children or the questions that use it. Restoring is refused
     while its parent is retired, so an active item never hangs under a retired one by restoring.
     """
+    require(principal, Action.MANAGE_CATALOGUES)
     node = _locked_node(session, node_id)
     require_if_match(if_match, node.revision)
     if node.state == state:
