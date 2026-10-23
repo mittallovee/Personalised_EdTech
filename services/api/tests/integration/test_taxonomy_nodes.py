@@ -1,5 +1,6 @@
 """M3 PR 2a: the syllabus tree (C-01, C-04, C-10; tests T24, T26 and T30 for syllabus items)."""
 
+import base64
 import threading
 from collections.abc import Iterator
 from typing import Any
@@ -19,6 +20,7 @@ from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.taxonomy import service
+from qbank.modules.taxonomy.cursors import MAX_CURSOR_LENGTH
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import CreateNode, UpdateNode
 from tests.integration.conftest import (
@@ -787,9 +789,41 @@ def test_every_cursor_the_api_hands_out_is_accepted_even_after_long_non_latin_na
         cursor = page.json()["page"]["next_cursor"]
         if cursor is None:
             break
-        assert len(cursor) < 100  # a cursor never carries the name
+        assert len(cursor) <= MAX_CURSOR_LENGTH  # every cursor fits the limit the API sets
 
     assert seen == names
+
+
+def test_renaming_or_reordering_the_last_item_of_a_page_does_not_make_the_next_page_skip_items(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    items = {name: add(client, admin_headers, "CLASS", name) for name in ("A", "B", "C", "D", "E")}
+    first = client.get(NODES, params={"limit": 3}).json()  # A, B, C
+    third = items["C"]
+
+    client.patch(
+        f"{NODES}/{third['id']}",
+        json={"name": "Z", "sort_order": 50},  # moves to the end, by name and by order
+        headers={**admin_headers, **if_match(third)},
+    )
+    second = client.get(NODES, params={"cursor": first["page"]["next_cursor"]}).json()
+
+    assert [node["name"] for node in second["data"]] == ["D", "E", "Z"]
+
+
+def test_a_damaged_or_forged_cursor_is_a_400_for_the_syllabus_too(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    add(client, admin_headers, "CLASS", "Class 11")
+    too_long = base64.urlsafe_b64encode(bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    too_short = base64.urlsafe_b64encode(b"short").decode().rstrip("=")
+
+    codes = [
+        client.get(NODES, params={"cursor": cursor}).status_code
+        for cursor in ("not-a-cursor", too_short, too_long)
+    ]
+
+    assert codes == [400, 400, 400]
 
 
 def test_every_change_is_in_the_audit_log_with_before_and_after(

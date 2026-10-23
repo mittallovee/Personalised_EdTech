@@ -23,6 +23,7 @@ from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.taxonomy import catalogue_service as service
+from qbank.modules.taxonomy.cursors import MAX_CURSOR_LENGTH
 from qbank.modules.taxonomy.models import Exam, Source
 from tests.integration.conftest import (
     Member,
@@ -190,25 +191,48 @@ def test_every_cursor_the_api_hands_out_is_accepted_even_after_long_non_latin_na
         cursor = page.json()["page"]["next_cursor"]
         if cursor is None:
             break
-        assert len(cursor) < 100  # a cursor never carries the name
+        assert len(cursor) <= MAX_CURSOR_LENGTH  # every cursor fits the limit the API sets
 
     assert seen == names
 
 
 @BOTH
-def test_a_cursor_for_an_item_that_is_not_there_is_a_400(
-    client: TestClient, owner_db: Database, admin_headers: dict[str, str], kind: Kind
+def test_renaming_the_last_item_of_a_page_does_not_make_the_next_page_skip_items(
+    client: TestClient, admin_headers: dict[str, str], kind: Kind
+) -> None:
+    items = {name: add(client, admin_headers, kind, name) for name in ("Alpha", "Bravo", "Charlie")}
+    add(client, admin_headers, kind, "Delta")
+    add(client, admin_headers, kind, "Echo")
+    first = client.get(kind.path, params={"limit": 3}).json()  # Alpha, Bravo, Charlie
+    charlie = items["Charlie"]
+
+    client.patch(
+        f"{kind.path}/{charlie['id']}",
+        json={"name": "Zulu"},  # the item the cursor points at moves to the end of the list
+        headers={**admin_headers, **if_match(charlie)},
+    )
+    second = client.get(kind.path, params={"cursor": first["page"]["next_cursor"]}).json()
+
+    assert [entry["name"] for entry in second["data"]] == ["Delta", "Echo", "Zulu"]
+
+
+@BOTH
+def test_a_damaged_or_forged_cursor_is_a_400(
+    client: TestClient, admin_headers: dict[str, str], kind: Kind
 ) -> None:
     add(client, admin_headers, kind, FIRST)
-    other = TestClient(client.app)
-    other_headers = sign_in(other, make_member(owner_db, "ADMIN").email)
-    foreign = add(other, other_headers, kind, FIRST)
-    # Another coaching's item id, as the cursor of a list this coaching reads.
-    cursor = base64.urlsafe_b64encode(foreign["id"].encode()).decode().rstrip("=")
+    good = client.get(kind.path, params={"limit": 1}).json()  # no next page: build one by hand
+    assert good["page"]["next_cursor"] is None
+    too_long = base64.urlsafe_b64encode(bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    too_short = base64.urlsafe_b64encode(b"short").decode().rstrip("=")
+    not_text = base64.urlsafe_b64encode(bytes(16) + bytes(4) + b"\xff\xfe").decode().rstrip("=")
 
-    response = client.get(kind.path, params={"cursor": cursor})
+    codes = [
+        client.get(kind.path, params={"cursor": cursor}).status_code
+        for cursor in ("not-a-cursor", too_short, too_long, not_text)
+    ]
 
-    assert (response.status_code, response.json()["error"]["code"]) == (400, "MALFORMED_REQUEST")
+    assert codes == [400, 400, 400, 400]
 
 
 # --- Names are unique -----------------------------------------------------------------------------

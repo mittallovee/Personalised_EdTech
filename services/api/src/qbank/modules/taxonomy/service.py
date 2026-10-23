@@ -10,14 +10,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
-from qbank.core.errors import Conflict, MalformedRequest, NotFound, ValidationFailed
+from qbank.core.errors import Conflict, NotFound, ValidationFailed
 from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
-from qbank.modules.taxonomy.cursors import INVALID_CURSOR, encode_cursor
+from qbank.modules.taxonomy.cursors import encode_cursor
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import CreateNode, NodeOut, UpdateNode
 
@@ -48,7 +48,10 @@ def _organization_id(principal: Principal) -> UUID:
 
 
 def next_cursor(nodes: Sequence[TaxonomyNode], has_more: bool) -> str | None:
-    return encode_cursor(nodes[-1].id) if has_more and nodes else None
+    if not (has_more and nodes):
+        return None
+    last = nodes[-1]
+    return encode_cursor(last.sort_order, last.name_key, last.id)
 
 
 def list_nodes(
@@ -58,9 +61,9 @@ def list_nodes(
     parent_id: UUID | None,
     state: str | None,
     limit: int,
-    after: UUID | None,
+    after: tuple[int, str, UUID] | None,
 ) -> tuple[list[TaxonomyNode], bool]:
-    """In the admin's order (sort order, then name), after the item ``after`` (a cursor).
+    """In the admin's order (sort order, then name), after the position ``after`` (a cursor).
 
     Returns the page and whether more follow.
     """
@@ -74,19 +77,14 @@ def list_nodes(
     if state is not None:
         query = query.where(TaxonomyNode.state == state)
     if after is not None:
-        last = session.get(TaxonomyNode, after)  # none if it is another coaching's, or not there
-        if last is None:
-            raise MalformedRequest(INVALID_CURSOR)
+        sort_order, key, node_id = after
         query = query.where(
-            (TaxonomyNode.sort_order > last.sort_order)
+            (TaxonomyNode.sort_order > sort_order)
+            | ((TaxonomyNode.sort_order == sort_order) & (TaxonomyNode.name_key > key))
             | (
-                (TaxonomyNode.sort_order == last.sort_order)
-                & (TaxonomyNode.name_key > last.name_key)
-            )
-            | (
-                (TaxonomyNode.sort_order == last.sort_order)
-                & (TaxonomyNode.name_key == last.name_key)
-                & (TaxonomyNode.id > last.id)
+                (TaxonomyNode.sort_order == sort_order)
+                & (TaxonomyNode.name_key == key)
+                & (TaxonomyNode.id > node_id)
             )
         )
     rows = list(session.scalars(query.limit(limit + 1)))

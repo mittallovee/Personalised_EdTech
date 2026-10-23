@@ -14,14 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
-from qbank.core.errors import Conflict, MalformedRequest, NotFound
+from qbank.core.errors import Conflict, NotFound
 from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
-from qbank.modules.taxonomy.cursors import INVALID_CURSOR, encode_cursor
+from qbank.modules.taxonomy.cursors import encode_cursor
 from qbank.modules.taxonomy.models import Exam, Source
 
 
@@ -68,7 +68,9 @@ def _organization_id(principal: Principal) -> UUID:
 
 
 def next_cursor(items: list[Any], has_more: bool) -> str | None:
-    return encode_cursor(items[-1].id) if has_more and items else None
+    if not (has_more and items):
+        return None
+    return encode_cursor(0, items[-1].name_key, items[-1].id)  # these lists have no sort order
 
 
 def list_items(
@@ -77,10 +79,10 @@ def list_items(
     *,
     state: str | None,
     limit: int,
-    after: UUID | None,
+    after: tuple[int, str, UUID] | None,
     where: tuple[ColumnElement[bool], ...] = (),
 ) -> tuple[list[Any], bool]:
-    """In name order, after the item ``after`` (a cursor). Returns the page and if more follow."""
+    """In name order, after ``after`` (a cursor). Returns the page and whether more follow."""
     model = catalogue.model
     query = select(model).order_by(model.name_key, model.id)
     for condition in where:
@@ -88,12 +90,9 @@ def list_items(
     if state is not None:
         query = query.where(model.state == state)
     if after is not None:
-        last = session.get(model, after)  # none if it is another coaching's, or not there
-        if last is None:
-            raise MalformedRequest(INVALID_CURSOR)
+        _, key, item_id = after
         query = query.where(
-            (model.name_key > last.name_key)
-            | ((model.name_key == last.name_key) & (model.id > last.id))
+            (model.name_key > key) | ((model.name_key == key) & (model.id > item_id))
         )
     rows = list(session.scalars(query.limit(limit + 1)))
     return rows[:limit], len(rows) > limit
