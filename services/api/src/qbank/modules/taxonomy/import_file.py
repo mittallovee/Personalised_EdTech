@@ -5,19 +5,26 @@ ZIP archive, a CSV is UTF-8 text, anything else is refused. Limits keep one uplo
 server up: the file size, the number of rows, and (against a "decompression bomb", a tiny archive
 that expands to gigabytes) the total size the archive claims to expand to.
 
+A spreadsheet is read by the small streaming reader below, not by a spreadsheet library: the
+sheet is walked once, element by element, in constant memory, with every limit checked as it goes.
+(A library builds the whole sheet in memory and reads parts the file points to, which a crafted
+file can use to exhaust the server.)
+
 Formulas are never evaluated. A spreadsheet that contains any is refused with a plain message,
 because what the admin sees in the cell and what the import would read could differ.
 """
 
 import csv
 import io
+import posixpath
 import unicodedata
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import IO, Any
+from typing import IO
+from xml.etree.ElementTree import Element
 
 from defusedxml.ElementTree import iterparse
-from openpyxl import load_workbook
 
 from qbank.core.errors import ValidationFailed
 
@@ -25,8 +32,7 @@ MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 20_000
 MAX_COLUMNS = 40
 MAX_CELL_CHARS = 2_000
-# What the archive may expand to in total. A syllabus of 20,000 rows is a few MB unpacked. The
-# spreadsheet reader holds a multiple of this in memory while it works, so it is kept modest.
+# What the archive may expand to in total. A syllabus of 20,000 rows is a few MB unpacked.
 MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 200
 MAX_CELLS_PER_ROW = 16_384  # the columns of a sheet (A to XFD); a row cannot hold more
@@ -111,36 +117,17 @@ def _check_archive(data: bytes) -> None:
         raise ImportFileInvalid("This file is too large once unpacked.")
 
 
-def _spreadsheet_lines(data: bytes) -> list[list[str]]:
-    _check_archive(data)
-    try:
-        _check_sheets(data)
-    except ImportFileInvalid:
-        raise
-    except Exception:
-        # A sheet that is not well-formed XML, or a damaged archive.
-        raise ImportFileInvalid("This is not a valid .xlsx file.") from None
-    try:
-        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=False)
-    except Exception:
-        # Whatever the library raises, the upload is simply unreadable.
-        raise ImportFileInvalid("This is not a valid .xlsx file.") from None
-    try:
-        sheet = workbook.worksheets[0] if workbook.worksheets else None
-        if sheet is None:
-            raise ImportFileInvalid("The workbook has no sheet.")
-        return _sheet_lines(sheet)
-    except ImportFileInvalid:
-        raise
-    except Exception:
-        # The sheet is parsed lazily, so damage in it shows up only here.
-        raise ImportFileInvalid("This is not a valid .xlsx file.") from None
-    finally:
-        workbook.close()
+def _local(tag: str) -> str:
+    """An XML tag without its namespace."""
+    return tag.rsplit("}", 1)[-1]
+
+
+def _number(text: str | None) -> int:
+    return int(text) if text is not None and text.isdigit() else 0
 
 
 def _column_number(reference: str) -> int:
-    """The column of a cell reference such as "XFD12" (A is 1)."""
+    """The column of a cell reference such as "XFD12" (A is 1); 0 if it has none."""
     number = 0
     for char in reference:
         if not char.isalpha():
@@ -151,77 +138,147 @@ def _column_number(reference: str) -> int:
     return number
 
 
-def _check_sheets(data: bytes) -> None:
-    """Look through the XML of every sheet before the spreadsheet library is given the file.
-
-    The library reads a sheet's whole XML just to learn its size and keeps what it reads, so a
-    sheet of millions of empty rows or cells would cost it minutes and hundreds of megabytes. Here
-    the sheet is read as a stream, in constant memory, and refused as soon as a limit is passed.
-    """
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        for name in archive.namelist():
-            if name.startswith("xl/worksheets/") and name.endswith(".xml"):
-                with archive.open(name) as source:
-                    _scan_sheet(source)
-
-
-def _scan_sheet(source: IO[bytes]) -> None:
-    """Refuse too many rows, too many cells in a row, formulas, and a populated cell past the
-    column limit, which the reader below (it stops at the limit) would otherwise never see. Empty
-    styled cells at the far right of every row are not walked (16,384 per row would keep the
-    server busy for minutes): the cells are looked at one by one, as stored in the file."""
-    sheet_data = row = None
-    rows = cells_in_row = 0
+def _stream(source: IO[bytes], keep_inside: str = "") -> Iterator[Element]:
+    """Each element of an XML part, as it ends. After the caller has seen it, it is released, so a
+    part with millions of elements is read in constant memory. Elements inside a ``keep_inside``
+    element stay until that one ends, because its end is where they are read."""
+    stack: list[Element] = []
     for event, element in iterparse(source, events=("start", "end")):
-        tag = element.tag.rsplit("}", 1)[-1]
         if event == "start":
-            if tag == "sheetData":
-                sheet_data = element
-            elif tag == "row":
-                row, cells_in_row = element, 0
-                rows += 1
-                # Counted as they come: millions of empty rows are small once compressed.
-                # (The header is a row too, hence the plus one.)
-                if rows > MAX_ROWS + 1 or _number(element.get("r")) > MAX_ROWS + 1:
-                    raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
-        elif tag == "c":
+            stack.append(element)
+            continue
+        stack.pop()
+        yield element
+        if not any(_local(parent.tag) == keep_inside for parent in stack):
+            element.clear()
+            if stack:
+                stack[-1].remove(element)
+
+
+def _rich_text(item: Element) -> str:
+    """The text of a shared or inline string: plain and formatted runs, not phonetic hints."""
+    parts: list[str] = []
+    for child in item:
+        if _local(child.tag) == "t":
+            parts.append(child.text or "")
+        elif _local(child.tag) == "r":
+            parts.extend((run.text or "") for run in child if _local(run.tag) == "t")
+    return "".join(parts)
+
+
+def _first_sheet_part(archive: zipfile.ZipFile) -> str:
+    """Where the first sheet of the workbook is stored, found through the workbook's relationships
+    (the sheet can be stored under any name)."""
+    relationship_id = None
+    with archive.open("xl/workbook.xml") as source:
+        for element in _stream(source):
+            if _local(element.tag) == "sheet":
+                relationship_id = next(
+                    (v for k, v in element.attrib.items() if k.endswith("}id")), None
+                )
+                break
+    if relationship_id is None:
+        raise ImportFileInvalid("The workbook has no sheet.")
+    target = kind = None
+    with archive.open("xl/_rels/workbook.xml.rels") as source:
+        for element in _stream(source):
+            if _local(element.tag) == "Relationship" and element.get("Id") == relationship_id:
+                target, kind = element.get("Target"), element.get("Type", "")
+                break
+    if target is None or not (kind or "").endswith("/worksheet"):
+        raise ImportFileInvalid("The first sheet of the workbook is not a worksheet.")
+    part = posixpath.normpath(target.lstrip("/") if target.startswith("/") else f"xl/{target}")
+    archive.getinfo(part)  # raises KeyError if the archive does not hold it
+    return part
+
+
+def _shared_strings(archive: zipfile.ZipFile) -> list[str]:
+    try:
+        archive.getinfo("xl/sharedStrings.xml")
+    except KeyError:
+        return []
+    strings: list[str] = []
+    with archive.open("xl/sharedStrings.xml") as source:
+        for element in _stream(source, keep_inside="si"):
+            if _local(element.tag) == "si":
+                if len(strings) >= MAX_ROWS * MAX_COLUMNS:
+                    raise ImportFileInvalid("The file has too many different texts.")
+                strings.append(_text(_rich_text(element)))
+    return strings
+
+
+def _cell_text(cell: Element, strings: list[str]) -> str:
+    parts = {_local(child.tag): child for child in cell}
+    if "f" in parts:
+        raise ImportFileInvalid(_FORMULAS)
+    kind = cell.get("t", "n")
+    if kind == "inlineStr":
+        inline = parts.get("is")
+        return _text(_rich_text(inline)) if inline is not None else ""
+    value = parts.get("v")
+    raw = value.text if value is not None and value.text else ""
+    if not raw:
+        return ""
+    if kind == "s":
+        return strings[int(raw)]
+    if kind == "b":
+        return "TRUE" if raw == "1" else "FALSE"
+    if kind == "n":
+        try:
+            number = float(raw)
+        except ValueError:
+            return _text(raw)
+        return str(int(number)) if number.is_integer() and abs(number) < 1e15 else _text(raw)
+    return _text(raw)
+
+
+def _sheet_lines(source: IO[bytes], strings: list[str]) -> list[list[str]]:
+    """The rows of a sheet as lists of text, read as a stream with every limit enforced as it goes.
+
+    The size the sheet declares for itself is not used (it can lie), and the cells of a row are
+    taken as they are stored, so empty styled cells at the far right of every row cost nothing.
+    """
+    lines: list[list[str]] = []
+    last_row = cells_in_row = 0
+    cells: dict[int, str] = {}
+    for element in _stream(source, keep_inside="c"):
+        tag = _local(element.tag)
+        if tag == "c":
             cells_in_row += 1
             if cells_in_row > MAX_CELLS_PER_ROW:
                 raise ImportFileInvalid("A row of the file has more cells than a sheet can hold.")
-            parts = {child.tag.rsplit("}", 1)[-1]: child for child in element}
-            if "f" in parts:
-                raise ImportFileInvalid(_FORMULAS)
-            value, inline = parts.get("v"), parts.get("is")
-            filled = inline is not None or (value is not None and bool(value.text))
-            if filled and _column_number(element.get("r", "")) > MAX_COLUMNS:
-                raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
-            # Drop the cell at once: a row can hold hundreds of thousands of them, and
-            # keeping them until the row ends would use memory in proportion.
-            element.clear()
-            if row is not None:
-                row.remove(element)
-        elif tag == "row" and sheet_data is not None:
-            element.clear()
-            sheet_data.remove(element)
-
-
-def _number(text: str | None) -> int:
-    return int(text) if text is not None and text.isdigit() else 0
-
-
-def _sheet_lines(sheet: Any) -> list[list[str]]:
-    # The sheet's declared size is ignored: a file can declare it too small and hide rows or cells.
-    sheet.reset_dimensions()
-    lines: list[list[str]] = []
-    # Blank rows count too: a file that declares a million empty rows is refused, not walked.
-    for row in sheet.iter_rows(max_col=MAX_COLUMNS):
-        if len(lines) > MAX_ROWS + 1:
-            raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
-        for cell in row:
-            if cell.data_type == "f":
-                raise ImportFileInvalid(_FORMULAS)
-        lines.append([_text(cell.value) for cell in row])
+            text = _cell_text(element, strings)
+            if text:
+                column = _column_number(element.get("r", ""))
+                if column < 1:
+                    raise ImportFileInvalid("This is not a valid .xlsx file.")
+                if column > MAX_COLUMNS:
+                    raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
+                cells[column] = text
+        elif tag == "row":
+            number = _number(element.get("r")) or last_row + 1
+            if number > MAX_ROWS + 1:  # the header is a row too
+                raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
+            if number <= last_row:
+                raise ImportFileInvalid("The rows of the file are not in order.")
+            lines.extend([] for _ in range(number - last_row - 1))  # blank rows in between
+            lines.append([cells.get(column, "") for column in range(1, max(cells, default=0) + 1)])
+            last_row, cells_in_row, cells = number, 0, {}
     return lines
+
+
+def _spreadsheet_lines(data: bytes) -> list[list[str]]:
+    _check_archive(data)
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            strings = _shared_strings(archive)
+            with archive.open(_first_sheet_part(archive)) as source:
+                return _sheet_lines(source, strings)
+    except ImportFileInvalid:
+        raise
+    except Exception:
+        # A damaged archive, XML that is not well formed, a missing part, a bad reference.
+        raise ImportFileInvalid("This is not a valid .xlsx file.") from None
 
 
 def _from_lines(lines: list[list[str]]) -> Table:

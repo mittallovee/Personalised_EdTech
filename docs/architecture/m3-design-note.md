@@ -92,9 +92,12 @@ content as raw HTML").
 ### 4.4 Excel / CSV import (C-03)
 Importing is a **preview, then apply** flow, so nothing changes until the admin has seen the result.
 - **Upload** an `.xlsx` or `.csv` file. The server checks the content, not the file name (a real
-  spreadsheet or plain text), a size cap (5 MB), a row cap (20,000), and never evaluates formulas. The
-  reader opens the file in read-only mode and refuses an archive that expands beyond a fixed limit
-  (decompression-bomb guard).
+  spreadsheet or plain text), a size cap (5 MB), a row cap (20,000), and never evaluates formulas. A
+  spreadsheet is read by a small **streaming reader of our own** (no spreadsheet library): one pass over
+  the sheet's XML in constant memory, with the limits on rows, cells per row and columns checked as it
+  goes, and an archive that would unpack beyond 20 MB refused first (decompression-bomb guard). A
+  library was tried first and replaced: it builds the whole sheet in memory and follows parts the file
+  points to, which review showed a crafted file can use to exhaust the server.
 - The app offers a **template** to download. It is **one sheet** (a CSV file is the same table): one row
   per item with the columns `kind` (CLASS, SUBJECT, CHAPTER, TOPIC, SUBTOPIC or CONCEPT), `path`
   (`Class 11 > Physics > Kinematics`; for a concept the subject's path and then the concept's name),
@@ -332,7 +335,7 @@ The browser holds no rules: the findings, limits and permissions come from the A
 | Spreadsheet/CSV formula injection when exporting later | Nothing is exported in M3 |
 
 New dependencies, each reviewed for licence and known vulnerabilities and pinned: backend **Pillow**
-(images), **openpyxl** (Excel, read-only), **python-multipart** (uploads); web **katex** and **mathlive**.
+(images), **defusedxml** (safe XML reading for the Excel import), **python-multipart** (uploads); web **katex** and **mathlive**.
 
 ## 11. Tests that prove M3
 

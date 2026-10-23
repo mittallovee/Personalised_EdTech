@@ -324,3 +324,84 @@ def test_millions_of_empty_rows_are_refused_early_without_using_much_memory() ->
 
 def test_a_row_far_down_the_sheet_is_refused_without_walking_the_gap() -> None:
     assert "more than 20,000 rows" in refused(sheet_with_rows(b'<row r="999999"/>'))
+
+
+def moved_sheet(data: bytes, sheet_xml: bytes | None = None) -> bytes:
+    """The first sheet stored at xl/custom.xml, with the workbook's relationship pointing there."""
+    result = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(result, "w") as target:
+        for member in source.infolist():
+            content = source.read(member)
+            name = member.filename
+            if name == "xl/worksheets/sheet1.xml":
+                name, content = "xl/custom.xml", sheet_xml or content
+            elif name == "xl/_rels/workbook.xml.rels":
+                content = content.replace(b"worksheets/sheet1.xml", b"custom.xml")
+                content = content.replace(b"/xl/custom.xml", b"custom.xml")
+            target.writestr(name, content)
+    return result.getvalue()
+
+
+def test_the_sheet_is_found_through_the_workbook_relationships_wherever_it_is_stored() -> None:
+    good = xlsx(["kind", "path"], ["CLASS", "Class 11"])
+    assert [r.cells for r in read_table(moved_sheet(good)).rows] == [
+        {"kind": "CLASS", "path": "Class 11"}
+    ]
+    far_cell = xlsx(["kind"], ["CLASS", *[None] * 59, "hidden"])
+    assert "more than 40 columns" in refused(moved_sheet(far_cell))
+
+
+def test_a_sheet_with_hundreds_of_thousands_of_other_elements_does_not_pile_up_in_memory() -> None:
+    merges = b'<mergeCell ref="A1:B2"/>' * 400_000  # about 10 MB of XML, small once compressed
+    sheet = (
+        b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+        b'<row r="1"><c r="A1" t="inlineStr"><is><t>kind</t></is></c></row>'
+        b'<row r="2"><c r="A2" t="inlineStr"><is><t>CLASS</t></is></c></row></sheetData>'
+        b"<mergeCells>" + merges + b"</mergeCells></worksheet>"
+    )
+    data = with_sheet_xml(xlsx(["kind"], ["CLASS"]), sheet)
+    tracemalloc.start()
+    try:
+        table = read_table(data)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert [r.cells for r in table.rows] == [{"kind": "CLASS"}]
+    assert peak < 20 * 1024 * 1024
+
+
+def test_rows_out_of_order_or_repeated_are_refused() -> None:
+    row = b'<row r="%d"><c r="A%d" t="inlineStr"><is><t>x</t></is></c></row>'
+    assert "not in order" in refused(sheet_with_rows(row % (3, 3) + row % (2, 2)))
+    assert "not in order" in refused(sheet_with_rows(b'<row r="1"/>'))  # the header is row 1
+
+
+def test_values_of_every_kind_of_cell_are_read_as_text() -> None:
+    sheet = (
+        b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+        b'<row r="1"><c r="A1" t="inlineStr"><is><t>kind</t></is></c>'
+        b'<c r="B1" t="inlineStr"><is><t>n</t></is></c><c r="C1" t="inlineStr"><is><t>b</t></is>'
+        b'</c><c r="D1" t="inlineStr"><is><t>s</t></is></c></row>'
+        b'<row r="2"><c r="A2" t="inlineStr"><is><r><t>CL</t></r><r><t>ASS</t></r>'
+        b"<rPh><t>ignored</t></rPh></is></c>"
+        b'<c r="B2"><v>3.0</v></c><c r="C2" t="b"><v>1</v></c><c r="D2" t="s"><v>0</v></c></row>'
+        b"</sheetData></worksheet>"
+    )
+    strings = (
+        b'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        b"<si><t> shared </t></si></sst>"
+    )
+    result = io.BytesIO()
+    with (
+        zipfile.ZipFile(io.BytesIO(xlsx(["kind"], ["CLASS"]))) as source,
+        zipfile.ZipFile(result, "w") as target,
+    ):
+        for member in source.infolist():
+            content = source.read(member)
+            if member.filename == "xl/worksheets/sheet1.xml":
+                content = sheet
+            if member.filename != "xl/sharedStrings.xml":
+                target.writestr(member, content)
+        target.writestr("xl/sharedStrings.xml", strings)
+    table = read_table(result.getvalue())
+    assert table.rows[0].cells == {"kind": "CLASS", "n": "3", "b": "TRUE", "s": "shared"}

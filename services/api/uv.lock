@@ -883,7 +883,6 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx2" },
     { name = "joserfc" },
-    { name = "openpyxl" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -897,6 +896,7 @@ dependencies = [
 dev = [
     { name = "import-linter" },
     { name = "mypy" },
+    { name = "openpyxl" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "types-defusedxml" },
@@ -912,7 +912,6 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.144,<0.145" },
     { name = "httpx2", specifier = ">=2.13,<3" },
     { name = "joserfc", specifier = ">=1.7,<2" },
-    { name = "openpyxl", specifier = ">=3.1,<4" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3,<4" },
     { name = "pydantic", specifier = ">=2.14,<3" },
     { name = "pydantic-settings", specifier = ">=2.16,<3" },
@@ -926,6 +925,7 @@ requires-dist = [
 dev = [
     { name = "import-linter", specifier = ">=2.15,<3" },
     { name = "mypy", specifier = ">=2.4,<3" },
+    { name = "openpyxl", specifier = ">=3.1,<4" },
     { name = "pytest", specifier = ">=9.1,<10" },
     { name = "ruff", specifier = ">=0.17,<0.18" },
     { name = "types-defusedxml", specifier = ">=0.7.0.20260504" },
