@@ -782,7 +782,7 @@ export interface paths {
         };
         /**
          * A CSV file to start an import from
-         * @description One row per syllabus item or concept. Open it in Excel or any spreadsheet, fill it in, and upload it (as CSV or saved as .xlsx).
+         * @description One row per syllabus item or concept. Open it in Excel or any spreadsheet, fill it in, and upload it (as CSV or saved as .xlsx). Parts of a path are separated by `>`; a name that contains `>` is written with a backslash before it (`v \> u`).
          */
         get: operations["import_template_api_v1_taxonomy_import_template_get"];
         put?: never;

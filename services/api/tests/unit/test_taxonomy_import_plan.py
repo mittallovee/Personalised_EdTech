@@ -288,3 +288,36 @@ def test_new_aliases_cannot_take_an_existing_concept_past_ten() -> None:
     over = plan([head + "alias 3; one more,"], snapshot)
     assert statuses(over) == ["ERROR"]
     assert "more than 10 aliases" in (over.rows[0].message or "")
+
+
+def test_a_name_with_a_greater_than_sign_is_written_with_a_backslash() -> None:
+    cls = node("CLASS", "class 11")
+    physics = node("SUBJECT", "physics", cls)
+    odd = node("CHAPTER", "acceleration when v > u", physics)
+    snapshot = Snapshot(nodes=[cls, physics, odd], concepts=[])
+    result = plan(
+        [
+            r"CHAPTER,Class 11 > Physics > Acceleration when v \> u,,,",  # already there
+            r"TOPIC,Class 11 > Physics > Acceleration when v \> u > Cases for a \\ b,,,",
+            r"CONCEPT,Class 11 > Physics > Is v \> u,,,",
+            r"CONCEPT,Class 11 > Physics > C:\path\file,,,",  # a lone backslash is a backslash
+        ],
+        snapshot,
+    )
+    assert statuses(result) == ["UNCHANGED", "NEW", "NEW", "NEW"]
+    assert result.rows[1].names == [
+        "Class 11",
+        "Physics",
+        "Acceleration when v > u",
+        "Cases for a \\ b",
+    ]
+    assert (
+        result.rows[1].path == r"Class 11 > Physics > Acceleration when v \> u > Cases for a \\ b"
+    )
+    assert result.rows[3].names[2] == "C:\\path\\file"
+
+
+def test_an_unescaped_greater_than_sign_still_separates_parts() -> None:
+    result = plan(["CHAPTER,Class 11 > Physics > v > u,,,"])
+    assert statuses(result) == ["ERROR"]
+    assert "4 part(s)" in (result.rows[0].message or "")

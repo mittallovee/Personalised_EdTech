@@ -158,6 +158,33 @@ def _key(value: str) -> str:
         raise _RowError(str(error.message)) from None
 
 
+def _split_path(path: str) -> list[str]:
+    """The parts of a path, split at ">". A name that contains ">" (or "\\") is written with a
+    backslash before it: ``Acceleration when v \\> u``. Any other backslash is just a backslash."""
+    parts: list[str] = []
+    current: list[str] = []
+    index = 0
+    while index < len(path):
+        char = path[index]
+        if char == "\\" and path[index + 1 : index + 2] in (">", "\\"):
+            current.append(path[index + 1])
+            index += 2
+            continue
+        if char == ">":
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    parts.append("".join(current).strip())
+    return parts
+
+
+def _write_path(names: list[str]) -> str:
+    """A path as it is written in a file: the inverse of ``_split_path``."""
+    return " > ".join(name.replace("\\", "\\\\").replace(">", "\\>") for name in names)
+
+
 def _parse_row(number: int, cells: dict[str, str]) -> PlannedRow:
     """Check one row on its own (its path, kind, labels...). Raises ``_RowError``."""
     kind = cells.get("kind", "").upper()
@@ -167,7 +194,7 @@ def _parse_row(number: int, cells: dict[str, str]) -> PlannedRow:
         raise _RowError(
             f"The kind {shown!r} is not one of CLASS, SUBJECT, CHAPTER, TOPIC, SUBTOPIC, CONCEPT."
         )
-    parts = [part.strip() for part in path.split(">")]
+    parts = _split_path(path)
     if not path or "" in parts:
         raise _RowError("The path is empty or has an empty part. Write it as Class 11 > Physics.")
     depth = 3 if kind == CONCEPT else DEPTH[kind]
@@ -207,7 +234,7 @@ def _parse_row(number: int, cells: dict[str, str]) -> PlannedRow:
     return PlannedRow(
         number=number,
         kind=kind,
-        path=" > ".join(names),
+        path=_write_path(names),
         status="NEW",
         names=names,
         sort_order=sort_order,
