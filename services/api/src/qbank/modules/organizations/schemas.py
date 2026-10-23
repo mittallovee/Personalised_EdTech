@@ -15,8 +15,13 @@ from pydantic import (
 
 from qbank.core.pagination import PageInfo
 from qbank.core.permissions import Grant
+from qbank.core.text import no_control_characters
 
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+Name = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+    AfterValidator(no_control_characters),
+]
 
 
 def _known_timezone(name: str) -> str:
