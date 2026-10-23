@@ -142,6 +142,9 @@ def test_new_aliases_or_labels_of_an_existing_concept_are_a_change() -> None:
         ("CONCEPT,Class 11 > Physics,,,", "the class, the subject and the concept"),
         ("CLASS,Class 11,x,,", "whole number"),
         ("CLASS,Class 11,100001,,", "whole number"),
+        ("CLASS,Class 11,²,,", "whole number"),  # isdigit() is true for these, int() fails
+        ("CLASS,Class 11,①,,", "whole number"),
+        ("CLASS,Class 11,٣,,", "whole number"),
         ("CONCEPT,Class 11 > Physics > Work,5,,", "no sort order"),
         ("CLASS,Class 11,,Alias,", "Only a concept has aliases"),
         ("CLASS,Class\x07 11,,,", "not valid"),
@@ -271,3 +274,17 @@ def test_the_fingerprint_changes_when_the_syllabus_does() -> None:
         snapshot.fingerprint()
     )
     assert plan(["CLASS,Class 11,,,"], snapshot).base_fingerprint == snapshot.fingerprint()
+
+
+def test_new_aliases_cannot_take_an_existing_concept_past_ten() -> None:
+    snapshot, items = tree()
+    full = frozenset(f"alias {n}" for n in range(10))
+    work = concept(items["subject"], "work", full)
+    snapshot = Snapshot(nodes=snapshot.nodes, concepts=[work])
+    head = "CONCEPT,Class 11 > Physics > Work,,"
+    result = plan([head + "alias 3,", head.replace("Work", "Work") + "one more,"], snapshot)
+    # the first row repeats an alias it has (nothing new); the second is the same concept again
+    assert statuses(result) == ["UNCHANGED", "ERROR"]
+    over = plan([head + "alias 3; one more,"], snapshot)
+    assert statuses(over) == ["ERROR"]
+    assert "more than 10 aliases" in (over.rows[0].message or "")

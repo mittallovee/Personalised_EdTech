@@ -185,7 +185,7 @@ def _parse_row(number: int, cells: dict[str, str]) -> PlannedRow:
     if sort_text:
         if kind == CONCEPT:
             raise _RowError("A concept has no sort order; leave the sort cell empty.")
-        if not sort_text.isdigit() or int(sort_text) > MAX_SORT:
+        if not (sort_text.isascii() and sort_text.isdigit()) or int(sort_text) > MAX_SORT:
             raise _RowError(
                 f"The sort order {sort_text!r} must be a whole number up to {MAX_SORT}."
             )
@@ -365,6 +365,11 @@ def _plan_concept(
         if snap.state != "ACTIVE":
             raise _RowError("This concept is retired. Restore it in the syllabus first.")
         new_aliases = {k: a for k, a in alias_keys.items() if k not in snap.alias_keys}
+        if len(snap.alias_keys | new_aliases.keys()) > MAX_ALIASES:
+            raise _RowError(
+                f"With the aliases it already has, this would give the concept more than"
+                f" {MAX_ALIASES} aliases."
+            )
         _check_free(registry, existing.owner, new_aliases)
         changed = any(snap.labels.get(tag) != text for tag, text in row.labels.items())
         row.status = "CHANGED" if (changed or new_aliases) else "UNCHANGED"

@@ -131,7 +131,7 @@ def _local(tag: str) -> str:
 
 
 def _number(text: str | None) -> int:
-    return int(text) if text is not None and text.isdigit() else 0
+    return int(text) if text is not None and text.isascii() and text.isdigit() else 0
 
 
 def _column_number(reference: str) -> int:
