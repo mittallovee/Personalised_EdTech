@@ -223,9 +223,13 @@ def test_a_damaged_or_forged_cursor_is_a_400(
     add(client, admin_headers, kind, FIRST)
     good = client.get(kind.path, params={"limit": 1}).json()  # no next page: build one by hand
     assert good["page"]["next_cursor"] is None
-    too_long = base64.urlsafe_b64encode(bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    too_long = (
+        base64.urlsafe_b64encode(b"\x01" + bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    )
     too_short = base64.urlsafe_b64encode(b"short").decode().rstrip("=")
-    not_text = base64.urlsafe_b64encode(bytes(16) + bytes(4) + b"\xff\xfe").decode().rstrip("=")
+    not_text = (
+        base64.urlsafe_b64encode(b"\x01" + bytes(16) + bytes(4) + b"\xff\xfe").decode().rstrip("=")
+    )
 
     codes = [
         client.get(kind.path, params={"cursor": cursor}).status_code

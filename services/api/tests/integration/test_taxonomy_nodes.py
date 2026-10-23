@@ -815,7 +815,9 @@ def test_a_damaged_or_forged_cursor_is_a_400_for_the_syllabus_too(
     client: TestClient, admin_headers: dict[str, str]
 ) -> None:
     add(client, admin_headers, "CLASS", "Class 11")
-    too_long = base64.urlsafe_b64encode(bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    too_long = (
+        base64.urlsafe_b64encode(b"\x01" + bytes(16) + bytes(4) + b"x" * 401).decode().rstrip("=")
+    )
     too_short = base64.urlsafe_b64encode(b"short").decode().rstrip("=")
 
     codes = [

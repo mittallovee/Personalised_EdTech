@@ -1,5 +1,7 @@
 """M3 PR 2b: page cursors of the catalogue lists hold the ordering values, within a known limit."""
 
+import base64
+import json
 from uuid import UUID
 
 import pytest
@@ -32,3 +34,12 @@ def test_the_longest_possible_cursor_fits_the_limit_the_api_sets() -> None:
 def test_a_damaged_cursor_is_refused(cursor: str) -> None:
     with pytest.raises(MalformedRequest):
         decode_cursor(cursor)
+
+
+def test_a_cursor_from_the_earlier_json_format_is_refused_not_misread() -> None:
+    """The syllabus list once handed out base64 JSON cursors: [sort order, name key, id]."""
+    raw = json.dumps([0, "kinematics", str(ITEM)]).encode()
+    legacy = base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    with pytest.raises(MalformedRequest):
+        decode_cursor(legacy)
