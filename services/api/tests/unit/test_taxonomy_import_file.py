@@ -297,3 +297,30 @@ def test_a_row_may_hold_as_many_cells_as_the_limit_and_not_one_more(
 )
 def test_a_csv_with_broken_quoting_is_refused_not_repaired(data: bytes) -> None:
     assert "quote" in refused(data)
+
+
+def sheet_with_rows(rows: bytes) -> bytes:
+    sheet = (
+        b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        b'<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>kind</t></is></c></row>'
+        + rows
+        + b"</sheetData></worksheet>"
+    )
+    return with_sheet_xml(xlsx(["kind"], ["CLASS"]), sheet)
+
+
+def test_millions_of_empty_rows_are_refused_early_without_using_much_memory() -> None:
+    data = sheet_with_rows(b"<row/>" * 2_500_000)  # about 15 MB unpacked, tiny once compressed
+    assert len(data) < import_file.MAX_FILE_BYTES
+    tracemalloc.start()
+    try:
+        message = refused(data)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert "more than 20,000 rows" in message
+    assert peak < 64 * 1024 * 1024
+
+
+def test_a_row_far_down_the_sheet_is_refused_without_walking_the_gap() -> None:
+    assert "more than 20,000 rows" in refused(sheet_with_rows(b'<row r="999999"/>'))

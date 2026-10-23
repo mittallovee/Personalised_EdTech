@@ -14,7 +14,7 @@ import io
 import unicodedata
 import zipfile
 from dataclasses import dataclass
-from typing import Any
+from typing import IO, Any
 
 from defusedxml.ElementTree import iterparse
 from openpyxl import load_workbook
@@ -114,6 +114,13 @@ def _check_archive(data: bytes) -> None:
 def _spreadsheet_lines(data: bytes) -> list[list[str]]:
     _check_archive(data)
     try:
+        _check_sheets(data)
+    except ImportFileInvalid:
+        raise
+    except Exception:
+        # A sheet that is not well-formed XML, or a damaged archive.
+        raise ImportFileInvalid("This is not a valid .xlsx file.") from None
+    try:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=False)
     except Exception:
         # Whatever the library raises, the upload is simply unreadable.
@@ -144,46 +151,67 @@ def _column_number(reference: str) -> int:
     return number
 
 
-def _check_far_cells(sheet: Any) -> None:
-    """Refuse a populated cell past the column limit, without building the cells in between.
+def _check_sheets(data: bytes) -> None:
+    """Look through the XML of every sheet before the spreadsheet library is given the file.
 
-    The reader below stops at the limit, so it would never see such a cell. A spreadsheet can also
-    hold empty, styled cells at the far right of every row; walking those (16,384 per row) would
-    keep the server busy for minutes, which is why the cells are looked at here one by one as they
-    are in the file, and only those with content are counted.
+    The library reads a sheet's whole XML just to learn its size and keeps what it reads, so a
+    sheet of millions of empty rows or cells would cost it minutes and hundreds of megabytes. Here
+    the sheet is read as a stream, in constant memory, and refused as soon as a limit is passed.
     """
-    with sheet._get_source() as source:  # the sheet's XML, as stored in the archive
-        row = None
-        cells_in_row = 0
-        for event, element in iterparse(source, events=("start", "end")):
-            tag = element.tag.rsplit("}", 1)[-1]
-            if event == "start":
-                if tag == "row":
-                    row, cells_in_row = element, 0
-            elif tag == "c":
-                cells_in_row += 1
-                if cells_in_row > MAX_CELLS_PER_ROW:
-                    raise ImportFileInvalid(
-                        "A row of the file has more cells than a sheet can hold."
-                    )
-                parts = {child.tag.rsplit("}", 1)[-1]: child for child in element}
-                if "f" in parts:
-                    raise ImportFileInvalid(_FORMULAS)
-                value, inline = parts.get("v"), parts.get("is")
-                filled = inline is not None or (value is not None and bool(value.text))
-                if filled and _column_number(element.get("r", "")) > MAX_COLUMNS:
-                    raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
-                # Drop the cell at once: a row can hold hundreds of thousands of them, and
-                # keeping them until the row ends would use memory in proportion.
-                element.clear()
-                if row is not None:
-                    row.remove(element)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        for name in archive.namelist():
+            if name.startswith("xl/worksheets/") and name.endswith(".xml"):
+                with archive.open(name) as source:
+                    _scan_sheet(source)
+
+
+def _scan_sheet(source: IO[bytes]) -> None:
+    """Refuse too many rows, too many cells in a row, formulas, and a populated cell past the
+    column limit, which the reader below (it stops at the limit) would otherwise never see. Empty
+    styled cells at the far right of every row are not walked (16,384 per row would keep the
+    server busy for minutes): the cells are looked at one by one, as stored in the file."""
+    sheet_data = row = None
+    rows = cells_in_row = 0
+    for event, element in iterparse(source, events=("start", "end")):
+        tag = element.tag.rsplit("}", 1)[-1]
+        if event == "start":
+            if tag == "sheetData":
+                sheet_data = element
+            elif tag == "row":
+                row, cells_in_row = element, 0
+                rows += 1
+                # Counted as they come: millions of empty rows are small once compressed.
+                # (The header is a row too, hence the plus one.)
+                if rows > MAX_ROWS + 1 or _number(element.get("r")) > MAX_ROWS + 1:
+                    raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
+        elif tag == "c":
+            cells_in_row += 1
+            if cells_in_row > MAX_CELLS_PER_ROW:
+                raise ImportFileInvalid("A row of the file has more cells than a sheet can hold.")
+            parts = {child.tag.rsplit("}", 1)[-1]: child for child in element}
+            if "f" in parts:
+                raise ImportFileInvalid(_FORMULAS)
+            value, inline = parts.get("v"), parts.get("is")
+            filled = inline is not None or (value is not None and bool(value.text))
+            if filled and _column_number(element.get("r", "")) > MAX_COLUMNS:
+                raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
+            # Drop the cell at once: a row can hold hundreds of thousands of them, and
+            # keeping them until the row ends would use memory in proportion.
+            element.clear()
+            if row is not None:
+                row.remove(element)
+        elif tag == "row" and sheet_data is not None:
+            element.clear()
+            sheet_data.remove(element)
+
+
+def _number(text: str | None) -> int:
+    return int(text) if text is not None and text.isdigit() else 0
 
 
 def _sheet_lines(sheet: Any) -> list[list[str]]:
     # The sheet's declared size is ignored: a file can declare it too small and hide rows or cells.
     sheet.reset_dimensions()
-    _check_far_cells(sheet)
     lines: list[list[str]] = []
     # Blank rows count too: a file that declares a million empty rows is refused, not walked.
     for row in sheet.iter_rows(max_col=MAX_COLUMNS):
