@@ -4006,7 +4006,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Wrong kind of parent (`HIERARCHY_INVALID`) */
+            /** @description Wrong kind of parent (`HIERARCHY_INVALID`) or a name that is too long once normalised for comparing (`NAME_TOO_LONG`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4120,15 +4120,6 @@ export interface operations {
                     "application/json": components["schemas"]["NodeOut"];
                 };
             };
-            /** @description The request is not valid (`MALFORMED_REQUEST`) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
                 headers: {
@@ -4167,6 +4158,15 @@ export interface operations {
             };
             /** @description Changed by someone else since you read it (`REVISION_STALE`) */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The name is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4464,15 +4464,6 @@ export interface operations {
                     "application/json": components["schemas"]["ExamOut"];
                 };
             };
-            /** @description The request is not valid (`MALFORMED_REQUEST`) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
                 headers: {
@@ -4493,6 +4484,15 @@ export interface operations {
             };
             /** @description Another item has this name (`DUPLICATE_NAME`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The name is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4605,15 +4605,6 @@ export interface operations {
                     "application/json": components["schemas"]["ExamOut"];
                 };
             };
-            /** @description The request is not valid (`MALFORMED_REQUEST`) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
                 headers: {
@@ -4652,6 +4643,15 @@ export interface operations {
             };
             /** @description Changed by someone else since you read it (`REVISION_STALE`) */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The name is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4941,15 +4941,6 @@ export interface operations {
                     "application/json": components["schemas"]["SourceOut"];
                 };
             };
-            /** @description The request is not valid (`MALFORMED_REQUEST`) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
                 headers: {
@@ -4970,6 +4961,15 @@ export interface operations {
             };
             /** @description Another item has this name (`DUPLICATE_NAME`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The name is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5082,15 +5082,6 @@ export interface operations {
                     "application/json": components["schemas"]["SourceOut"];
                 };
             };
-            /** @description The request is not valid (`MALFORMED_REQUEST`) */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
             /** @description Not signed in (`UNAUTHENTICATED`) */
             401: {
                 headers: {
@@ -5129,6 +5120,15 @@ export interface operations {
             };
             /** @description Changed by someone else since you read it (`REVISION_STALE`) */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The name is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

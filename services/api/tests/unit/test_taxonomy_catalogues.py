@@ -1,7 +1,10 @@
 """M3 PR 2a: the fixed lists (languages, Bloom, difficulty guide) and how names are compared."""
 
+import json
+
 import pytest
 
+from qbank.contract import render_openapi
 from qbank.core.errors import ValidationFailed
 from qbank.modules.taxonomy.catalogues import (
     BLOOM_LEVELS,
@@ -68,3 +71,24 @@ def test_a_name_that_grows_too_long_once_normalised_is_refused_in_plain_words() 
 def test_a_long_name_that_stays_short_enough_is_accepted() -> None:
     assert len(name_key("x" * 200)) == 200
     assert len(name_key("\ufb03" * 133)) == 399  # 133 ligatures become 399 letters
+
+
+# Every route that takes a name can answer 422 NAME_TOO_LONG, so the contract must say so.
+NAMING_OPERATIONS = [
+    ("post", "/api/v1/taxonomy/nodes"),
+    ("patch", "/api/v1/taxonomy/nodes/{node_id}"),
+    ("post", "/api/v1/exams"),
+    ("patch", "/api/v1/exams/{exam_id}"),
+    ("post", "/api/v1/sources"),
+    ("patch", "/api/v1/sources/{source_id}"),
+]
+
+
+@pytest.mark.parametrize(("method", "path"), NAMING_OPERATIONS)
+def test_the_contract_documents_the_name_too_long_answer(method: str, path: str) -> None:
+    contract = json.loads(render_openapi())
+
+    responses = contract["paths"][path][method]["responses"]
+
+    assert "422" in responses
+    assert "NAME_TOO_LONG" in responses["422"]["description"]

@@ -142,7 +142,10 @@ def get_node(
             " (`PARENT_DEPRECATED`), or the Idempotency-Key was used for a different request"
             " (`IDEMPOTENCY_KEY_REUSED`)"
         },
-        422: {"description": "Wrong kind of parent (`HIERARCHY_INVALID`)"},
+        422: {
+            "description": "Wrong kind of parent (`HIERARCHY_INVALID`) or a name that is too long"
+            " once normalised for comparing (`NAME_TOO_LONG`)"
+        },
     },
 )
 def create_node(
@@ -176,6 +179,9 @@ def create_node(
         **_NOT_FOUND,
         **_STALE,
         409: {"description": "A sibling has this name (`DUPLICATE_NAME`)"},
+        422: {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)"
+        },
     },
 )
 def update_node(

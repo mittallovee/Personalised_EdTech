@@ -48,6 +48,9 @@ _CREATE_CONFLICT: dict[int | str, dict[str, Any]] = {
 _RENAME_CONFLICT: dict[int | str, dict[str, Any]] = {
     409: {"description": "Another item has this name (`DUPLICATE_NAME`)"}
 }
+_NAME_TOO_LONG: dict[int | str, dict[str, Any]] = {
+    422: {"description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)"}
+}
 
 
 def _exam_out(exam: Exam) -> ExamOut:
@@ -133,7 +136,7 @@ def get_exam(
     summary="Add an exam",
     description="Owner and admins. Send an `Idempotency-Key` so a retry after a lost response"
     " returns the same exam instead of failing.",
-    responses={**_DENIED, **_CREATE_CONFLICT},
+    responses={**_DENIED, **_CREATE_CONFLICT, **_NAME_TOO_LONG},
 )
 def create_exam(
     body: CreateExam,
@@ -162,7 +165,7 @@ def create_exam(
     "/{exam_id}",
     summary="Rename an exam or change its short code",
     description="Send the ETag you last read in `If-Match`.",
-    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_RENAME_CONFLICT},
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_RENAME_CONFLICT, **_NAME_TOO_LONG},
 )
 def update_exam(
     exam_id: UUID,
@@ -298,7 +301,7 @@ def get_source(
     summary="Add a source",
     description="Owner and admins. Send an `Idempotency-Key` so a retry after a lost response"
     " returns the same source instead of failing.",
-    responses={**_DENIED, **_CREATE_CONFLICT},
+    responses={**_DENIED, **_CREATE_CONFLICT, **_NAME_TOO_LONG},
 )
 def create_source(
     body: CreateSource,
@@ -327,7 +330,7 @@ def create_source(
     "/{source_id}",
     summary="Rename a source",
     description="Send the ETag you last read in `If-Match`. The kind never changes.",
-    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_RENAME_CONFLICT},
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_RENAME_CONFLICT, **_NAME_TOO_LONG},
 )
 def update_source(
     source_id: UUID,

@@ -3404,7 +3404,7 @@
             }
           },
           "422": {
-            "description": "Wrong kind of parent (`HIERARCHY_INVALID`)",
+            "description": "Wrong kind of parent (`HIERARCHY_INVALID`) or a name that is too long once normalised for comparing (`NAME_TOO_LONG`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3579,16 +3579,6 @@
               }
             }
           },
-          "400": {
-            "description": "The request is not valid (`MALFORMED_REQUEST`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
             "content": {
@@ -3631,6 +3621,16 @@
           },
           "412": {
             "description": "Changed by someone else since you read it (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4102,16 +4102,6 @@
               }
             }
           },
-          "400": {
-            "description": "The request is not valid (`MALFORMED_REQUEST`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
             "content": {
@@ -4134,6 +4124,16 @@
           },
           "409": {
             "description": "Another item has this name (`DUPLICATE_NAME`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4308,16 +4308,6 @@
               }
             }
           },
-          "400": {
-            "description": "The request is not valid (`MALFORMED_REQUEST`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
             "content": {
@@ -4360,6 +4350,16 @@
           },
           "412": {
             "description": "Changed by someone else since you read it (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4844,16 +4844,6 @@
               }
             }
           },
-          "400": {
-            "description": "The request is not valid (`MALFORMED_REQUEST`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
             "content": {
@@ -4876,6 +4866,16 @@
           },
           "409": {
             "description": "Another item has this name (`DUPLICATE_NAME`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5050,16 +5050,6 @@
               }
             }
           },
-          "400": {
-            "description": "The request is not valid (`MALFORMED_REQUEST`)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
           "401": {
             "description": "Not signed in (`UNAUTHENTICATED`)",
             "content": {
@@ -5102,6 +5092,16 @@
           },
           "412": {
             "description": "Changed by someone else since you read it (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name is too long once normalised for comparing (`NAME_TOO_LONG`)",
             "content": {
               "application/json": {
                 "schema": {
