@@ -39,6 +39,17 @@ SQL
 psql -c "ALTER ROLE app PASSWORD 'safe;value' BYPASSRLS;"
 # ruleid: qbank-no-rls-bypass-infra
 psql -c "ALTER ROLE \"odd;name\" BYPASSRLS"
+psql <<'SQL'
+# ruleid: qbank-no-rls-bypass-infra
+ALTER ROLE app -- backup access; reviewed
+BYPASSRLS;
+SQL
+# ruleid: qbank-no-rls-bypass-infra
+psql -c "ALTER ROLE app /* a; b */ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass-infra
+psql -c 'ALTER ROLE app PASSWORD $$a;b$$ BYPASSRLS;'
+# ruleid: qbank-no-rls-bypass-infra
+psql -c 'ALTER ROLE app PASSWORD $t$a;b$t$ BYPASSRLS;'
 # ruleid: qbank-no-rls-bypass-infra
 psql -c "SET row_security = off"
 # ok: qbank-no-rls-bypass-infra

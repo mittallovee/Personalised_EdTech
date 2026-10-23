@@ -64,6 +64,14 @@ SEMICOLON_IN_NAME = 'ALTER ROLE "odd;name" BYPASSRLS'
 # ruleid: qbank-no-rls-bypass
 STRAY_QUOTE = "ALTER ROLE app -- don't forget\n    BYPASSRLS;"
 # ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_LINE_COMMENT = "ALTER ROLE app -- backup access; reviewed\n    BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_BLOCK_COMMENT = "ALTER ROLE app /* a; b */ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_DOLLAR_QUOTE = "ALTER ROLE app PASSWORD $$a;b$$ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_TAGGED_DOLLAR_QUOTE = "ALTER ROLE app PASSWORD $t$a;b$t$ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
 FORMATTED = f"ALTER ROLE {ROLE} WITH BYPASSRLS"
 # ruleid: qbank-no-rls-bypass
 OFF = "SET row_security = off"

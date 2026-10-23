@@ -13,7 +13,7 @@ rules:
     # The text is looked for inside one string literal at a time (bound to $S), so a statement ends
     # where its string ends and a long multi-line statement is read to the end. Only commands count,
     # not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS before the next semicolon
-    # (a semicolon inside a quoted value does not count; quoted names and clauses included; not NOBYPASSRLS, not the column name rolbypassrls), turning
+    # (a semicolon inside a quoted value, $$-string or comment does not count; quoted names and clauses included; not NOBYPASSRLS, not the column name rolbypassrls), turning
     # row_security off, un-forcing or disabling it. (metavariable-regex matches from the start, hence
     # the leading .*)
     patterns:
@@ -22,7 +22,7 @@ rules:
           - pattern: 'f"$S"'
       - metavariable-regex:
           metavariable: $S
-          regex: '(?is).*((create|alter)\s+(role|user)\b(?:[^;]*?|(?:''[^'']*''|"[^"]*"|[^;''"])*?)(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
+          regex: '(?is).*((create|alter)\s+(role|user)\b(?:[^;]*?|(?:''[^'']*''|"[^"]*"|--[^\n]*(?=\n|$)|/\*(?:(?!\*/).)*\*/|\$(?P<tag>[a-z_]*)\$(?:(?!\$(?P=tag)\$).)*\$(?P=tag)\$|[^;''"\-/$]|-(?!-)|/(?!\*)|\$(?![a-z_]*\$))*?)(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
 
   - id: qbank-sql-text-built-from-string
     message: >-
