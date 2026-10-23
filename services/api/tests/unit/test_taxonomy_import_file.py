@@ -3,6 +3,7 @@
 import io
 import re
 import time
+import tracemalloc
 import zipfile
 
 import pytest
@@ -237,3 +238,62 @@ def test_a_value_in_a_column_without_a_header_name_is_refused() -> None:
     assert "no name" in refused(xlsx(["kind", None, "path"], ["CLASS", "unexpected", "Class 11"]))
     table = read_table(b"kind,,path\nCLASS,,Class 11\n")  # an empty unnamed column is harmless
     assert table.rows[0].cells == {"kind": "CLASS", "path": "Class 11"}
+
+
+def with_sheet_xml(data: bytes, sheet_xml: bytes) -> bytes:
+    """The same workbook with its first sheet's XML replaced."""
+    result = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(result, "w") as target:
+        for member in source.infolist():
+            content = (
+                sheet_xml if member.filename == "xl/worksheets/sheet1.xml" else source.read(member)
+            )
+            target.writestr(member, content)
+    return result.getvalue()
+
+
+def packed_row_workbook(cells: int) -> bytes:
+    sheet = (
+        b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+        b'<row r="1"><c r="A1" t="inlineStr"><is><t>kind</t></is></c></row>'
+        b'<row r="2"><c r="A2" t="inlineStr"><is><t>CLASS</t></is></c>'
+        + b'<c r="B2" s="1"/>' * cells
+        + b"</row></sheetData></worksheet>"
+    )
+    return with_sheet_xml(xlsx(["kind"], ["CLASS"]), sheet)
+
+
+def test_a_row_packed_with_empty_cells_is_refused_without_using_much_memory() -> None:
+    """Such a row fits in a small compressed file but would become hundreds of megabytes of
+    objects. A row cannot hold more cells than a sheet has columns."""
+    data = packed_row_workbook(400_000)
+    assert len(data) < import_file.MAX_FILE_BYTES
+    tracemalloc.start()
+    try:
+        message = refused(data)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert "more cells than a sheet can hold" in message
+    # The spreadsheet library alone peaks near 33 MB on this 7 MB sheet; keeping the cells in
+    # memory as well (the earlier behaviour) took over 200 MB.
+    assert peak < 64 * 1024 * 1024
+
+
+def test_a_row_may_hold_as_many_cells_as_the_limit_and_not_one_more(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(import_file, "MAX_CELLS_PER_ROW", 6)
+    assert [r.cells for r in read_table(packed_row_workbook(5)).rows] == [{"kind": "CLASS"}]
+    assert "more cells than a sheet can hold" in refused(packed_row_workbook(6))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b'kind,path\nCLASS,"Class 11"oops\n',  # a closing quote followed by more text
+        b'kind,path\nCLASS,"Class 11\nSUBJECT,Physics\n',  # a quote that is never closed
+    ],
+)
+def test_a_csv_with_broken_quoting_is_refused_not_repaired(data: bytes) -> None:
+    assert "quote" in refused(data)

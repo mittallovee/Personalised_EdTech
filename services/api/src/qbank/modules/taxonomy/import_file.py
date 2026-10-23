@@ -25,9 +25,11 @@ MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 20_000
 MAX_COLUMNS = 40
 MAX_CELL_CHARS = 2_000
-# What the archive may expand to in total. A 5 MB spreadsheet of 20,000 rows is far below this.
-MAX_UNPACKED_BYTES = 50 * 1024 * 1024
+# What the archive may expand to in total. A syllabus of 20,000 rows is a few MB unpacked. The
+# spreadsheet reader holds a multiple of this in memory while it works, so it is kept modest.
+MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 200
+MAX_CELLS_PER_ROW = 16_384  # the columns of a sheet (A to XFD); a row cannot hold more
 
 _ZIP_MAGIC = b"PK\x03\x04"
 _OLD_EXCEL_MAGIC = bytes.fromhex("D0CF11E0A1B11AE1")
@@ -88,12 +90,14 @@ def _csv_lines(data: bytes) -> list[list[str]]:
         ) from None
     lines: list[list[str]] = []
     try:
-        for record in csv.reader(io.StringIO(content, newline="")):
+        for record in csv.reader(io.StringIO(content, newline=""), strict=True):
             lines.append([_text(cell) for cell in record])
             if len(lines) > MAX_ROWS + 1:
                 raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
     except csv.Error:
-        raise ImportFileInvalid("The CSV file could not be read.") from None
+        raise ImportFileInvalid(
+            "The CSV file has a quote that is not closed or not placed correctly."
+        ) from None
     return lines
 
 
@@ -149,9 +153,19 @@ def _check_far_cells(sheet: Any) -> None:
     are in the file, and only those with content are counted.
     """
     with sheet._get_source() as source:  # the sheet's XML, as stored in the archive
-        for _, element in iterparse(source):
+        row = None
+        cells_in_row = 0
+        for event, element in iterparse(source, events=("start", "end")):
             tag = element.tag.rsplit("}", 1)[-1]
-            if tag == "c":
+            if event == "start":
+                if tag == "row":
+                    row, cells_in_row = element, 0
+            elif tag == "c":
+                cells_in_row += 1
+                if cells_in_row > MAX_CELLS_PER_ROW:
+                    raise ImportFileInvalid(
+                        "A row of the file has more cells than a sheet can hold."
+                    )
                 parts = {child.tag.rsplit("}", 1)[-1]: child for child in element}
                 if "f" in parts:
                     raise ImportFileInvalid(_FORMULAS)
@@ -159,8 +173,11 @@ def _check_far_cells(sheet: Any) -> None:
                 filled = inline is not None or (value is not None and bool(value.text))
                 if filled and _column_number(element.get("r", "")) > MAX_COLUMNS:
                     raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
-            elif tag == "row":
+                # Drop the cell at once: a row can hold hundreds of thousands of them, and
+                # keeping them until the row ends would use memory in proportion.
                 element.clear()
+                if row is not None:
+                    row.remove(element)
 
 
 def _sheet_lines(sheet: Any) -> list[list[str]]:
