@@ -17,6 +17,7 @@ because what the admin sees in the cell and what the import would read could dif
 import csv
 import io
 import posixpath
+import re
 import unicodedata
 import zipfile
 from collections.abc import Iterator
@@ -36,6 +37,7 @@ MAX_CELL_CHARS = 2_000
 MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 200
 MAX_PARTS_PER_ITEM = 2_000  # elements inside one cell or one shared text (runs of formatting)
+MAX_TAG_BYTES = 4_096  # one start tag with its attributes (a real one is under 200 bytes)
 MAX_DEPTH = 32  # how deep the XML of a sheet nests (a real one reaches about seven)
 MAX_CELLS_PER_ROW = 16_384  # the columns of a sheet (A to XFD); a row cannot hold more
 
@@ -96,6 +98,10 @@ def _csv_lines(data: bytes) -> list[list[str]]:
         raise ImportFileInvalid(
             "The CSV file must be saved as UTF-8 (in Excel: Save as > CSV UTF-8)."
         ) from None
+    if content.count(",") > (MAX_ROWS + 1) * MAX_COLUMNS:
+        # Checked before the file is split: a row of five million commas would become five
+        # million fields at once.
+        raise ImportFileInvalid("The file has too many cells.")
     lines: list[list[str]] = []
     try:
         for record in csv.reader(io.StringIO(content, newline=""), strict=True):
@@ -140,6 +146,30 @@ def _column_number(reference: str) -> int:
     return number
 
 
+_LONG_TAG = re.compile(rb"<[^>]{%d,}" % MAX_TAG_BYTES)
+
+
+class _TagGuard:
+    """Wraps the bytes of an XML part and refuses a start tag longer than ``MAX_TAG_BYTES``.
+
+    The XML parser builds all of a tag's attributes before it reports the tag, so a tag with
+    millions of them would use hundreds of megabytes before any other limit could act. This looks
+    at the bytes first, in a linear scan, keeping the end of the last read to catch a tag that
+    spans two reads."""
+
+    def __init__(self, source: IO[bytes]) -> None:
+        self._source = source
+        self._tail = b""
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = self._source.read(size)
+        window = self._tail + chunk
+        if _LONG_TAG.search(window):
+            raise ImportFileInvalid("A cell or text of the file is too complex.")
+        self._tail = window[-MAX_TAG_BYTES:]
+        return chunk
+
+
 def _stream(source: IO[bytes], keep_inside: str = "") -> Iterator[Element]:
     """Each element of an XML part, as it ends. After the caller has seen it, it is released, so a
     part with millions of elements is read in constant memory. Elements inside a ``keep_inside``
@@ -148,7 +178,7 @@ def _stream(source: IO[bytes], keep_inside: str = "") -> Iterator[Element]:
     stack: list[Element] = []
     inside = False
     kept = 0
-    for event, element in iterparse(source, events=("start", "end")):
+    for event, element in iterparse(_TagGuard(source), events=("start", "end")):
         if event == "start":
             stack.append(element)
             if len(stack) > MAX_DEPTH:

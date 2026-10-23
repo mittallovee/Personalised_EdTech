@@ -454,3 +454,38 @@ def test_deeply_nested_xml_is_refused_quickly() -> None:
     started = time.monotonic()
     assert "too complex" in refused(data)
     assert time.monotonic() - started < 2.0
+
+
+def test_a_csv_of_millions_of_commas_is_refused_before_it_is_split_into_fields() -> None:
+    data = b"," * 5_000_000
+    tracemalloc.start()
+    try:
+        message = refused(data)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert "too many cells" in message
+    assert peak < 20 * 1024 * 1024
+
+
+def test_an_element_with_millions_of_attributes_is_refused_before_it_is_built() -> None:
+    attributes = b" ".join(b'a%d="1"' % number for number in range(1_500_000))  # ~15 MB, no parser
+    data = sheet_with_rows(b"<odd " + attributes + b"/>")
+    tracemalloc.start()
+    try:
+        message = refused(data)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert "too complex" in message
+    assert peak < 20 * 1024 * 1024
+
+
+def test_a_tag_split_across_reads_is_still_measured() -> None:
+    long_tag = b"<odd " + b" ".join(b'a%d="1"' % number for number in range(1_000)) + b"/>"
+    guard = import_file._TagGuard(io.BytesIO(b"<a>" + b"x" * 3_000 + long_tag))
+    with pytest.raises(ImportFileInvalid, match="too complex"):
+        while guard.read(500):  # the tag is cut into many reads, none holding all of it
+            pass
+    short = import_file._TagGuard(io.BytesIO(b"<a " + b'b="1" ' * 100 + b"/>" * 1))
+    assert short.read(100) + short.read(100000)  # an ordinary tag passes, read in pieces
