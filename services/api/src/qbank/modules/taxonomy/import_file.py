@@ -36,6 +36,7 @@ MAX_CELL_CHARS = 2_000
 MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 200
 MAX_PARTS_PER_ITEM = 2_000  # elements inside one cell or one shared text (runs of formatting)
+MAX_DEPTH = 32  # how deep the XML of a sheet nests (a real one reaches about seven)
 MAX_CELLS_PER_ROW = 16_384  # the columns of a sheet (A to XFD); a row cannot hold more
 
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -150,6 +151,8 @@ def _stream(source: IO[bytes], keep_inside: str = "") -> Iterator[Element]:
     for event, element in iterparse(source, events=("start", "end")):
         if event == "start":
             stack.append(element)
+            if len(stack) > MAX_DEPTH:
+                raise ImportFileInvalid("A cell or text of the file is too complex.")
             if not inside and _local(element.tag) == keep_inside:
                 inside, kept = True, 0
             elif inside:

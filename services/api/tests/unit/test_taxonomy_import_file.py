@@ -446,3 +446,11 @@ def with_part(data: bytes, name: str, content: bytes) -> bytes:
                 target.writestr(member, source.read(member))
         target.writestr(name, content)
     return result.getvalue()
+
+
+def test_deeply_nested_xml_is_refused_quickly() -> None:
+    depth = 200_000
+    data = sheet_with_rows(b"<a>" * depth + b"</a>" * depth)  # not inside any cell
+    started = time.monotonic()
+    assert "too complex" in refused(data)
+    assert time.monotonic() - started < 2.0
