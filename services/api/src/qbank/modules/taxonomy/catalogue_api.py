@@ -12,6 +12,7 @@ from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
 from qbank.modules.taxonomy import catalogue_service as service
+from qbank.modules.taxonomy.cursors import MAX_CURSOR_LENGTH, decode_cursor
 from qbank.modules.taxonomy.models import Exam, Source
 from qbank.modules.taxonomy.schemas import (
     CreateExam,
@@ -97,10 +98,10 @@ def list_exams(
     database: Annotated[Database, Depends(get_database)],
     exam_state: Annotated[NodeState | None, Query(alias="state")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-    cursor: Annotated[str | None, Query(max_length=600)] = None,
+    cursor: Annotated[str | None, Query(max_length=MAX_CURSOR_LENGTH)] = None,
 ) -> ExamPage:
     require(principal, Action.VIEW_CATALOGUES)
-    after = service.decode_cursor(cursor) if cursor is not None else None
+    after = decode_cursor(cursor) if cursor is not None else None
     with database.transaction(principal.tenant_context) as session:
         rows, has_more = service.list_items(
             session, service.EXAMS, state=exam_state, limit=limit, after=after
@@ -261,10 +262,10 @@ def list_sources(
     kind: SourceKind | None = None,
     source_state: Annotated[NodeState | None, Query(alias="state")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-    cursor: Annotated[str | None, Query(max_length=600)] = None,
+    cursor: Annotated[str | None, Query(max_length=MAX_CURSOR_LENGTH)] = None,
 ) -> SourcePage:
     require(principal, Action.VIEW_CATALOGUES)
-    after = service.decode_cursor(cursor) if cursor is not None else None
+    after = decode_cursor(cursor) if cursor is not None else None
     where = (Source.kind == kind,) if kind is not None else ()
     with database.transaction(principal.tenant_context) as session:
         rows, has_more = service.list_items(

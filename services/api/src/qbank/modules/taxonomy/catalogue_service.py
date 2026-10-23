@@ -4,9 +4,6 @@ Both are a name that is unique within the coaching, and both are retired rather 
 logic is the same, so it is written once and described by a ``Catalogue``.
 """
 
-import base64
-import binascii
-import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -24,6 +21,7 @@ from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
+from qbank.modules.taxonomy.cursors import INVALID_CURSOR, encode_cursor
 from qbank.modules.taxonomy.models import Exam, Source
 
 
@@ -70,30 +68,7 @@ def _organization_id(principal: Principal) -> UUID:
 
 
 def next_cursor(items: list[Any], has_more: bool) -> str | None:
-    if not (has_more and items):
-        return None
-    raw = json.dumps([items[-1].name_key, str(items[-1].id)]).encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-
-def decode_cursor(cursor: str) -> tuple[str, UUID]:
-    """Inverse of ``next_cursor``; a damaged cursor is a 400, never a 500."""
-    invalid = MalformedRequest("The page cursor is not valid. Start again from the first page.")
-    try:
-        data = json.loads(base64.urlsafe_b64decode((cursor + "=" * (-len(cursor) % 4)).encode()))
-    except binascii.Error, UnicodeDecodeError, ValueError:
-        raise invalid from None
-    if not (
-        isinstance(data, list)
-        and len(data) == 2
-        and isinstance(data[0], str)
-        and isinstance(data[1], str)
-    ):
-        raise invalid
-    try:
-        return data[0], UUID(data[1])
-    except ValueError:
-        raise invalid from None
+    return encode_cursor(items[-1].id) if has_more and items else None
 
 
 def list_items(
@@ -102,10 +77,10 @@ def list_items(
     *,
     state: str | None,
     limit: int,
-    after: tuple[str, UUID] | None,
+    after: UUID | None,
     where: tuple[ColumnElement[bool], ...] = (),
 ) -> tuple[list[Any], bool]:
-    """In name order. Returns the page and whether more follow."""
+    """In name order, after the item ``after`` (a cursor). Returns the page and if more follow."""
     model = catalogue.model
     query = select(model).order_by(model.name_key, model.id)
     for condition in where:
@@ -113,9 +88,12 @@ def list_items(
     if state is not None:
         query = query.where(model.state == state)
     if after is not None:
-        key, item_id = after
+        last = session.get(model, after)  # none if it is another coaching's, or not there
+        if last is None:
+            raise MalformedRequest(INVALID_CURSOR)
         query = query.where(
-            (model.name_key > key) | ((model.name_key == key) & (model.id > item_id))
+            (model.name_key > last.name_key)
+            | ((model.name_key == last.name_key) & (model.id > last.id))
         )
     rows = list(session.scalars(query.limit(limit + 1)))
     return rows[:limit], len(rows) > limit

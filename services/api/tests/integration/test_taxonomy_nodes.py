@@ -770,6 +770,28 @@ def test_pages_follow_the_admins_order_and_a_damaged_cursor_is_a_400(
     assert client.get(NODES, params={"cursor": "not-a-cursor"}).status_code == 400
 
 
+def test_every_cursor_the_api_hands_out_is_accepted_even_after_long_non_latin_names(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    names = [letter * 200 for letter in ("\u0915", "\u0916", "\u0917")]  # Devanagari, 200 letters
+    for name in names:
+        add(client, admin_headers, "CLASS", name)
+
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        params: dict[str, Any] = {"limit": 1, **({"cursor": cursor} if cursor else {})}
+        page = client.get(NODES, params=params)
+        assert page.status_code == 200, page.text
+        seen += [node["name"] for node in page.json()["data"]]
+        cursor = page.json()["page"]["next_cursor"]
+        if cursor is None:
+            break
+        assert len(cursor) < 100  # a cursor never carries the name
+
+    assert seen == names
+
+
 def test_every_change_is_in_the_audit_log_with_before_and_after(
     client: TestClient, owner_db: Database, team: dict[str, Member], admin_headers: dict[str, str]
 ) -> None:

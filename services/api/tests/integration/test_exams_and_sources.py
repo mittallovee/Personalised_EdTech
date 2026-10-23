@@ -3,6 +3,7 @@
 Exams and sources behave alike, so most tests run once for each.
 """
 
+import base64
 import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -169,6 +170,45 @@ def test_pages_are_in_name_order_and_a_damaged_cursor_is_a_400(
     assert [entry["name"] for entry in second.json()["data"]] == ["delta"]
     assert second.json()["page"] == {"next_cursor": None, "has_more": False}
     assert client.get(kind.path, params={"cursor": "not-a-cursor"}).status_code == 400
+
+
+@BOTH
+def test_every_cursor_the_api_hands_out_is_accepted_even_after_long_non_latin_names(
+    client: TestClient, admin_headers: dict[str, str], kind: Kind
+) -> None:
+    names = [letter * 200 for letter in ("\u0915", "\u0916", "\u0917")]  # Devanagari, 200 letters
+    for name in names:
+        add(client, admin_headers, kind, name)
+
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        params: dict[str, Any] = {"limit": 1, **({"cursor": cursor} if cursor else {})}
+        page = client.get(kind.path, params=params)
+        assert page.status_code == 200, page.text
+        seen += [entry["name"] for entry in page.json()["data"]]
+        cursor = page.json()["page"]["next_cursor"]
+        if cursor is None:
+            break
+        assert len(cursor) < 100  # a cursor never carries the name
+
+    assert seen == names
+
+
+@BOTH
+def test_a_cursor_for_an_item_that_is_not_there_is_a_400(
+    client: TestClient, owner_db: Database, admin_headers: dict[str, str], kind: Kind
+) -> None:
+    add(client, admin_headers, kind, FIRST)
+    other = TestClient(client.app)
+    other_headers = sign_in(other, make_member(owner_db, "ADMIN").email)
+    foreign = add(other, other_headers, kind, FIRST)
+    # Another coaching's item id, as the cursor of a list this coaching reads.
+    cursor = base64.urlsafe_b64encode(foreign["id"].encode()).decode().rstrip("=")
+
+    response = client.get(kind.path, params={"cursor": cursor})
+
+    assert (response.status_code, response.json()["error"]["code"]) == (400, "MALFORMED_REQUEST")
 
 
 # --- Names are unique -----------------------------------------------------------------------------

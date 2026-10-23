@@ -1,8 +1,5 @@
 """The syllabus tree (M3 design note §4.1): add, rename, order, retire and restore items."""
 
-import base64
-import binascii
-import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -20,6 +17,7 @@ from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
+from qbank.modules.taxonomy.cursors import INVALID_CURSOR, encode_cursor
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import CreateNode, NodeOut, UpdateNode
 
@@ -49,35 +47,8 @@ def _organization_id(principal: Principal) -> UUID:
 # --- Reading ----------------------------------------------------------------------------------
 
 
-def _encode_position(node: TaxonomyNode) -> str:
-    raw = json.dumps([node.sort_order, node.name_key, str(node.id)]).encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-
-def decode_position(cursor: str) -> tuple[int, str, UUID]:
-    """Inverse of ``next_cursor``; a damaged cursor is a 400, never a 500."""
-    invalid = MalformedRequest("The page cursor is not valid. Start again from the first page.")
-    try:
-        data = json.loads(base64.urlsafe_b64decode((cursor + "=" * (-len(cursor) % 4)).encode()))
-    except binascii.Error, UnicodeDecodeError, ValueError:
-        raise invalid from None
-    if not (
-        isinstance(data, list)
-        and len(data) == 3
-        and isinstance(data[0], int)
-        and not isinstance(data[0], bool)
-        and isinstance(data[1], str)
-        and isinstance(data[2], str)
-    ):
-        raise invalid
-    try:
-        return data[0], data[1], UUID(data[2])
-    except ValueError:
-        raise invalid from None
-
-
 def next_cursor(nodes: Sequence[TaxonomyNode], has_more: bool) -> str | None:
-    return _encode_position(nodes[-1]) if has_more and nodes else None
+    return encode_cursor(nodes[-1].id) if has_more and nodes else None
 
 
 def list_nodes(
@@ -87,9 +58,12 @@ def list_nodes(
     parent_id: UUID | None,
     state: str | None,
     limit: int,
-    after: tuple[int, str, UUID] | None,
+    after: UUID | None,
 ) -> tuple[list[TaxonomyNode], bool]:
-    """In the admin's order (sort order, then name). Returns the page and whether more follow."""
+    """In the admin's order (sort order, then name), after the item ``after`` (a cursor).
+
+    Returns the page and whether more follow.
+    """
     query = select(TaxonomyNode).order_by(
         TaxonomyNode.sort_order, TaxonomyNode.name_key, TaxonomyNode.id
     )
@@ -100,14 +74,19 @@ def list_nodes(
     if state is not None:
         query = query.where(TaxonomyNode.state == state)
     if after is not None:
-        sort_order, key, node_id = after
+        last = session.get(TaxonomyNode, after)  # none if it is another coaching's, or not there
+        if last is None:
+            raise MalformedRequest(INVALID_CURSOR)
         query = query.where(
-            (TaxonomyNode.sort_order > sort_order)
-            | ((TaxonomyNode.sort_order == sort_order) & (TaxonomyNode.name_key > key))
+            (TaxonomyNode.sort_order > last.sort_order)
             | (
-                (TaxonomyNode.sort_order == sort_order)
-                & (TaxonomyNode.name_key == key)
-                & (TaxonomyNode.id > node_id)
+                (TaxonomyNode.sort_order == last.sort_order)
+                & (TaxonomyNode.name_key > last.name_key)
+            )
+            | (
+                (TaxonomyNode.sort_order == last.sort_order)
+                & (TaxonomyNode.name_key == last.name_key)
+                & (TaxonomyNode.id > last.id)
             )
         )
     rows = list(session.scalars(query.limit(limit + 1)))

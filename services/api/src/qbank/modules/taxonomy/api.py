@@ -11,6 +11,7 @@ from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
 from qbank.modules.taxonomy import service
 from qbank.modules.taxonomy.catalogues import BLOOM_LEVELS, DIFFICULTY_GUIDE, LANGUAGES
+from qbank.modules.taxonomy.cursors import MAX_CURSOR_LENGTH, decode_cursor
 from qbank.modules.taxonomy.schemas import (
     BloomLevelOut,
     CreateNode,
@@ -91,10 +92,10 @@ def list_nodes(
     parent_id: UUID | None = None,
     node_state: Annotated[NodeState | None, Query(alias="state")] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
-    cursor: Annotated[str | None, Query(max_length=300)] = None,
+    cursor: Annotated[str | None, Query(max_length=MAX_CURSOR_LENGTH)] = None,
 ) -> NodePage:
     require(principal, Action.VIEW_CATALOGUES)
-    after = service.decode_position(cursor) if cursor is not None else None
+    after = decode_cursor(cursor) if cursor is not None else None
     with database.transaction(principal.tenant_context) as session:
         rows, has_more = service.list_nodes(
             session, kind=kind, parent_id=parent_id, state=node_state, limit=limit, after=after
