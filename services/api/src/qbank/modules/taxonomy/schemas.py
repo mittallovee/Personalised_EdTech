@@ -132,3 +132,39 @@ class SourceOut(BaseModel):
 class SourcePage(BaseModel):
     data: list[SourceOut]
     page: PageInfo
+
+
+# The aliases of a concept: other ways to say its name. Capped so a picker stays readable.
+Aliases = Annotated[list[Name], Field(max_length=10)]
+
+
+class CreateConcept(BaseModel):
+    subject_id: UUID = Field(description="The subject this concept belongs to; it never changes.")
+    name: Name = Field(description="The English name.", examples=["Newton's second law"])
+    labels: Labels = Field(default_factory=dict)
+    aliases: Aliases = Field(default_factory=list, examples=[["Newton's 2nd law"]])
+
+
+class UpdateConcept(BaseModel):
+    name: Name | None = None
+    labels: Labels | None = Field(
+        default=None, description="Replaces all the other-language names when sent."
+    )
+    aliases: Aliases | None = Field(default=None, description="Replaces all the aliases when sent.")
+
+
+class ConceptOut(BaseModel):
+    id: UUID
+    subject_id: UUID
+    name: str
+    labels: dict[str, str]
+    aliases: list[str] = Field(description="In alphabetical order.")
+    state: NodeState = Field(description="DEPRECATED concepts cannot be chosen for new questions.")
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConceptPage(BaseModel):
+    data: list[ConceptOut]
+    page: PageInfo

@@ -688,6 +688,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/taxonomy/concepts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Concepts, in name order
+         * @description Filter by `subject_id` and `state` (use `state=ACTIVE` for a picker for a new question). `q` finds concepts whose name or an alias contains the text, in any case or spacing.
+         */
+        get: operations["list_concepts_api_v1_taxonomy_concepts_get"];
+        put?: never;
+        /**
+         * Add a concept
+         * @description Owner and admins. A concept belongs under a subject and never changes subject. Its name and aliases must differ from every other name and alias in the subject. Send an `Idempotency-Key` so a retry after a lost response returns the same concept.
+         */
+        post: operations["create_concept_api_v1_taxonomy_concepts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/taxonomy/concepts/{concept_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One concept
+         * @description The ETag is its revision, for changes that need `If-Match`.
+         */
+        get: operations["get_concept_api_v1_taxonomy_concepts__concept_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename a concept, or change its other-language names or aliases
+         * @description Send the ETag you last read in `If-Match`. The subject never changes.
+         */
+        patch: operations["update_concept_api_v1_taxonomy_concepts__concept_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/taxonomy/concepts/{concept_id}/deprecate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retire a concept
+         * @description It can no longer be chosen for new questions; questions that use it keep it.
+         */
+        post: operations["deprecate_concept_api_v1_taxonomy_concepts__concept_id__deprecate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/taxonomy/concepts/{concept_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring a retired concept back */
+        post: operations["restore_concept_api_v1_taxonomy_concepts__concept_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/exams": {
         parameters: {
             query?: never;
@@ -987,6 +1072,80 @@ export interface components {
              * @enum {string}
              */
             new_role: "ADMIN" | "FACULTY";
+        };
+        /** ConceptOut */
+        ConceptOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Name */
+            name: string;
+            /** Labels */
+            labels: {
+                [key: string]: string;
+            };
+            /**
+             * Aliases
+             * @description In alphabetical order.
+             */
+            aliases: string[];
+            /**
+             * State
+             * @description DEPRECATED concepts cannot be chosen for new questions.
+             * @enum {string}
+             */
+            state: "ACTIVE" | "DEPRECATED";
+            /** Revision */
+            revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ConceptPage */
+        ConceptPage: {
+            /** Data */
+            data: components["schemas"]["ConceptOut"][];
+            page: components["schemas"]["PageInfo"];
+        };
+        /** CreateConcept */
+        CreateConcept: {
+            /**
+             * Subject Id
+             * Format: uuid
+             * @description The subject this concept belongs to; it never changes.
+             */
+            subject_id: string;
+            /**
+             * Name
+             * @description The English name.
+             * @example Newton's second law
+             */
+            name: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
+            /**
+             * Aliases
+             * @example [
+             *       "Newton's 2nd law"
+             *     ]
+             */
+            aliases?: string[];
         };
         /** CreateExam */
         CreateExam: {
@@ -1593,6 +1752,23 @@ export interface components {
              * @description An active admin of this coaching, who becomes the Owner.
              */
             new_owner_membership_id: string;
+        };
+        /** UpdateConcept */
+        UpdateConcept: {
+            /** Name */
+            name?: string | null;
+            /**
+             * Labels
+             * @description Replaces all the other-language names when sent.
+             */
+            labels?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Aliases
+             * @description Replaces all the aliases when sent.
+             */
+            aliases?: string[] | null;
         };
         /** UpdateExam */
         UpdateExam: {
@@ -4342,6 +4518,502 @@ export interface operations {
                 };
             };
             /** @description Its parent is retired; restore that first (`PARENT_DEPRECATED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_concepts_api_v1_taxonomy_concepts_get: {
+        parameters: {
+            query?: {
+                subject_id?: string | null;
+                state?: ("ACTIVE" | "DEPRECATED") | null;
+                q?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConceptPage"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A name or alias is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_concept_api_v1_taxonomy_concepts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConcept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConceptOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such subject in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A name or alias is taken in this subject (`DUPLICATE_NAME`), the subject is retired (`PARENT_DEPRECATED`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The parent is not a subject (`HIERARCHY_INVALID`), or a name or alias is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_concept_api_v1_taxonomy_concepts__concept_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                concept_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConceptOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such concept (or subject) in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_concept_api_v1_taxonomy_concepts__concept_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                concept_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConcept"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConceptOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such concept (or subject) in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A name or alias is taken in this subject (`DUPLICATE_NAME`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A name or alias is too long once normalised for comparing (`NAME_TOO_LONG`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deprecate_concept_api_v1_taxonomy_concepts__concept_id__deprecate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                concept_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConceptOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such concept (or subject) in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_concept_api_v1_taxonomy_concepts__concept_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                concept_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConceptOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such concept (or subject) in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Its subject is retired; restore that first (`PARENT_DEPRECATED`) */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -69,6 +69,10 @@ content as raw HTML").
   trimming, case-folding and Unicode normalisation; they never merge two concepts by themselves.
 - A question has one **primary** concept and any number of **secondary** concepts, all of its subject.
   Secondary concepts may sit outside the primary topic (C-02).
+- Within a subject a concept's name and aliases are all different from each other (one name or alias
+  points at one concept), enforced by the database for name against name and alias against alias, and
+  by the service, which locks the subject while it checks, for the two mixed cases. A concept never
+  changes subject; it cannot be restored while its subject is retired.
 - In M3 a concept is `ACTIVE` or `DEPRECATED`. "Provisional, added by AI" and alias-matching by AI arrive
   in M5 (C-05, C-06); the table is ready for them.
 
@@ -265,7 +269,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | 0013 | **Built (PR 2a):** `taxonomy_nodes` (kind, parent referenced together with its kind, state, sort order, revision; sibling names unique) and `taxonomy_labels` (names in the other languages). The languages and Bloom levels are fixed lists in code, not tables |
 | 0014 | **Built (PR 2a follow-up):** the syllabus CHECK also requires the parent kind whenever there is a parent |
 | 0015 | **Built (PR 2b):** `exams` (name, optional short code) and `sources` (kind, name); retired, never deleted |
-| 0016 | `concepts` and their labels and aliases |
+| 0016 | **Built (PR 2b, part 2):** `concepts` (under a subject; retired, never deleted), `concept_labels`, `concept_aliases` |
 | 0017 | `catalogue_imports` (the stored preview that apply uses) |
 | 0018 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
 | 0019 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
@@ -276,7 +280,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 |---|---|
 | `GET /languages` · `GET /catalogues/bloom` · `GET /catalogues/difficulty-guide` | Fixed lists (built in PR 2a) |
 | `GET /taxonomy/nodes` (filter by kind, parent, state) · `GET /{id}` · `POST` · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Syllabus (built in PR 2a) |
-| `GET/POST /taxonomy/concepts` · `PATCH /{id}` · `/deprecate` · `/restore` | Concepts and aliases |
+| `GET /taxonomy/concepts` (`?subject_id=`, `?state=`, `?q=` over names and aliases) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Concepts and aliases (built in PR 2b) |
 | `GET /exams` · `GET /sources` (+ `?kind=`) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Exams, sources (built in PR 2b) |
 | `GET /taxonomy/import-template` · `POST /taxonomy/imports` (file; creates the preview) · `GET /taxonomy/imports/{id}` · `POST /taxonomy/imports/{id}/apply` | Excel/CSV import |
 | `POST /questions` (`Idempotency-Key`) · `GET /questions` (mine, or all for admins; cursor pages) · `GET /questions/by-code/{code}` · `GET /questions/{id}` | Create and read; every read carries the findings |

@@ -81,6 +81,8 @@ NAMING_OPERATIONS = [
     ("patch", "/api/v1/exams/{exam_id}"),
     ("post", "/api/v1/sources"),
     ("patch", "/api/v1/sources/{source_id}"),
+    ("post", "/api/v1/taxonomy/concepts"),
+    ("patch", "/api/v1/taxonomy/concepts/{concept_id}"),
 ]
 
 
