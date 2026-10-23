@@ -18,6 +18,7 @@ from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
 from qbank.modules.taxonomy.cursors import encode_cursor
+from qbank.modules.taxonomy.locks import lock_syllabus_for_change
 from qbank.modules.taxonomy.models import TaxonomyLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import CreateNode, NodeOut, UpdateNode
 
@@ -179,6 +180,7 @@ def create_node(
     """Add an item. A retry with the ``idempotency_key`` of an earlier, identical request returns
     that item instead of failing with ``DUPLICATE_NAME`` because the first attempt worked."""
     require(principal, Action.MANAGE_CATALOGUES)
+    lock_syllabus_for_change(session, principal)
     organization_id = _organization_id(principal)
     node_id = new_id()
     if idempotency_key is not None:
@@ -293,6 +295,7 @@ def update_node(
 ) -> TaxonomyNode:
     """Rename, reorder or change the other-language names, refusing stale changes (If-Match)."""
     require(principal, Action.MANAGE_CATALOGUES)
+    lock_syllabus_for_change(session, principal)
     node = _locked_node(session, node_id)
     require_if_match(if_match, node.revision)
     labels = _current_labels(session, node.id)
@@ -343,6 +346,7 @@ def set_state(
     while its parent is retired, so an active item never hangs under a retired one by restoring.
     """
     require(principal, Action.MANAGE_CATALOGUES)
+    lock_syllabus_for_change(session, principal)
     node = _locked_node(session, node_id)
     require_if_match(if_match, node.revision)
     if node.state == state:

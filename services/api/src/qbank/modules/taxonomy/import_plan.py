@@ -28,6 +28,7 @@ Status = Literal["NEW", "CHANGED", "UNCHANGED", "ERROR"]
 DEPTH = {"CLASS": 1, "SUBJECT": 2, "CHAPTER": 3, "TOPIC": 4, "SUBTOPIC": 5}
 CONCEPT = "CONCEPT"  # its path is the subject's path and then the concept's name
 MAX_SORT = 100_000
+MAX_APPLY_ROWS = 5_000  # most rows one import may add or change (a larger file is split)
 MAX_ALIASES = 10
 OTHER_LANGUAGES = tuple(language.tag for language in LANGUAGES if language.tag != "en")
 LABEL_COLUMNS = {f"label_{tag}": tag for tag in OTHER_LANGUAGES}
@@ -57,7 +58,11 @@ class SnapConcept:
     state: str
     revision: int
     labels: dict[str, str]
-    alias_keys: frozenset[str]
+    aliases: dict[str, str]  # alias key -> the alias as it is written
+
+    @property
+    def alias_keys(self) -> frozenset[str]:
+        return frozenset(self.aliases)
 
 
 @dataclass(frozen=True)
@@ -257,6 +262,17 @@ def _paths(snapshot: Snapshot) -> dict[UUID, tuple[str, ...]]:
     for node in snapshot.nodes:
         path_of(node)
     return paths
+
+
+def node_index(snapshot: Snapshot) -> dict[tuple[str, ...], SnapNode]:
+    """Every existing node by its path of name keys."""
+    paths = _paths(snapshot)
+    return {paths[node.id]: node for node in snapshot.nodes}
+
+
+def apply_order(row: dict[str, Any]) -> tuple[bool, int, int]:
+    """Parents before children, concepts last; file order within each."""
+    return (row["kind"] == CONCEPT, DEPTH.get(row["kind"], 0), row["number"])
 
 
 def check_columns(table: Table) -> None:

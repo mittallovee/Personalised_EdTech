@@ -5109,6 +5109,106 @@
         }
       }
     },
+    "/api/v1/taxonomy/imports/{import_id}/apply": {
+      "post": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "Apply an import preview to the syllabus",
+        "description": "Owner and admins. Adds the new items and fills in the changed ones, **all or nothing**, exactly as the preview listed them. Nothing is removed, renamed, retired or restored. Applying a preview that is already applied changes nothing and returns it again. Refused if any row is an error, if there is nothing to do, or if it would add or change more than 5,000 rows at once (`IMPORT_INVALID`); and if the syllabus has changed since the preview was made (`IMPORT_STALE`): upload the file again.",
+        "operationId": "apply_import_api_v1_taxonomy_imports__import_id__apply_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such import in your coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The syllabus changed after the preview (`IMPORT_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not applicable: error rows, nothing to do, too many (`IMPORT_INVALID`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/exams": {
       "get": {
         "tags": [

@@ -54,7 +54,7 @@ def concept(
         subject_id=subject.id,
         name=key.title(),
         name_key=key,
-        alias_keys=aliases,
+        aliases={key: key for key in aliases},
         **{**fields, **more},  # type: ignore[arg-type]
     )
 

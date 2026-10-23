@@ -39,10 +39,11 @@ def load_snapshot(database: Database, context: TenantContext) -> Snapshot:
     revision, and the fingerprint stored with it describes exactly what was compared.
     """
     with database.transaction(context, isolation_level="REPEATABLE READ") as session:
-        return _read_snapshot(session)
+        return read_snapshot(session)
 
 
-def _read_snapshot(session: Session) -> Snapshot:
+def read_snapshot(session: Session) -> Snapshot:
+    """The syllabus as the caller's transaction sees it now."""
     node_labels: dict[UUID, dict[str, str]] = defaultdict(dict)
     for node_id, language, label in session.execute(
         select(TaxonomyLabel.node_id, TaxonomyLabel.language, TaxonomyLabel.label)
@@ -66,11 +67,11 @@ def _read_snapshot(session: Session) -> Snapshot:
         select(ConceptLabel.concept_id, ConceptLabel.language, ConceptLabel.label)
     ):
         concept_labels[concept_id][language] = label
-    alias_keys: dict[UUID, set[str]] = defaultdict(set)
-    for concept_id, alias_key in session.execute(
-        select(ConceptAlias.concept_id, ConceptAlias.alias_key)
+    aliases: dict[UUID, dict[str, str]] = defaultdict(dict)
+    for concept_id, alias_key, alias in session.execute(
+        select(ConceptAlias.concept_id, ConceptAlias.alias_key, ConceptAlias.alias)
     ):
-        alias_keys[concept_id].add(alias_key)
+        aliases[concept_id][alias_key] = alias
     concepts = [
         SnapConcept(
             id=concept.id,
@@ -80,7 +81,7 @@ def _read_snapshot(session: Session) -> Snapshot:
             state=concept.state,
             revision=concept.revision,
             labels=concept_labels[concept.id],
-            alias_keys=frozenset(alias_keys[concept.id]),
+            aliases=aliases[concept.id],
         )
         for concept in session.scalars(select(Concept))
     ]
