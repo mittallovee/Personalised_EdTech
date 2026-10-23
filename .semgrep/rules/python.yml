@@ -3,13 +3,16 @@
 rules:
   - id: qbank-no-rls-bypass
     message: >-
-      Do not weaken row-level security or the database role (AGENTS.md §3, ADR-0005): no
-      BYPASSRLS, no disabling or un-forcing row-level security, no `row_security = off`.
+      Do not weaken row-level security or the database role (AGENTS.md §3, ADR-0005): no role that is
+      given BYPASSRLS, no disabling or un-forcing row-level security, no `row_security = off`. (A
+      dedicated backup role may need BYPASSRLS: create it in infrastructure code, not here.)
     severity: ERROR
     languages: [generic]
     paths:
       include: ["/services/api/src/", "/services/api/migrations/", "/infra/"]
-    pattern-regex: '(?i)(row_security\s*(=|to)\s*off|(?<!NO)BYPASSRLS|NO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY|DISABLE\s+ROW\s+LEVEL\s+SECURITY)'
+    # Only the commands count, not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS (not
+    # NOBYPASSRLS, not the column name rolbypassrls), turning row_security off, un-forcing or disabling it.
+    pattern-regex: '(?is)((create|alter)\s+(role|user)\b[^;''"]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
 
   - id: qbank-sql-text-built-from-string
     message: >-

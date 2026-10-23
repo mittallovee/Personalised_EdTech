@@ -39,6 +39,8 @@ def sql(name: str, log, logger) -> None:
 # ruleid: qbank-no-rls-bypass
 ROLE = "CREATE ROLE app LOGIN BYPASSRLS"
 # ruleid: qbank-no-rls-bypass
+ALTERED = "alter role app with bypassrls"
+# ruleid: qbank-no-rls-bypass
 OFF = "SET row_security = off"
 # ruleid: qbank-no-rls-bypass
 DROP = "ALTER TABLE t DISABLE ROW LEVEL SECURITY"
@@ -48,3 +50,7 @@ UNFORCE = "ALTER TABLE t NO FORCE ROW LEVEL SECURITY"
 SAFE = "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS"
 # ok: qbank-no-rls-bypass
 FORCE = "ALTER TABLE t FORCE ROW LEVEL SECURITY"
+# ok: qbank-no-rls-bypass
+READ = "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
+# ok: qbank-no-rls-bypass
+TALK = "The backup role must be a superuser or have BYPASSRLS."
