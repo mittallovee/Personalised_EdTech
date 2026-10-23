@@ -29,6 +29,8 @@ from qbank.modules.taxonomy.import_plan import (
     apply_order,
     node_index,
 )
+from qbank.modules.taxonomy.import_service import read_snapshot
+from qbank.modules.taxonomy.locks import lock_syllabus_for_import
 from qbank.modules.taxonomy.models import CatalogueImport
 from qbank.modules.taxonomy.schemas import CreateConcept, CreateNode, UpdateConcept, UpdateNode
 
@@ -45,17 +47,24 @@ def apply_import(
     session: Session,
     principal: Principal,
     import_id: UUID,
-    snapshot: Snapshot,
     *,
     request_id: str | None,
 ) -> CatalogueImport:
-    """Apply the preview. ``snapshot`` is the syllabus as it is now (``load_snapshot``).
+    """Apply the preview.
+
+    Takes the coaching's syllabus lock exclusively first (see ``locks``), so no change to the
+    syllabus can slip in between the staleness check and the writes, and two imports cannot apply
+    at the same time.
 
     Applying twice is safe: the second call finds it applied and changes nothing. Refused with
     ``IMPORT_INVALID`` if a row is an error, there is nothing to do, or it is too much at once;
     with ``IMPORT_STALE`` if the syllabus is not what the preview was made against.
     """
     require(principal, Action.MANAGE_CATALOGUES)
+    organization_id = principal.tenant_context.organization_id
+    if organization_id is None:  # the permission check already refuses this
+        raise NotFound("No such import.")
+    lock_syllabus_for_import(session, organization_id)
     preview = session.scalars(
         select(CatalogueImport).where(CatalogueImport.id == import_id).with_for_update()
     ).first()  # locked: two people applying at once take turns
@@ -77,6 +86,7 @@ def apply_import(
             f"This would add or change {actionable:,} rows; at most {MAX_APPLY_ROWS:,} at once."
             " Split the file and import the parts one after another."
         )
+    snapshot = read_snapshot(session)
     if snapshot.fingerprint() != preview.base_fingerprint:
         raise _stale()
 
@@ -185,7 +195,13 @@ def _write_concept(
         )
         return
     concept = existing[(subject_id, concept_key)]
-    added = [alias for alias in row["aliases"] if name_key(alias) not in concept.aliases]
+    added = list(
+        {
+            name_key(alias): alias
+            for alias in reversed(row["aliases"])
+            if name_key(alias) not in concept.aliases
+        }.values()
+    )[::-1]  # one spelling for each new alias, the first the file gave
     concepts.update_concept(
         session,
         principal,

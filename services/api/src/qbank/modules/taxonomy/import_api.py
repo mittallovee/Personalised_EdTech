@@ -241,9 +241,8 @@ def apply_import(
     database: Annotated[Database, Depends(get_database)],
 ) -> ImportOut:
     require(principal, Action.MANAGE_CATALOGUES)
-    snapshot = service.load_snapshot(database, principal.tenant_context)
     with database.transaction(principal.tenant_context) as session:
         applied = import_apply.apply_import(
-            session, principal, import_id, snapshot, request_id=request.state.request_id
+            session, principal, import_id, request_id=request.state.request_id
         )
         return _out(applied)

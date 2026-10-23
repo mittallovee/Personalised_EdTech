@@ -7,8 +7,9 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
+from qbank.core.auth import Principal
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
@@ -16,6 +17,7 @@ from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
 from qbank.modules.taxonomy import concepts, import_apply, import_plan
+from qbank.modules.taxonomy.locks import lock_syllabus_for_change, lock_syllabus_for_import
 from qbank.modules.taxonomy.models import TaxonomyNode
 from tests.integration.conftest import Member, MigratedDatabase, make_member, sign_in
 
@@ -317,3 +319,104 @@ def test_the_database_holds_the_applied_state_together(
             .where(TaxonomyNode.organization_id == team["owner"].org_id)
         )
     assert count == 3
+
+
+# --- Applying and other syllabus changes do not slip past each other ---------------------
+
+
+def run_in_thread(results: dict[str, Any], name: str, call: Any) -> threading.Thread:
+    thread = threading.Thread(target=lambda: results.__setitem__(name, call()))
+    thread.start()
+    return thread
+
+
+def test_a_change_still_in_progress_makes_the_preview_stale_instead_of_being_missed(
+    client: TestClient, owner_db: Database, team: dict[str, Member], admin_headers: dict[str, str]
+) -> None:
+    """Another admin is part-way through adding an item when the apply starts. The apply waits for
+    it, then sees the syllabus is not what the preview saw."""
+    result = preview(client, admin_headers, FILE)
+    context = TenantContext(organization_id=team["owner"].org_id)
+    results: dict[str, Any] = {}
+    with owner_db.transaction(context) as session:
+        lock_syllabus_for_change(session, _principal(team["owner"]))
+        session.execute(
+            text(
+                "INSERT INTO taxonomy_nodes (id, organization_id, kind, name, name_key)"
+                " VALUES (gen_random_uuid(), :org, 'CLASS', 'Class 12', 'class 12')"
+            ),
+            {"org": team["owner"].org_id},
+        )
+        worker = run_in_thread(results, "apply", lambda: apply(client, admin_headers, result["id"]))
+        worker.join(timeout=1.5)
+        assert "apply" not in results  # waiting for the change to finish
+    worker.join(timeout=15)
+    assert results["apply"].status_code == 409
+    assert results["apply"].json()["error"]["code"] == "IMPORT_STALE"
+    assert set(nodes(client, admin_headers)) == {"Class 12"}
+
+
+def test_syllabus_changes_wait_while_an_import_is_being_applied(
+    client: TestClient, owner_db: Database, team: dict[str, Member], admin_headers: dict[str, str]
+) -> None:
+    context = TenantContext(organization_id=team["owner"].org_id)
+    results: dict[str, Any] = {}
+    with owner_db.transaction(context) as session:
+        lock_syllabus_for_import(session, team["owner"].org_id)  # an apply is in progress
+        worker = run_in_thread(
+            results,
+            "create",
+            lambda: client.post(
+                NODES, json={"kind": "CLASS", "name": "Class 12"}, headers=admin_headers
+            ),
+        )
+        worker.join(timeout=1.5)
+        assert "create" not in results
+    worker.join(timeout=15)
+    assert results["create"].status_code == 201
+
+
+def test_two_previews_made_from_the_same_syllabus_cannot_both_be_applied(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    first = preview(client, admin_headers, HEADER + "CLASS,Class 11,,,\n")
+    second = preview(client, admin_headers, HEADER + "CLASS,Class 12,,,\n")
+    assert apply(client, admin_headers, first["id"]).status_code == 200
+    response = apply(client, admin_headers, second["id"])
+    assert response.status_code == 409 and response.json()["error"]["code"] == "IMPORT_STALE"
+    assert set(nodes(client, admin_headers)) == {"Class 11"}
+
+
+def test_the_same_new_alias_spelled_twice_is_added_once(
+    client: TestClient, admin_headers: dict[str, str]
+) -> None:
+    cls = client.post(
+        NODES, json={"kind": "CLASS", "name": "Class 11"}, headers=admin_headers
+    ).json()
+    subject = client.post(
+        NODES,
+        json={"kind": "SUBJECT", "parent_id": cls["id"], "name": "Physics"},
+        headers=admin_headers,
+    ).json()
+    existing = [f"alias {n}" for n in range(9)]
+    client.post(
+        CONCEPTS,
+        json={"subject_id": subject["id"], "name": "Work", "aliases": existing},
+        headers=admin_headers,
+    )
+    data = HEADER + 'CONCEPT,Class 11 > Physics > Work,,"Tenth; TENTH ;  tenth",\n'
+    result = preview(client, admin_headers, data)
+    assert result["counts"]["error"] == 0 and result["counts"]["changed"] == 1
+    assert apply(client, admin_headers, result["id"]).status_code == 200
+    [work] = all_concepts(client, admin_headers)
+    assert len(work["aliases"]) == 10 and "Tenth" in work["aliases"]
+
+
+def _principal(member: Member) -> Principal:
+    return Principal(
+        user_id=member.user_id,
+        display_name="Owner",
+        is_platform_admin=False,
+        organization_id=member.org_id,
+        role="OWNER",
+    )

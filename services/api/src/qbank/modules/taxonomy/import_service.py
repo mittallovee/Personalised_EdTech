@@ -39,10 +39,11 @@ def load_snapshot(database: Database, context: TenantContext) -> Snapshot:
     revision, and the fingerprint stored with it describes exactly what was compared.
     """
     with database.transaction(context, isolation_level="REPEATABLE READ") as session:
-        return _read_snapshot(session)
+        return read_snapshot(session)
 
 
-def _read_snapshot(session: Session) -> Snapshot:
+def read_snapshot(session: Session) -> Snapshot:
+    """The syllabus as the caller's transaction sees it now."""
     node_labels: dict[UUID, dict[str, str]] = defaultdict(dict)
     for node_id, language, label in session.execute(
         select(TaxonomyLabel.node_id, TaxonomyLabel.language, TaxonomyLabel.label)

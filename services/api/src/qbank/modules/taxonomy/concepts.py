@@ -24,6 +24,7 @@ from qbank.core.permissions import Action, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.taxonomy.catalogues import name_key
 from qbank.modules.taxonomy.cursors import encode_cursor
+from qbank.modules.taxonomy.locks import lock_syllabus_for_change
 from qbank.modules.taxonomy.models import Concept, ConceptAlias, ConceptLabel, TaxonomyNode
 from qbank.modules.taxonomy.schemas import ConceptOut, CreateConcept, UpdateConcept
 
@@ -282,6 +283,7 @@ def create_concept(
     """Add a concept. A retry with the ``idempotency_key`` of an earlier, identical request returns
     that concept instead of failing with ``DUPLICATE_NAME`` because the first attempt worked."""
     require(principal, Action.MANAGE_CATALOGUES)
+    lock_syllabus_for_change(session, principal)
     organization_id = _organization_id(principal)
     concept_id = new_id()
     if idempotency_key is not None:
@@ -391,6 +393,7 @@ def update_concept(
     A change that changes nothing keeps the revision and writes no audit event.
     """
     require(principal, Action.MANAGE_CATALOGUES)
+    lock_syllabus_for_change(session, principal)
     concept = _locked_concept(session, concept_id)
     require_if_match(if_match, concept.revision)
     before = _snapshot(session, concept)
@@ -437,6 +440,7 @@ def set_state(
     Restoring is refused while its subject is retired.
     """
     require(principal, Action.MANAGE_CATALOGUES)
+    lock_syllabus_for_change(session, principal)
     concept = _locked_concept(session, concept_id)
     require_if_match(if_match, concept.revision)
     if concept.state == state:
