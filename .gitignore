@@ -25,6 +25,11 @@ playwright-report/
 
 # Local data
 /data/
+# Database backups hold real personal data: never commit them (docs/operations/backup-and-restore.md)
+/backups/
+*.dump
+*.dump.sha256
+*.dump.partial
 *.log
 
 # OS / editors

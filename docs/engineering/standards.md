@@ -170,6 +170,7 @@ Rules:
 ```text
 backend:  ruff check · ruff format --check · mypy · import-linter
           pytest unit + integration + api (PostgreSQL service container)
+          includes the restore drill: back up, restore into a new database, compare, prove tenant isolation
           alembic upgrade head → downgrade base → upgrade head (empty DB)
           export OpenAPI → must equal committed api/openapi.json · oasdiff breaking-change check
 web:      pnpm lint · typecheck · vitest · build · api-client regenerated == committed

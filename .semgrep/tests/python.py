@@ -39,6 +39,41 @@ def sql(name: str, log, logger) -> None:
 # ruleid: qbank-no-rls-bypass
 ROLE = "CREATE ROLE app LOGIN BYPASSRLS"
 # ruleid: qbank-no-rls-bypass
+ALTERED = "alter role app with bypassrls"
+# ruleid: qbank-no-rls-bypass
+QUOTED = 'ALTER ROLE "qbank_app" BYPASSRLS'
+# ruleid: qbank-no-rls-bypass
+QUOTED_CLAUSE = "ALTER ROLE \"qbank_app\" WITH LOGIN PASSWORD 'secret' BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+SPLIT = "CREATE ROLE app LOGIN " "BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+MULTI = """ALTER ROLE app
+    LOGIN
+    BYPASSRLS"""
+# ruleid: qbank-no-rls-bypass
+LONG = """ALTER ROLE app
+    WITH
+    LOGIN
+    PASSWORD 'x'
+    CONNECTION LIMIT 5
+    BYPASSRLS;"""
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_VALUE = "ALTER ROLE app PASSWORD 'safe;value' BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_NAME = 'ALTER ROLE "odd;name" BYPASSRLS'
+# ruleid: qbank-no-rls-bypass
+STRAY_QUOTE = "ALTER ROLE app -- don't forget\n    BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_LINE_COMMENT = "ALTER ROLE app -- backup access; reviewed\n    BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_BLOCK_COMMENT = "ALTER ROLE app /* a; b */ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_DOLLAR_QUOTE = "ALTER ROLE app PASSWORD $$a;b$$ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+SEMICOLON_IN_TAGGED_DOLLAR_QUOTE = "ALTER ROLE app PASSWORD $t$a;b$t$ BYPASSRLS;"
+# ruleid: qbank-no-rls-bypass
+FORMATTED = f"ALTER ROLE {ROLE} WITH BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
 OFF = "SET row_security = off"
 # ruleid: qbank-no-rls-bypass
 DROP = "ALTER TABLE t DISABLE ROW LEVEL SECURITY"
@@ -48,3 +83,18 @@ UNFORCE = "ALTER TABLE t NO FORCE ROW LEVEL SECURITY"
 SAFE = "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS"
 # ok: qbank-no-rls-bypass
 FORCE = "ALTER TABLE t FORCE ROW LEVEL SECURITY"
+# ok: qbank-no-rls-bypass
+READ = "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
+# ruleid: qbank-no-rls-bypass
+TALK = "The backup role must be a superuser or have BYPASSRLS."  # prose in a string is flagged too, on purpose
+# ruleid: qbank-no-rls-bypass
+OTHER_STATEMENT = "CREATE ROLE app LOGIN; SELECT 'a role with BYPASSRLS would be bad'"
+# ruleid: qbank-no-rls-bypass
+PIECES = "ALTER ROLE app " + "BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+OPTION_ONLY = "BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+DIGIT_TAG = "ALTER ROLE app PASSWORD $tag1$a;b$tag1$ BYPASSRLS;"
+# A comment can talk about BYPASSRLS freely: only string literals are looked at.
+# ok: qbank-no-rls-bypass
+NO_BYPASS_COLUMN = "SELECT rolname FROM pg_roles WHERE NOT rolbypassrls AND rolname <> 'x'"

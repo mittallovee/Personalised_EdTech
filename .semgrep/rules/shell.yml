@@ -1,0 +1,24 @@
+# Project rules for infrastructure scripts (K-02). Same intent as qbank-no-rls-bypass in python.yml,
+# for SQL inside shell scripts and .sql files, where there is no string literal to bound a statement:
+# a statement is read to the next semicolon, however long, whatever its line breaks or indentation,
+# and a semicolon inside a quoted value ('a;b' or "a;b"), a $$dollar-quoted$$ string or a -- / /* */
+# comment does not end it (the plain scan to the first semicolon is kept too, so a stray quote can only widen
+# what is caught). Comments may also sit between the words CREATE/ALTER and ROLE/USER. Not handled (a regex cannot count nesting or
+# know the string syntax in use): nested /* /* */ */ comments that contain a semicolon, and backslash escapes
+# inside E'...' strings. This rule is the third layer: the
+# tenant-isolation tests run as the restricted role and would fail if it could bypass row-level security,
+# and ensure-app-role.sh creates the runtime roles with NOBYPASSRLS. The price is a false alarm when a statement has no closing semicolon and the word
+# BYPASSRLS comes soon after in an unrelated place; end the statement with `;` or add a reviewed
+# `nosemgrep` comment that says why. For a guard on tenant isolation that is the right way round.
+rules:
+  - id: qbank-no-rls-bypass-infra
+    message: >-
+      Do not weaken row-level security or the database role (AGENTS.md §3, ADR-0005): no role that is
+      given BYPASSRLS, no disabling or un-forcing row-level security, no `row_security = off`. (A
+      dedicated backup role may need BYPASSRLS: create it in infrastructure code with a reviewed
+      `nosemgrep` comment that says why.)
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["/infra/"]
+    pattern-regex: '(?is)((create|alter)(?:\s|/\*(?:(?!\*/).)*\*/|--[^\n]*(?=\n|$))+(role|user)\b(?:[^;]*?|(?:''[^'']*''|"[^"]*"|--[^\n]*(?=\n|$)|/\*(?:(?!\*/).)*\*/|\$(?P<tag>(?:[a-z_][a-z_0-9]*)?)\$(?:(?!\$(?P=tag)\$).)*\$(?P=tag)\$|[^;''"\-/$]|-(?!-)|/(?!\*)|\$(?!(?:[a-z_][a-z_0-9]*)?\$))*?)(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'

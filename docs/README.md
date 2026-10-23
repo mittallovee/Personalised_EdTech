@@ -22,6 +22,7 @@
    [M3 design note](./architecture/m3-design-note.md): question authoring, **draft for approval**.
 8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [M2 demo](./operations/m2-demo.md): check identity and coaching admin yourself; [remote access](./operations/remote-access.md) on your own domain;
    [Google login](./operations/google-login.md): one-time Google Cloud setup (M2).
+   [Backup and restore](./operations/backup-and-restore.md): taking and restoring database backups, targets, the restore drill (K-03).
 
 ## Review reading order (history)
 

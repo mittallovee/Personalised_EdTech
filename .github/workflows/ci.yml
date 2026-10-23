@@ -35,6 +35,9 @@ jobs:
       QBANK_TEST_ADMIN_URL: postgresql+psycopg://qbank_owner:ci-owner-password@localhost:5432/postgres
       QBANK_TEST_APP_PASSWORD: ci-app-password
       QBANK_TEST_WORKER_PASSWORD: ci-worker-password
+      # The restore drill (tests/integration/test_backup_restore.py) runs pg_dump and pg_restore from
+      # this image so their version matches the server. Keep it equal to the postgres service above.
+      PG_DOCKER_IMAGE: postgres:17
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
