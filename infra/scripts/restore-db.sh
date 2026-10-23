@@ -24,6 +24,25 @@ else
 fi
 
 export PGDATABASE=postgres
+
+# The backup keeps who may do what (GRANT lines), so every role it names must exist on this server, or the
+# restore would stop part-way. Look at the permissions only (--schema-only: no data is read for this).
+roles="$(pg_tool pg_restore --schema-only --no-owner -f - < "$dump" \
+  | sed -n -E 's/^(ALTER DEFAULT PRIVILEGES.* )?(GRANT|REVOKE) .* (TO|FROM) ("[^"]+"|[A-Za-z0-9_$]+)( WITH GRANT OPTION)?;$/\4/p' \
+  | tr -d '"' | sort -u | grep -vx 'PUBLIC' || true)"
+if [ -n "$roles" ]; then
+  missing="$(printf '%s\n' "$roles" \
+    | pg_tool psql -X -At -c "CREATE TEMP TABLE wanted (r text)" -c "COPY wanted FROM STDIN" \
+        -c "SELECT r FROM wanted WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) ORDER BY r" \
+    | grep -v -e '^CREATE TABLE$' -e '^COPY ' || true)"
+  if [ -n "$missing" ]; then
+    echo "The backup grants privileges to roles that do not exist on this server:" >&2
+    printf '  %s\n' $missing >&2
+    echo "Create them first (infra/db/ensure-app-role.sh does qbank_app and qbank_worker), then restore again." >&2
+    exit 1
+  fi
+fi
+
 exists="$(echo "SELECT 1 FROM pg_database WHERE datname = :'target'" | pg_tool psql -X -At -v "target=$target")"
 if [ -n "$exists" ]; then
   echo "Database $target already exists; restore into a new name." >&2

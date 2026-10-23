@@ -58,8 +58,11 @@ refuses to run); leave it out if the tools on your machine already match. The `b
 A restore always goes into a **new** database. It never overwrites, so a mistaken restore cannot destroy data.
 
 ```bash
-# 1. On a brand-new server only: create the two runtime roles first.
-#    (The compose stack's db-init service already did this on yours.)
+# 1. On a brand-new server only: create the roles the backup grants privileges to. That is always
+#    qbank_app and qbank_worker (infra/db/ensure-app-role.sh does both; the compose stack's db-init
+#    service already did it on yours), and any other role you gave access, such as a backup role with
+#    its own SELECT grants. The script checks first and, if one is missing, lists it and stops before
+#    restoring anything.
 # 2. Restore beside the old database:
 PGHOST=localhost PGUSER="$POSTGRES_USER" PGPASSWORD="$POSTGRES_PASSWORD" PG_DOCKER_IMAGE=postgres:17 \
   infra/scripts/restore-db.sh backups/qbank-2026-10-23-1030.dump qbank_restored
@@ -83,7 +86,8 @@ against the migrated test database with two coachings in it, and then checks tha
 
 and that, signed in as the runtime role, coaching A sees only coaching A, coaching B only B, and no coaching
 context sees nothing. It also checks the safety rules: a role that cannot bypass row-level security is refused, a
-restore never overwrites, and a damaged file is refused.
+restore never overwrites, a damaged file is refused, and a backup that grants privileges to a role the new server
+does not have stops with the role's name before anything is created (and restores once the role exists).
 
 I checked that the drill has teeth by breaking the backup script three ways (leaving out the privileges, leaving out
 one table's rows, removing the role check); the drill failed each time with a message naming what differed.

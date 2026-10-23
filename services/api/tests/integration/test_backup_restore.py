@@ -230,3 +230,56 @@ def test_restore_refuses_a_damaged_backup(backup: Path, tmp_path: Path, restored
             "SELECT 1 FROM pg_database WHERE datname = %s", (restored_name,)
         ).fetchone()
     assert found is None  # nothing was created
+
+
+def test_restore_stops_before_starting_when_a_granted_role_is_missing(
+    migrated_database: MigratedDatabase, tmp_path: Path
+) -> None:
+    """A backup keeps every GRANT. On a server without one of those roles it must stop with a clear
+    message and create nothing; once the role exists, the same file restores and keeps the grant."""
+    extra = f"qbank_extra_{secrets.token_hex(4)}"
+    target = f"qbank_restore_{secrets.token_hex(6)}"
+    admin = make_url(ADMIN_URL).set(drivername="postgresql")
+    source = admin.set(database=migrated_database.name).render_as_string(hide_password=False)
+    server = admin.render_as_string(hide_password=False)
+    dump = tmp_path / "extra.dump"
+    try:
+        with psycopg.connect(server, autocommit=True) as conn:
+            conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(extra)))
+        with psycopg.connect(source, autocommit=True) as conn:
+            conn.execute(
+                sql.SQL("GRANT SELECT ON organizations TO {}").format(sql.Identifier(extra))
+            )
+        result = _run("backup-db.sh", dump, env=_connection_env(migrated_database.name))
+        assert result.returncode == 0, result.stderr
+        # A server that has never heard of the role: take it away from the source, then drop it.
+        with psycopg.connect(source, autocommit=True) as conn:
+            conn.execute(
+                sql.SQL("REVOKE SELECT ON organizations FROM {}").format(sql.Identifier(extra))
+            )
+        with psycopg.connect(server, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(extra)))
+
+        result = _run("restore-db.sh", dump, target, env=_connection_env("postgres"))
+        assert result.returncode != 0
+        assert extra in result.stderr and "do not exist" in result.stderr
+        with psycopg.connect(server) as conn:
+            found = conn.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s", (target,)
+            ).fetchone()
+        assert found is None  # it stopped before creating anything
+
+        with psycopg.connect(server, autocommit=True) as conn:
+            conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(extra)))
+        result = _run("restore-db.sh", dump, target, env=_connection_env("postgres"))
+        assert result.returncode == 0, result.stderr
+        restored = admin.set(database=target).render_as_string(hide_password=False)
+        with psycopg.connect(restored) as conn:
+            granted = conn.execute(
+                "SELECT has_table_privilege(%s, 'organizations', 'SELECT')", (extra,)
+            ).fetchone()
+        assert granted == (True,)
+    finally:
+        drop_database(target)
+        with psycopg.connect(server, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(extra)))
