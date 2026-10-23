@@ -7,7 +7,7 @@ rules:
     severity: ERROR
     languages: [typescript, javascript]
     paths:
-      include: ["apps/web/src/", "packages/"]
+      include: ["/apps/web/src/", "/packages/"]
     pattern-either:
       - pattern: <$EL dangerouslySetInnerHTML={...} />
       - pattern: <$EL dangerouslySetInnerHTML={...}>...</$EL>
@@ -21,7 +21,7 @@ rules:
     severity: ERROR
     languages: [typescript, javascript]
     paths:
-      include: ["apps/web/src/", "packages/"]
+      include: ["/apps/web/src/", "/packages/"]
     pattern-either:
       - pattern: eval(...)
       - pattern: new Function(...)
@@ -35,7 +35,7 @@ rules:
     severity: ERROR
     languages: [generic]
     paths:
-      include: ["apps/web/src/"]
+      include: ["/apps/web/src/"]
     pattern-regex: '(?m)(^\s*[''"]use server[''"]|^export\s+(async\s+)?(function|const)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b)'
 
   - id: qbank-no-token-in-browser-storage
@@ -45,7 +45,7 @@ rules:
     severity: ERROR
     languages: [typescript, javascript]
     paths:
-      include: ["apps/web/src/", "packages/"]
+      include: ["/apps/web/src/", "/packages/"]
     patterns:
       - pattern-either:
           - pattern: localStorage.setItem($K, ...)

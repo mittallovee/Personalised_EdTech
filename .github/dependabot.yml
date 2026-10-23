@@ -4,6 +4,8 @@
 #
 # Patch and minor updates of one ecosystem arrive together as one PR (less noise, one CI run);
 # a major update arrives alone, because it is the one most likely to need real work.
+# A new release is only proposed once it is 7 days old (cooldown): a malicious or broken release
+# is usually found and pulled within days. Security advisories are not delayed by this.
 # (Written out in full, without YAML anchors, so that Dependabot's own parser cannot trip on it.)
 version: 2
 
@@ -16,6 +18,8 @@ updates:
       time: "08:00"
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -30,6 +34,8 @@ updates:
       time: "08:00"
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -44,6 +50,8 @@ updates:
       time: "08:00"
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -61,6 +69,8 @@ updates:
       time: "08:00"
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     groups:
@@ -75,6 +85,8 @@ updates:
       time: "08:00"
       timezone: Asia/Kolkata
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
     groups:

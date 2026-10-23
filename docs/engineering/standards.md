@@ -181,6 +181,11 @@ updates:  Dependabot opens one pull request a week per ecosystem (Python, web, G
           images) in .github/dependabot.yml; patch and minor updates are grouped, a major update stands
           alone. Such a PR is reviewed and merged like any other: CI must be green, and a major update
           needs the owner's decision.
+supply:   Third-party GitHub Actions are pinned to a full commit with the version in a comment
+          (`uses: owner/action@<sha> # v7`); Dependabot moves both. New npm releases wait 7 days
+          (pnpm `minimumReleaseAge`, Dependabot `cooldown`), and `trustPolicy: no-downgrade`
+          refuses a version with weaker publishing evidence than an earlier one: if it flags a
+          package, look at the error, and only then add it to `trustPolicyExclude` with a reason.
 ```
 
 ### Semgrep findings

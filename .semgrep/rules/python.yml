@@ -8,7 +8,7 @@ rules:
     severity: ERROR
     languages: [generic]
     paths:
-      include: ["services/api/src/", "services/api/migrations/", "infra/"]
+      include: ["/services/api/src/", "/services/api/migrations/", "/infra/"]
     pattern-regex: '(?i)(row_security\s*(=|to)\s*off|(?<!NO)BYPASSRLS|NO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY|DISABLE\s+ROW\s+LEVEL\s+SECURITY)'
 
   - id: qbank-sql-text-built-from-string
@@ -18,7 +18,7 @@ rules:
     severity: ERROR
     languages: [python]
     paths:
-      include: ["services/api/src/", "services/api/migrations/"]
+      include: ["/services/api/src/", "/services/api/migrations/"]
     pattern-either:
       - pattern: text(f"...", ...)
       - pattern: text("..." + $X, ...)
@@ -32,7 +32,7 @@ rules:
     severity: ERROR
     languages: [python]
     paths:
-      include: ["services/api/src/", "services/api/migrations/"]
+      include: ["/services/api/src/", "/services/api/migrations/"]
     pattern-either:
       - pattern: Float(...)
       - pattern: sa.Float(...)
@@ -45,7 +45,7 @@ rules:
     severity: ERROR
     languages: [python]
     paths:
-      include: ["services/api/src/"]
+      include: ["/services/api/src/"]
     patterns:
       - pattern-either:
           - pattern: $LOG.debug(..., $K=$V, ...)

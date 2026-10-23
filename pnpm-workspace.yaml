@@ -6,3 +6,21 @@ packages:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# Supply-chain settings (K-02; Semgrep's package-manager rules ask for each of them).
+# A dependency may not come from a git URL or tarball behind our back.
+blockExoticSubdeps: true
+# Do not install a version published less than 7 days ago (10080 minutes): bad releases are
+# usually found and pulled within days. Dependabot has the same 7-day wait.
+minimumReleaseAge: 10080
+# Refuse a package version whose publishing evidence (provenance, trusted publisher) is weaker
+# than an earlier version's.
+trustPolicy: no-downgrade
+# Versions the check wrongly flags on a fresh install (found by resolving from an empty lockfile
+# on 23 Oct 2026): old releases that were republished without the publishing evidence their
+# newer siblings have. Each line needs a reason; add one only after looking at the error
+# (ERR_PNPM_TRUST_DOWNGRADE names the package) and judging it a false alarm.
+trustPolicyExclude:
+  - undici-types@6.21.0 # types-only package, pulled in by @types/node
+  - eslint-import-resolver-typescript@3.10.1 # pulled in by eslint-config-next
+  - semver@6.3.1 # a 6.x backport published after 7.x

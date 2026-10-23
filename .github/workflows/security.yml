@@ -28,8 +28,8 @@ jobs:
       run:
         working-directory: services/api
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           working-directory: services/api
       # Exactly the versions in uv.lock (with their hashes), checked against the PyPI/OSV
@@ -41,9 +41,9 @@ jobs:
     name: Web dependencies (pnpm audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
       # Libraries that end up in the running app (pnpm-lock.yaml); moderate severity or worse fails.
@@ -58,8 +58,8 @@ jobs:
       # line, so move it by hand when you want newer rules and engine.
       SEMGREP: semgrep==1.182.1
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           enable-cache: false
       # Our own rules (.semgrep/rules) must still catch what their test files say they catch.
