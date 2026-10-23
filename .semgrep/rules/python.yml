@@ -7,13 +7,22 @@ rules:
       given BYPASSRLS, no disabling or un-forcing row-level security, no `row_security = off`. (A
       dedicated backup role may need BYPASSRLS: create it in infrastructure code, not here.)
     severity: ERROR
-    languages: [generic]
+    languages: [python]
     paths:
-      include: ["/services/api/src/", "/services/api/migrations/", "/infra/"]
-    # Only the commands count, not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS in the
-    # same statement, on the same or the next two lines (quoted names and clauses included; not
-    # NOBYPASSRLS, not the column name rolbypassrls), turning row_security off, un-forcing or disabling it.
-    pattern-regex: '(?is)((create|alter)\s+(role|user)\b(?:[^;\n]*\n){0,2}?[^;\n]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
+      include: ["/services/api/src/", "/services/api/migrations/"]
+    # The text is looked for inside one string literal at a time (bound to $S), so a statement ends
+    # where its string ends and a long multi-line statement is read to the end. Only commands count,
+    # not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS before the next semicolon
+    # (quoted names and clauses included; not NOBYPASSRLS, not the column name rolbypassrls), turning
+    # row_security off, un-forcing or disabling it. (metavariable-regex matches from the start, hence
+    # the leading .*)
+    patterns:
+      - pattern-either:
+          - pattern: '"$S"'
+          - pattern: 'f"$S"'
+      - metavariable-regex:
+          metavariable: $S
+          regex: '(?is).*((create|alter)\s+(role|user)\b[^;]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
 
   - id: qbank-sql-text-built-from-string
     message: >-

@@ -51,6 +51,15 @@ MULTI = """ALTER ROLE app
     LOGIN
     BYPASSRLS"""
 # ruleid: qbank-no-rls-bypass
+LONG = """ALTER ROLE app
+    WITH
+    LOGIN
+    PASSWORD 'x'
+    CONNECTION LIMIT 5
+    BYPASSRLS;"""
+# ruleid: qbank-no-rls-bypass
+FORMATTED = f"ALTER ROLE {ROLE} WITH BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
 OFF = "SET row_security = off"
 # ruleid: qbank-no-rls-bypass
 DROP = "ALTER TABLE t DISABLE ROW LEVEL SECURITY"

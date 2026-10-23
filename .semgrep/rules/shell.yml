@@ -1,0 +1,17 @@
+# Project rules for infrastructure scripts (K-02). Same intent as qbank-no-rls-bypass in python.yml,
+# for SQL inside shell scripts and .sql files, where there is no string literal to bound a statement:
+# a statement runs to the next semicolon, and past a line break only onto an indented line (the way
+# multi-line SQL is written), so an unrelated line further down is never taken for part of it. The
+# limit: a statement whose later lines are not indented can slip past; review covers that.
+rules:
+  - id: qbank-no-rls-bypass-infra
+    message: >-
+      Do not weaken row-level security or the database role (AGENTS.md §3, ADR-0005): no role that is
+      given BYPASSRLS, no disabling or un-forcing row-level security, no `row_security = off`. (A
+      dedicated backup role may need BYPASSRLS: create it in infrastructure code with a reviewed
+      `nosemgrep` comment that says why.)
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["/infra/"]
+    pattern-regex: '(?is)((create|alter)\s+(role|user)\b(?:[^;\n]*?\n[ \t]+)*?[^;\n]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
