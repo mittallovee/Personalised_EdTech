@@ -23,6 +23,14 @@ function showsAudit(me: Me): boolean {
   return showsUsers(me) || me.is_platform_admin;
 }
 
+/**
+ * Whether to show the Syllabus link: for people in a coaching, and a platform admin acting in one.
+ * A platform admin outside any coaching has no syllabus to see. A hint, like the above.
+ */
+function showsSyllabus(me: Me): boolean {
+  return me.organization !== null || me.acting_organization_id !== null;
+}
+
 /** Whether to show the Coachings link: the platform admin's own screen. A hint, like the above. */
 function showsCoachings(me: Me): boolean {
   return me.is_platform_admin;
@@ -128,15 +136,17 @@ export function AppShell({
                 </Link>
               </li>
             )}
-            <li>
-              <Link
-                href="/admin/syllabus"
-                aria-current={current === "syllabus" ? "page" : undefined}
-                className={`${ITEM} ${current === "syllabus" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
-              >
-                Syllabus
-              </Link>
-            </li>
+            {showsSyllabus(me) && (
+              <li>
+                <Link
+                  href="/admin/syllabus"
+                  aria-current={current === "syllabus" ? "page" : undefined}
+                  className={`${ITEM} ${current === "syllabus" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Syllabus
+                </Link>
+              </li>
+            )}
             <li>
               <Link
                 href="/profile"

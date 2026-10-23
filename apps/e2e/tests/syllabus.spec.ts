@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { activate, invite, signedInOwner, unique } from "./helpers";
+import {
+  activate,
+  actingPlatformAdmin,
+  csrfOf,
+  invite,
+  platformAdminContext,
+  signedInOwner,
+  unique,
+} from "./helpers";
 
 // M3 (C-01, C-04): the Owner builds the syllabus on the Syllabus screen, one level at a time.
 
@@ -31,6 +39,9 @@ test("the Owner builds a syllabus level by level, renames, translates, retires a
   await page.getByRole("link", { name: "Syllabus" }).click();
   await expect(page.getByRole("heading", { name: "Syllabus", level: 1 })).toBeVisible();
   await expect(page.getByText("No classes yet.")).toBeVisible();
+  // At the top there is nowhere higher to go: "All classes" is a label, not a button.
+  const where = page.getByRole("navigation", { name: "Where you are" });
+  await expect(where.getByRole("button")).toHaveCount(0);
 
   // Classes, then the subjects inside one, then its chapters.
   await add(page, "class", "Class 11");
@@ -71,7 +82,6 @@ test("the Owner builds a syllabus level by level, renames, translates, retires a
   await expect(renamed).not.toContainText("Retired");
 
   // The breadcrumb leads back up.
-  const where = page.getByRole("navigation", { name: "Where you are" });
   await where.getByRole("button", { name: "Class 11" }).click();
   await expect(item(page, "Physics")).toBeVisible();
   await expect(item(page, "Chemistry")).toBeVisible();
@@ -124,4 +134,69 @@ test("faculty can read the syllabus but have no controls to change it", async ({
   await expect(faculty.getByRole("button", { name: "Edit" })).toHaveCount(0);
   await expect(faculty.getByRole("button", { name: "Retire" })).toHaveCount(0);
   await expect(faculty.getByRole("form", { name: "Add a class" })).toHaveCount(0);
+});
+
+test("a new item shows where its order puts it", async ({ browser, baseURL }) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Order Syllabus ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/admin/syllabus");
+  await add(page, "class", "Class 11", "5");
+  await add(page, "class", "Class 10", "1");
+  await add(page, "class", "Class 12", "9");
+  await expect(
+    page
+      .getByRole("list", { name: "Syllabus items" })
+      .getByRole("listitem")
+      .getByText(/^Class 1/),
+  ).toHaveText(["Class 10", "Class 11", "Class 12"]);
+});
+
+test("pressing Show more twice on a long list loads the next page once", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Long Syllabus ${unique()}`);
+  const csrf = await csrfOf(context);
+  for (let n = 1; n <= 102; n++) {
+    const created = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data: { kind: "CLASS", name: `Class ${String(n).padStart(3, "0")}`, sort_order: n },
+    });
+    expect(created.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  // Slow the second page down, so both presses happen before it arrives.
+  await page.route("**/api/v1/taxonomy/nodes?*cursor=*", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  const items = page.getByRole("list", { name: "Syllabus items" }).getByRole("listitem");
+  await expect(items).toHaveCount(100);
+  const more = page.getByRole("button", { name: "Show more" });
+  await more.click();
+  await more.click({ noWaitAfter: true, timeout: 2000 }).catch(() => undefined);
+  await expect(items).toHaveCount(102);
+  await expect(page.getByRole("button", { name: "Show more" })).toHaveCount(0);
+});
+
+test("the Syllabus link is for people in a coaching, not a platform admin outside one", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context: ownerContext } = await signedInOwner(
+    browser,
+    baseURL!,
+    `Link Syllabus ${unique()}`,
+  );
+  const me = await (await ownerContext.request.get("/api/v1/me")).json();
+
+  const platform = await (await platformAdminContext(browser, baseURL!)).newPage();
+  await platform.goto("/");
+  await expect(platform.getByRole("heading", { name: /Welcome/ })).toBeVisible();
+  await expect(platform.getByRole("link", { name: "Syllabus" })).toHaveCount(0);
+
+  const acting = await (await actingPlatformAdmin(browser, baseURL!, me.organization.id)).newPage();
+  await acting.goto("/");
+  await expect(acting.getByRole("link", { name: "Syllabus" })).toBeVisible();
 });

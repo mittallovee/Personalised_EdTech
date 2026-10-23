@@ -48,6 +48,7 @@ export default function SyllabusPage() {
   // A retry of the same addition reuses its Idempotency-Key, so a lost response never means two.
   const addKey = useRef<{ key: string; fingerprint: string } | null>(null);
   const generation = useRef(0);
+  const moreInFlight = useRef(false);
 
   const here = path.at(-1) ?? null;
   const addingKind = childKind(here?.kind ?? null);
@@ -84,7 +85,10 @@ export default function SyllabusPage() {
       return;
     }
     const page = result.data.data;
-    setItems((current) => (cursor ? [...current, ...page] : page));
+    // An item already shown is not added twice.
+    setItems((current) =>
+      cursor ? [...current, ...page.filter((n) => !current.some((c) => c.id === n.id))] : page,
+    );
     setNextCursor(result.data.page.next_cursor ?? null);
     setState("ready");
     setListError(null);
@@ -107,7 +111,19 @@ export default function SyllabusPage() {
     })();
   }, []);
 
+  /** "Show more": one request at a time, so pressing it twice does not load the page twice. */
+  async function showMore() {
+    if (moreInFlight.current || !nextCursor) return;
+    moreInFlight.current = true;
+    try {
+      await load(here, nextCursor);
+    } finally {
+      moreInFlight.current = false;
+    }
+  }
+
   function goTo(depth: number) {
+    if (depth === path.length) return; // already here
     setPath((current) => current.slice(0, depth));
     setOpen(null);
     setNotice(null);
@@ -210,7 +226,7 @@ export default function SyllabusPage() {
         params: { header: { "Idempotency-Key": addKey.current.key } },
       });
       if (data) {
-        setItems((current) => [...current.filter((i) => i.id !== data.id), data]);
+        void load(here, null); // the server's order decides where the new item shows
         setNewName("");
         setNewOrder(String(data.sort_order + 1));
         setNotice(`${data.name} was added.`);
@@ -254,9 +270,15 @@ export default function SyllabusPage() {
       )}
 
       <nav aria-label="Where you are" className="mt-6 flex flex-wrap items-center gap-1 text-sm">
-        <button type="button" onClick={() => goTo(0)} className="underline">
-          All classes
-        </button>
+        {path.length === 0 ? (
+          <span aria-current="page" className="font-medium">
+            All classes
+          </span>
+        ) : (
+          <button type="button" onClick={() => goTo(0)} className="underline">
+            All classes
+          </button>
+        )}
         {path.map((node, index) => (
           <span key={node.id} className="flex items-center gap-1">
             <span aria-hidden>›</span>
@@ -318,7 +340,7 @@ export default function SyllabusPage() {
         {nextCursor && (
           <button
             type="button"
-            onClick={() => void load(here, nextCursor)}
+            onClick={() => void showMore()}
             className="rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700"
           >
             Show more
