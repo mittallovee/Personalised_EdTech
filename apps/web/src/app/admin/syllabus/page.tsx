@@ -53,6 +53,8 @@ export default function SyllabusPage() {
   // Which level is on screen, counted up each time the person moves. Every request remembers the
   // level it was sent from; an answer for a level that is no longer on screen changes nothing.
   const level = useRef(0);
+  // The parent of the level on screen, for refreshing it when a late answer comes in.
+  const hereRef = useRef<Node | null>(null);
   // The level that has a "Show more" request on its way, if any.
   const moreInFlight = useRef<number | null>(null);
 
@@ -105,6 +107,10 @@ export default function SyllabusPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(here, null);
   }, [load, here]);
+
+  useEffect(() => {
+    hereRef.current = here;
+  }, [here]);
 
   useEffect(() => {
     void (async () => {
@@ -160,6 +166,19 @@ export default function SyllabusPage() {
   /** Close the open panel only if it belongs to this item: another row's draft stays. */
   const closePanelOf = (id: string) => setOpen((current) => (current?.id === id ? null : current));
 
+  /**
+   * An answer for a level that is no longer on screen shows nothing there, but what is on screen
+   * may now be out of date (the person can have come back to the same level before the change was
+   * made): put the changed item into the breadcrumb and list, and fetch the level again.
+   */
+  function refreshWhereYouAre(updated?: Node) {
+    if (updated) {
+      replace(updated);
+      setPath((current) => current.map((n) => (n.id === updated.id ? updated : n)));
+    }
+    void load(hereRef.current, null);
+  }
+
   /** Run one change to an item; a stale revision reloads the list instead of overwriting. */
   async function change(
     node: Node,
@@ -174,7 +193,10 @@ export default function SyllabusPage() {
     setItemError(null);
     try {
       const result = await run();
-      if (level.current !== mine) return; // the person has moved on: the answer is not for this screen
+      if (level.current !== mine) {
+        if (result.data || result.response.status === 412) refreshWhereYouAre(result.data);
+        return; // the person has moved on: the answer is not for this screen
+      }
       if (result.data) {
         replace(result.data);
         done(result.data);
@@ -259,7 +281,10 @@ export default function SyllabusPage() {
         params: { header: { "Idempotency-Key": key } },
       });
       if (data && addKey.current?.key === key) addKey.current = null;
-      if (level.current !== mine) return; // moved on: the answer is not for this screen
+      if (level.current !== mine) {
+        if (data) refreshWhereYouAre();
+        return; // moved on: the answer is not for this screen
+      }
       if (data) {
         setNotice(`${data.name} was added.`);
         void load(parent, null); // the server's order decides where the new item shows

@@ -719,3 +719,45 @@ test("a change still on its way does not lock the level you moved to", async ({
     timeout: 2000,
   });
 });
+
+test("a change that finishes after you came back to the same level shows on it", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Round Trip ${unique()}`);
+  const csrf = await csrfOf(context);
+  const make = async (data: object) => {
+    const response = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data,
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  const c11 = await make({ kind: "CLASS", name: "Class 11", sort_order: 1 });
+  await make({ kind: "SUBJECT", parent_id: c11.id, name: "Physics" });
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes/*/deprecate", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2500)); // the change is slow to be made
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  const where = page.getByRole("navigation", { name: "Where you are" });
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await item(page, "Physics").getByRole("button", { name: "Retire" }).click();
+  await item(page, "Physics").getByRole("button", { name: "Retire", exact: true }).last().click();
+
+  // Leave and come back, and go into the subject, before the change has been made.
+  await where.getByRole("button", { name: "All classes" }).click();
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Physics")).not.toContainText("Retired");
+  await item(page, "Physics").getByRole("button", { name: "Open" }).click();
+  await expect(page.getByRole("form", { name: "Add a chapter" })).toBeVisible();
+
+  // Once it is made, the screen catches up: the subject is retired and takes no new chapters.
+  await expect(
+    page.getByText("Physics is retired. Restore it to add chapters under it."),
+  ).toBeVisible({ timeout: 6000 });
+  await expect(page.getByRole("form", { name: "Add a chapter" })).toHaveCount(0);
+});
