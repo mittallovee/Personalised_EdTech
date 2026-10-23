@@ -378,7 +378,15 @@ def test_the_order_of_the_rows_in_the_file_does_not_change_what_the_syllabus_ite
     items = Table(columns=table.columns, rows=[r for r in table.rows if r.cells["kind"] != CONCEPT])
     shuffled_rows = list(items.rows)
     random.shuffle(shuffled_rows)  # type: ignore[attr-defined]
-    shuffled = Table(columns=items.columns, rows=shuffled_rows)
+    # Renumbered in the new order: the planner goes by row number, so the numbers have to move too
+    # for a child to really come before its parent.
+    shuffled = Table(
+        columns=items.columns,
+        rows=[
+            TableRow(number=number, cells=row.cells)
+            for number, row in enumerate(shuffled_rows, start=2)
+        ],
+    )
 
     def by_item(plan: Plan) -> dict[tuple[str, str], str]:
         return {(row.kind, row.path): row.status for row in plan.rows}
