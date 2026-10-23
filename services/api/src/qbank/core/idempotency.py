@@ -19,10 +19,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Header
+from pydantic import AfterValidator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from qbank.core.errors import Conflict
+from qbank.core.text import no_control_characters
 
 KEEP_FOR = "24 hours"
 
@@ -33,6 +35,9 @@ IdempotencyKeyHeader = Header(
     max_length=200,
     description="Any unique string (e.g. a UUID). Retrying with the same key never creates twice.",
 )
+# PostgreSQL cannot store NUL, so a key with control characters must be refused here (a 400), before
+# ``claim`` writes it. ``Header`` has no validator argument, so the check is added to its metadata.
+IdempotencyKeyHeader.metadata.append(AfterValidator(no_control_characters))
 
 # Every claim also clears the sender's expired keys (all of them, not just this one), so the table
 # holds at most a day of keys per person.
