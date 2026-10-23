@@ -14,6 +14,7 @@ The tests are deterministic in CI (``derandomize``) so a red build is always rep
 ``HYPOTHESIS_PROFILE=explore`` locally to try new random inputs.
 """
 
+import copy
 import csv
 import dataclasses
 import io
@@ -359,12 +360,14 @@ def test_a_plan_is_a_pure_function_of_the_file_and_the_syllabus(
     case: tuple[Snapshot, Table],
 ) -> None:
     snapshot, table = case
-    nodes, concepts = list(snapshot.nodes), list(snapshot.concepts)
+    # Independent copies, taken before planning: the lists and the dictionaries inside them are new
+    # objects, so a change made to the originals cannot also show in the copies.
+    snapshot_before, table_before = copy.deepcopy(snapshot), copy.deepcopy(table)
 
     first, second = build_plan(table, snapshot), build_plan(table, snapshot)
 
     assert _outcomes(first) == _outcomes(second)
-    assert (snapshot.nodes, snapshot.concepts) == (nodes, concepts)  # planning wrote nothing
+    assert snapshot == snapshot_before and table == table_before  # planning wrote nothing
 
 
 @given(snapshot_and_table(unique_paths=True), st.randoms(use_true_random=False))
@@ -455,21 +458,38 @@ def _apply(plan: Plan, snapshot: Snapshot) -> Snapshot:
 
 
 @given(snapshot_and_table())
+def test_a_file_with_errors_is_refused_whole_and_what_remains_plans_the_same(
+    case: tuple[Snapshot, Table],
+) -> None:
+    """An import with any row in error applies nothing (``apply_import`` refuses it). The admin
+    fixes the file; taking out the rows that failed must leave a file with no errors, in which
+    every other row gets the outcome it had before."""
+    snapshot, table = case
+    first = build_plan(table, snapshot)
+    failed = {row.number for row in first.rows if row.status == "ERROR"}
+
+    remaining = Table(columns=table.columns, rows=[r for r in table.rows if r.number not in failed])
+    again = build_plan(remaining, snapshot)
+
+    assert again.counts["ERROR"] == 0
+    assert [(r.number, r.status) for r in again.rows] == [
+        (r.number, r.status) for r in first.rows if r.number not in failed
+    ]
+
+
+@given(snapshot_and_table())
 def test_a_file_uploaded_twice_changes_nothing_the_second_time(
     case: tuple[Snapshot, Table],
 ) -> None:
     snapshot, table = case
-    first = build_plan(table, snapshot)
+    failed = {r.number for r in build_plan(table, snapshot).rows if r.status == "ERROR"}
+    file = Table(columns=table.columns, rows=[r for r in table.rows if r.number not in failed])
+    first = build_plan(file, snapshot)
+    assert first.counts["ERROR"] == 0  # a file the import would accept
 
-    second = build_plan(table, _apply(first, snapshot))
+    second = build_plan(file, _apply(first, snapshot))
 
-    assert [row.status for row in second.rows if row.status != "ERROR"] == ["UNCHANGED"] * (
-        len(second.rows) - second.counts["ERROR"]
-    )
-    # The rows that could not be imported the first time still cannot be.
-    assert {row.number for row in second.rows if row.status == "ERROR"} == {
-        row.number for row in first.rows if row.status == "ERROR"
-    }
+    assert {row.status for row in second.rows} <= {"UNCHANGED"}
 
 
 @given(st.lists(st.sampled_from([*NAMES, "", "  ", "a>b", "\\", ">"]), min_size=1, max_size=5))
