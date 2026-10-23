@@ -53,6 +53,13 @@ psql -c 'ALTER ROLE app PASSWORD $t$a;b$t$ BYPASSRLS;'
 # ruleid: qbank-no-rls-bypass-infra
 psql -c 'ALTER ROLE app PASSWORD $tag1$a;b$tag1$ BYPASSRLS;'
 # ruleid: qbank-no-rls-bypass-infra
+psql -c "ALTER /* managed */ ROLE app BYPASSRLS;"
+psql <<'SQL'
+# ruleid: qbank-no-rls-bypass-infra
+CREATE -- managed
+USER app BYPASSRLS;
+SQL
+# ruleid: qbank-no-rls-bypass-infra
 psql -c "SET row_security = off"
 # ok: qbank-no-rls-bypass-infra
 psql -c "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS;"
