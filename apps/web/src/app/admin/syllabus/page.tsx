@@ -48,9 +48,11 @@ export default function SyllabusPage() {
   // A retry of the same addition reuses its Idempotency-Key, so a lost response never means two.
   const addKey = useRef<{ key: string; fingerprint: string } | null>(null);
   const generation = useRef(0);
-  const moreInFlight = useRef(false);
-  // The parent whose level is on screen, for answers that arrive after the person has moved on.
-  const hereId = useRef<string | null>(null);
+  // Which level is on screen, counted up each time the person moves. Every request remembers the
+  // level it was sent from; an answer for a level that is no longer on screen changes nothing.
+  const level = useRef(0);
+  // The level that has a "Show more" request on its way, if any.
+  const moreInFlight = useRef<number | null>(null);
 
   const here = path.at(-1) ?? null;
   const addingKind = childKind(here?.kind ?? null);
@@ -103,10 +105,6 @@ export default function SyllabusPage() {
   }, [load, here]);
 
   useEffect(() => {
-    hereId.current = here?.id ?? null;
-  }, [here]);
-
-  useEffect(() => {
     void (async () => {
       try {
         const { data } = await api().GET("/api/v1/languages");
@@ -117,46 +115,39 @@ export default function SyllabusPage() {
     })();
   }, []);
 
-  /**
-   * Reload a level after a change to it, but only if that level is still the one on screen. An
-   * answer that arrives after the person has moved on must not put the old level back.
-   */
-  function reloadIfStillHere(parent: Node | null) {
-    if (hereId.current === (parent?.id ?? null)) void load(parent, null);
-  }
-
-  /** "Show more": one request at a time, so pressing it twice does not load the page twice. */
+  /** "Show more": one request at a time per level, so pressing it twice loads the page once. */
   async function showMore() {
-    if (moreInFlight.current || !nextCursor) return;
-    moreInFlight.current = true;
+    const mine = level.current;
+    if (moreInFlight.current === mine || !nextCursor) return;
+    moreInFlight.current = mine;
     try {
       await load(here, nextCursor);
     } finally {
-      moreInFlight.current = false;
+      if (moreInFlight.current === mine) moreInFlight.current = null;
     }
+  }
+
+  /** Move to another level: everything belonging to the one you leave is dropped. */
+  function moveTo(next: (current: Node[]) => Node[]) {
+    level.current += 1;
+    setPath(next);
+    setNextCursor(null);
+    setOpen(null);
+    setNotice(null);
+    setNewName("");
+    setNewOrder("0");
+    setAddError(null);
+    setAdding(false);
+    setState("loading");
   }
 
   function goTo(depth: number) {
     if (depth === path.length) return; // already here
-    setPath((current) => current.slice(0, depth));
-    setNextCursor(null);
-    setOpen(null);
-    setNotice(null);
-    setNewName("");
-    setNewOrder("0");
-    setAddError(null);
-    setState("loading");
+    moveTo((current) => current.slice(0, depth));
   }
 
   function enter(node: Node) {
-    setPath((current) => [...current, node]);
-    setNextCursor(null);
-    setOpen(null);
-    setNotice(null);
-    setNewName("");
-    setNewOrder("0");
-    setAddError(null);
-    setState("loading");
+    moveTo((current) => [...current, node]);
   }
 
   const replace = (updated: Node) =>
@@ -165,21 +156,23 @@ export default function SyllabusPage() {
   /** Run one change to an item; a stale revision reloads the list instead of overwriting. */
   async function change(
     node: Node,
-    parent: Node | null,
     run: () => Promise<{ data?: Node; error?: unknown; response: Response }>,
     done: (updated: Node) => void,
   ) {
+    const mine = level.current;
+    const parent = here;
     setBusyId(node.id);
     setItemError(null);
     try {
       const result = await run();
+      if (level.current !== mine) return; // the person has moved on: the answer is not for this screen
       if (result.data) {
         replace(result.data);
         done(result.data);
       } else if (result.response.status === 412) {
         setItemError({ id: node.id, message: STALE });
         setOpen(null);
-        reloadIfStillHere(parent);
+        void load(parent, null);
       } else {
         setItemError({
           id: node.id,
@@ -187,9 +180,9 @@ export default function SyllabusPage() {
         });
       }
     } catch {
-      setItemError({ id: node.id, message: NETWORK });
+      if (level.current === mine) setItemError({ id: node.id, message: NETWORK });
     } finally {
-      setBusyId(null);
+      setBusyId((current) => (current === node.id ? null : current));
     }
   }
 
@@ -199,7 +192,6 @@ export default function SyllabusPage() {
   ) =>
     change(
       node,
-      here,
       () =>
         api().PATCH("/api/v1/taxonomy/nodes/{node_id}", {
           params: { path: { node_id: node.id }, header: { "If-Match": ifMatch(node.revision) } },
@@ -208,14 +200,13 @@ export default function SyllabusPage() {
       (updated) => {
         setOpen(null);
         setNotice(`${updated.name} was saved.`);
-        reloadIfStillHere(here); // a new order or name can move it: the server's order decides
+        void load(here, null); // a new order or name can move it: the server's order decides
       },
     );
 
   const setRetired = (node: Node, retire: boolean) =>
     change(
       node,
-      here,
       () =>
         api().POST(
           retire
@@ -240,35 +231,34 @@ export default function SyllabusPage() {
       name: newName.trim(),
       sort_order: Number(newOrder),
     };
-    const parentId = body.parent_id;
+    const mine = level.current;
+    const parent = here;
     const fingerprint = JSON.stringify(body);
     if (addKey.current?.fingerprint !== fingerprint) {
       addKey.current = { key: crypto.randomUUID(), fingerprint };
     }
+    const key = addKey.current.key;
     setAdding(true);
     setAddError(null);
     try {
       const { data, error, response } = await api().POST("/api/v1/taxonomy/nodes", {
         body,
-        params: { header: { "Idempotency-Key": addKey.current.key } },
+        params: { header: { "Idempotency-Key": key } },
       });
+      if (data && addKey.current?.key === key) addKey.current = null;
+      if (level.current !== mine) return; // moved on: the answer is not for this screen
       if (data) {
-        addKey.current = null;
         setNotice(`${data.name} was added.`);
-        // Only if the person is still on the level it was added to; the server's order decides
-        // where the new item shows.
-        if (hereId.current === parentId) {
-          reloadIfStillHere(here);
-          setNewName("");
-          setNewOrder(String(data.sort_order + 1));
-        }
-      } else if (hereId.current === parentId) {
+        void load(parent, null); // the server's order decides where the new item shows
+        setNewName("");
+        setNewOrder(String(data.sort_order + 1));
+      } else {
         setAddError(errorMessage(error, response.status));
       }
     } catch {
-      if (hereId.current === parentId) setAddError(NETWORK);
+      if (level.current === mine) setAddError(NETWORK);
     } finally {
-      setAdding(false);
+      if (level.current === mine) setAdding(false);
     }
   }
 
@@ -390,7 +380,12 @@ export default function SyllabusPage() {
           </button>
         )}
 
-        {canManage && addingKind && state === "ready" && (
+        {canManage && addingKind && state === "ready" && here?.state === "DEPRECATED" && (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {here.name} is retired. Restore it to add {KIND_PLURAL[addingKind]} under it.
+          </p>
+        )}
+        {canManage && addingKind && state === "ready" && here?.state !== "DEPRECATED" && (
           <form
             onSubmit={add}
             aria-label={`Add a ${KIND_NAME[addingKind]}`}

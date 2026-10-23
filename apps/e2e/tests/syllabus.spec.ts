@@ -437,3 +437,117 @@ test("a late failure to add belongs to the level it was sent from", async ({
   await page.waitForTimeout(2500); // the slow refusal has come by now
   await expect(page.getByRole("form", { name: "Add a subject" }).getByRole("alert")).toHaveCount(0);
 });
+
+test("a save answered after you moved on leaves the edit you started on the new level alone", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Late Save Syllabus ${unique()}`);
+  const csrf = await csrfOf(context);
+  const make = async (data: object) => {
+    const response = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data,
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  const c11 = await make({ kind: "CLASS", name: "Class 11", sort_order: 1 });
+  const c12 = await make({ kind: "CLASS", name: "Class 12", sort_order: 2 });
+  await make({ kind: "SUBJECT", parent_id: c11.id, name: "Physics" });
+  await make({ kind: "SUBJECT", parent_id: c12.id, name: "Biology" });
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes/*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow answer
+    }
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await item(page, "Physics").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Physics").getByLabel("Order (smaller comes first)").fill("3");
+  await item(page, "Physics").getByRole("button", { name: "Save" }).click();
+
+  // Move on, and start an edit on the other class's subject before the answer comes.
+  const where = page.getByRole("navigation", { name: "Where you are" });
+  await where.getByRole("button", { name: "All classes" }).click();
+  await item(page, "Class 12").getByRole("button", { name: "Open" }).click();
+  await item(page, "Biology").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Biology").getByLabel("Name (English)").fill("Biology (draft)");
+
+  await page.waitForTimeout(2500); // the slow answer has come by now
+  await expect(item(page, "Biology").getByLabel("Name (English)")).toHaveValue("Biology (draft)");
+  await expect(page.getByText("Physics was saved.")).toHaveCount(0);
+});
+
+test("a retired item offers no way to add under it", async ({ browser, baseURL }) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Retired Parent ${unique()}`);
+  const csrf = await csrfOf(context);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": csrf };
+  const created = await context.request.post("/api/v1/taxonomy/nodes", {
+    headers,
+    data: { kind: "CLASS", name: "Class 11", sort_order: 1 },
+  });
+  const cls = (await created.json()) as { id: string; revision: number };
+  const retired = await context.request.post(`/api/v1/taxonomy/nodes/${cls.id}/deprecate`, {
+    headers: { ...headers, "If-Match": `"rev-${cls.revision}"` },
+  });
+  expect(retired.status()).toBe(200);
+
+  const page = await context.newPage();
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await expect(
+    page.getByText("Class 11 is retired. Restore it to add subjects under it."),
+  ).toBeVisible();
+  await expect(page.getByRole("form", { name: "Add a subject" })).toHaveCount(0);
+});
+
+test("Show more of a level you left does not block Show more on the level you moved to", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Lock Syllabus ${unique()}`);
+  const csrf = await csrfOf(context);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": csrf };
+  let first = "";
+  for (let n = 1; n <= 101; n++) {
+    const created = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers,
+      data: { kind: "CLASS", name: `Class ${String(n).padStart(3, "0")}`, sort_order: n },
+    });
+    expect(created.status()).toBe(201);
+    if (n === 1) first = ((await created.json()) as { id: string }).id;
+  }
+  for (let n = 1; n <= 101; n++) {
+    const created = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers,
+      data: {
+        kind: "SUBJECT",
+        parent_id: first,
+        name: `Subject ${String(n).padStart(3, "0")}`,
+        sort_order: n,
+      },
+    });
+    expect(created.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  // The classes' second page hangs for a long time; the subjects' second page is quick.
+  await page.route(
+    (url) => url.pathname === "/api/v1/taxonomy/nodes" && url.searchParams.has("cursor"),
+    async (route) => {
+      if (!route.request().url().includes("parent_id")) {
+        await new Promise((resolve) => setTimeout(resolve, 6000));
+      }
+      await route.continue();
+    },
+  );
+  await page.goto("/admin/syllabus");
+  await page.getByRole("button", { name: "Show more" }).click(); // slow, left hanging
+  await item(page, "Class 001").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Subject 001")).toBeVisible();
+  await page.getByRole("button", { name: "Show more" }).click();
+  await expect(item(page, "Subject 101")).toBeVisible({ timeout: 3000 });
+});
