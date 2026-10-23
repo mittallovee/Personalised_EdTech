@@ -200,3 +200,97 @@ test("the Syllabus link is for people in a coaching, not a platform admin outsid
   await acting.goto("/");
   await expect(acting.getByRole("link", { name: "Syllabus" })).toBeVisible();
 });
+
+test("changing an item's order moves it to where the order puts it", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Reorder Syllabus ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/admin/syllabus");
+  await add(page, "class", "Class 9", "1");
+  await add(page, "class", "Class 10", "2");
+  const names = page.getByRole("list", { name: "Syllabus items" }).getByRole("listitem");
+  await expect(names.getByText(/^Class \d+$/)).toHaveText(["Class 9", "Class 10"]);
+
+  await item(page, "Class 9").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Class 9").getByLabel("Order (smaller comes first)").fill("5");
+  await item(page, "Class 9").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("status")).toContainText("Class 9 was saved.");
+  await expect(names.getByText(/^Class \d+$/)).toHaveText(["Class 10", "Class 9"]);
+});
+
+test("after a refused change the editor starts again from the newer data", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Draft Syllabus ${unique()}`);
+  const first = await context.newPage();
+  await first.goto("/admin/syllabus");
+  await add(first, "class", "Class 7");
+
+  const second = await context.newPage();
+  await second.goto("/admin/syllabus");
+  await item(second, "Class 7").getByRole("button", { name: "Edit" }).click();
+  await item(second, "Class 7").getByLabel("Name (English)").fill("Class VII");
+  await item(second, "Class 7").getByRole("button", { name: "Save" }).click();
+  await expect(item(second, "Class VII")).toBeVisible();
+
+  // The first tab's change is refused; opening Edit again shows the newer name, not the old draft.
+  await item(first, "Class 7").getByRole("button", { name: "Edit" }).click();
+  await item(first, "Class 7").getByLabel("Name (English)").fill("Class 7 (my draft)");
+  await item(first, "Class 7").getByRole("button", { name: "Save" }).click();
+  await expect(first.locator("main").getByRole("alert")).toContainText("Someone else changed this");
+  await item(first, "Class VII").getByRole("button", { name: "Edit" }).click();
+  await expect(item(first, "Class VII").getByLabel("Name (English)")).toHaveValue("Class VII");
+});
+
+test("an addition answered after you moved on does not replace the level you moved to", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Moved Syllabus ${unique()}`);
+  const csrf = await csrfOf(context);
+  const make = async (data: object) => {
+    const response = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data,
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  const c11 = await make({ kind: "CLASS", name: "Class 11", sort_order: 1 });
+  const c12 = await make({ kind: "CLASS", name: "Class 12", sort_order: 2 });
+  await make({ kind: "SUBJECT", parent_id: c11.id, name: "Physics" });
+  await make({ kind: "SUBJECT", parent_id: c12.id, name: "Biology" });
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes", async (route) => {
+    if (route.request().method() === "POST") {
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow answer
+    }
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Physics")).toBeVisible();
+
+  // Send an addition, and move to the other class before the answer comes.
+  const form = page.getByRole("form", { name: "Add a subject" });
+  await form.getByLabel("Name (English)").fill("Chemistry");
+  await form.getByRole("button", { name: "Add subject" }).click();
+  const where = page.getByRole("navigation", { name: "Where you are" });
+  await where.getByRole("button", { name: "All classes" }).click();
+  await item(page, "Class 12").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Biology")).toBeVisible();
+
+  await page.waitForTimeout(2500); // the slow answer has come by now
+  const subjects = page.getByRole("list", { name: "Syllabus items" }).getByRole("listitem");
+  await expect(subjects).toHaveCount(1);
+  await expect(item(page, "Biology")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Class 12", level: 2 })).toBeVisible();
+  // The new subject was added to Class 11 all the same.
+  await where.getByRole("button", { name: "All classes" }).click();
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Chemistry")).toBeVisible();
+});

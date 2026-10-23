@@ -49,6 +49,8 @@ export default function SyllabusPage() {
   const addKey = useRef<{ key: string; fingerprint: string } | null>(null);
   const generation = useRef(0);
   const moreInFlight = useRef(false);
+  // The parent whose level is on screen, for answers that arrive after the person has moved on.
+  const hereId = useRef<string | null>(null);
 
   const here = path.at(-1) ?? null;
   const addingKind = childKind(here?.kind ?? null);
@@ -101,6 +103,10 @@ export default function SyllabusPage() {
   }, [load, here]);
 
   useEffect(() => {
+    hereId.current = here?.id ?? null;
+  }, [here]);
+
+  useEffect(() => {
     void (async () => {
       try {
         const { data } = await api().GET("/api/v1/languages");
@@ -127,6 +133,9 @@ export default function SyllabusPage() {
     setPath((current) => current.slice(0, depth));
     setOpen(null);
     setNotice(null);
+    setNewName("");
+    setNewOrder("0");
+    setAddError(null);
     setState("loading");
   }
 
@@ -134,6 +143,9 @@ export default function SyllabusPage() {
     setPath((current) => [...current, node]);
     setOpen(null);
     setNotice(null);
+    setNewName("");
+    setNewOrder("0");
+    setAddError(null);
     setState("loading");
   }
 
@@ -184,6 +196,7 @@ export default function SyllabusPage() {
       (updated) => {
         setOpen(null);
         setNotice(`${updated.name} was saved.`);
+        void load(here, null); // a new order or name can move it: the server's order decides
       },
     );
 
@@ -214,6 +227,7 @@ export default function SyllabusPage() {
       name: newName.trim(),
       sort_order: Number(newOrder),
     };
+    const parentId = body.parent_id;
     const fingerprint = JSON.stringify(body);
     if (addKey.current?.fingerprint !== fingerprint) {
       addKey.current = { key: crypto.randomUUID(), fingerprint };
@@ -226,11 +240,15 @@ export default function SyllabusPage() {
         params: { header: { "Idempotency-Key": addKey.current.key } },
       });
       if (data) {
-        void load(here, null); // the server's order decides where the new item shows
-        setNewName("");
-        setNewOrder(String(data.sort_order + 1));
-        setNotice(`${data.name} was added.`);
         addKey.current = null;
+        setNotice(`${data.name} was added.`);
+        // Only if the person is still on the level it was added to; the server's order decides
+        // where the new item shows.
+        if (hereId.current === parentId) {
+          void load(here, null);
+          setNewName("");
+          setNewOrder(String(data.sort_order + 1));
+        }
       } else {
         setAddError(errorMessage(error, response.status));
       }

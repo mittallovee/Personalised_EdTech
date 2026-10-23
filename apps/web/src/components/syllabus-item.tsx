@@ -43,24 +43,10 @@ export function SyllabusItem({
   /** Go inside this item (to its subjects, chapters...); not offered for a subtopic. */
   onOpen: (() => void) | null;
 }) {
-  const [name, setName] = useState(node.name);
-  const [sortOrder, setSortOrder] = useState(String(node.sort_order));
-  const [labels, setLabels] = useState<Record<string, string>>({ ...node.labels });
   const retired = node.state === "DEPRECATED";
-  const others = languages.filter((language) => language.tag !== "en");
   const shown = Object.entries(node.labels)
     .map(([tag, label]) => `${languages.find((l) => l.tag === tag)?.english_name ?? tag}: ${label}`)
     .join(" · ");
-
-  function submit(event: React.FormEvent) {
-    event.preventDefault();
-    const filled = Object.fromEntries(
-      Object.entries(labels)
-        .map(([tag, label]) => [tag, label.trim()] as const)
-        .filter(([, label]) => label !== ""),
-    );
-    onSave({ name: name.trim(), sort_order: Number(sortOrder), labels: filled });
-  }
 
   return (
     <li className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -104,59 +90,15 @@ export function SyllabusItem({
       </div>
 
       {panel === "edit" && (
-        <form onSubmit={submit} aria-label={`Edit ${node.name}`} className="mt-3 space-y-3">
-          <label className="block text-sm font-medium">
-            Name (English)
-            <input
-              name="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              maxLength={200}
-              className={`${FIELD} mt-1`}
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Order (smaller comes first)
-            <input
-              name="sort_order"
-              type="number"
-              min={0}
-              max={100000}
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              required
-              className={`${FIELD} mt-1`}
-            />
-          </label>
-          <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="text-sm font-medium">Names in other languages</legend>
-            {others.map((language) => (
-              <label key={language.tag} className="block text-sm">
-                {language.english_name} ({language.native_name})
-                <input
-                  name={`label_${language.tag}`}
-                  value={labels[language.tag] ?? ""}
-                  onChange={(e) => setLabels({ ...labels, [language.tag]: e.target.value })}
-                  maxLength={200}
-                  className={`${FIELD} mt-1`}
-                />
-              </label>
-            ))}
-          </fieldset>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-zinc-900 px-3 py-1 text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              {busy ? "Saving…" : "Save"}
-            </button>
-            <button type="button" onClick={() => onOpenPanel(null)} className={BUTTON}>
-              Cancel
-            </button>
-          </div>
-        </form>
+        <EditForm
+          // A new key whenever the item changes, so a draft never outlives the data it was made from.
+          key={`${node.id}-${node.revision}`}
+          node={node}
+          languages={languages}
+          busy={busy}
+          onSave={onSave}
+          onCancel={() => onOpenPanel(null)}
+        />
       )}
 
       {panel === "retire" && (
@@ -176,5 +118,94 @@ export function SyllabusItem({
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * The form to rename an item and set its order and other-language names. It starts from the item
+ * as it is when the form opens (the parent re-creates it when the item changes).
+ */
+function EditForm({
+  node,
+  languages,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  node: Node;
+  languages: Language[];
+  busy: boolean;
+  onSave: (changes: { name: string; sort_order: number; labels: Record<string, string> }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(node.name);
+  const [sortOrder, setSortOrder] = useState(String(node.sort_order));
+  const [labels, setLabels] = useState<Record<string, string>>({ ...node.labels });
+  const others = languages.filter((language) => language.tag !== "en");
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const filled = Object.fromEntries(
+      Object.entries(labels)
+        .map(([tag, label]) => [tag, label.trim()] as const)
+        .filter(([, label]) => label !== ""),
+    );
+    onSave({ name: name.trim(), sort_order: Number(sortOrder), labels: filled });
+  }
+
+  return (
+    <form onSubmit={submit} aria-label={`Edit ${node.name}`} className="mt-3 space-y-3">
+      <label className="block text-sm font-medium">
+        Name (English)
+        <input
+          name="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          maxLength={200}
+          className={`${FIELD} mt-1`}
+        />
+      </label>
+      <label className="block text-sm font-medium">
+        Order (smaller comes first)
+        <input
+          name="sort_order"
+          type="number"
+          min={0}
+          max={100000}
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value)}
+          required
+          className={`${FIELD} mt-1`}
+        />
+      </label>
+      <fieldset className="grid gap-3 sm:grid-cols-2">
+        <legend className="text-sm font-medium">Names in other languages</legend>
+        {others.map((language) => (
+          <label key={language.tag} className="block text-sm">
+            {language.english_name} ({language.native_name})
+            <input
+              name={`label_${language.tag}`}
+              value={labels[language.tag] ?? ""}
+              onChange={(e) => setLabels({ ...labels, [language.tag]: e.target.value })}
+              maxLength={200}
+              className={`${FIELD} mt-1`}
+            />
+          </label>
+        ))}
+      </fieldset>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-md bg-zinc-900 px-3 py-1 text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button type="button" onClick={onCancel} className={BUTTON}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
