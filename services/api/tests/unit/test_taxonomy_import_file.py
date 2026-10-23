@@ -146,3 +146,32 @@ def test_a_file_without_a_usable_header_is_refused(data: bytes, reason: str) -> 
     import re
 
     assert re.search(reason, refused(data))
+
+
+def test_a_row_wider_than_the_header_is_refused_in_both_formats() -> None:
+    # An unquoted comma inside a value would otherwise drop the end of the row without a word.
+    assert "Row 2" in refused(b"kind,path\nCLASS,Class 11,extra\n")
+    assert "Row 2" in refused(xlsx(["kind", "path"], ["CLASS", "Class 11", "extra"]))
+    # Empty cells beyond the header are harmless.
+    assert read_table(b"kind,path\nCLASS,Class 11,,\n").rows[0].cells == {
+        "kind": "CLASS",
+        "path": "Class 11",
+    }
+
+
+def test_content_in_columns_beyond_the_limit_is_refused_even_for_a_formula() -> None:
+    far = [None] * import_file.MAX_COLUMNS  # the 41st column
+    assert "Row 2" in refused(xlsx(["kind"], ["CLASS", *far[1:], "hidden"]))
+    assert "formulas" in refused(xlsx(["kind"], ["CLASS", *far[1:], "=1+1"]))
+
+
+def test_a_spreadsheet_whose_sheet_xml_is_damaged_is_refused_not_a_server_error() -> None:
+    good = io.BytesIO(xlsx(["kind"], ["CLASS"]))
+    damaged = io.BytesIO()
+    with zipfile.ZipFile(good) as source, zipfile.ZipFile(damaged, "w") as target:
+        for member in source.infolist():
+            content = source.read(member)
+            if member.filename == "xl/worksheets/sheet1.xml":
+                content = b"<worksheet><sheetData><row><c r="  # cut off in the middle
+            target.writestr(member, content)
+    assert "valid .xlsx" in refused(damaged.getvalue())

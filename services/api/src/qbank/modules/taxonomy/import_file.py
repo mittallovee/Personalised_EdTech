@@ -14,9 +14,9 @@ import io
 import unicodedata
 import zipfile
 from dataclasses import dataclass
+from typing import Any
 
 from openpyxl import load_workbook
-from openpyxl.utils.exceptions import InvalidFileException
 
 from qbank.core.errors import ValidationFailed
 
@@ -104,27 +104,39 @@ def _spreadsheet_lines(data: bytes) -> list[list[str]]:
     _check_archive(data)
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=False)
-    except InvalidFileException, zipfile.BadZipFile, KeyError, ValueError, OSError:
+    except Exception:
+        # Whatever the library raises, the upload is simply unreadable.
         raise ImportFileInvalid("This is not a valid .xlsx file.") from None
     try:
         sheet = workbook.worksheets[0] if workbook.worksheets else None
         if sheet is None:
             raise ImportFileInvalid("The workbook has no sheet.")
-        lines: list[list[str]] = []
-        # Blank rows count too: a file that declares a million empty rows is refused, not walked.
-        for row in sheet.iter_rows(max_col=MAX_COLUMNS):
-            if len(lines) > MAX_ROWS + 1:
-                raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
-            for cell in row:
-                if cell.data_type == "f":
-                    raise ImportFileInvalid(
-                        "The file has cells with formulas, which are not accepted. Copy the cells"
-                        " and paste them as values, then try again."
-                    )
-            lines.append([_text(cell.value) for cell in row])
-        return lines
+        return _sheet_lines(sheet)
+    except ImportFileInvalid:
+        raise
+    except Exception:
+        # The sheet is parsed lazily, so damage in it shows up only here.
+        raise ImportFileInvalid("This is not a valid .xlsx file.") from None
     finally:
         workbook.close()
+
+
+def _sheet_lines(sheet: Any) -> list[list[str]]:
+    lines: list[list[str]] = []
+    # One column more than allowed is read, so content past the limit is seen and refused (not
+    # dropped), and a formula there cannot hide. Blank rows count: a file that declares a million
+    # empty rows is refused, not walked.
+    for row in sheet.iter_rows(max_col=MAX_COLUMNS + 1):
+        if len(lines) > MAX_ROWS + 1:
+            raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
+        for cell in row:
+            if cell.data_type == "f":
+                raise ImportFileInvalid(
+                    "The file has cells with formulas, which are not accepted. Copy the cells"
+                    " and paste them as values, then try again."
+                )
+        lines.append([_text(cell.value) for cell in row])
+    return lines
 
 
 def _from_lines(lines: list[list[str]]) -> Table:
@@ -149,11 +161,14 @@ def _from_lines(lines: list[list[str]]) -> Table:
             raise ImportFileInvalid(
                 f"Row {number} has a cell longer than {MAX_CELL_CHARS} characters."
             )
-        padded = line + [""] * (len(columns) - len(line))
-        rows.append(
-            TableRow(
-                number=number, cells={c: v for c, v in zip(columns, padded, strict=False) if c}
+        if any(line[len(columns) :]):
+            raise ImportFileInvalid(
+                f"Row {number} has more values than the header has columns. A value that contains"
+                " a comma must be put in quotes."
             )
+        padded = (line + [""] * len(columns))[: len(columns)]
+        rows.append(
+            TableRow(number=number, cells={c: v for c, v in zip(columns, padded, strict=True) if c})
         )
     if len(rows) > MAX_ROWS:
         raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
