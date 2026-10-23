@@ -633,3 +633,89 @@ test("under a retired parent, a retired child cannot be restored first", async (
   await item(page, "Class 11").getByRole("button", { name: "Restore" }).click();
   await expect(item(page, "Class 11")).not.toContainText("Retired");
 });
+
+test("while one change is on its way, no second change can be sent from another row", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `One At A Time ${unique()}`);
+  const csrf = await csrfOf(context);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": csrf };
+  const post = async (path: string, data?: object, revision?: number) => {
+    const response = await context.request.post(path, {
+      headers: revision ? { ...headers, "If-Match": `"rev-${revision}"` } : headers,
+      data,
+    });
+    expect(response.status()).toBeLessThan(300);
+    return (await response.json()) as { id: string; revision: number };
+  };
+  await post("/api/v1/taxonomy/nodes", { kind: "CLASS", name: "Class 11", sort_order: 1 });
+  const other = await post("/api/v1/taxonomy/nodes", {
+    kind: "CLASS",
+    name: "Class 12",
+    sort_order: 2,
+  });
+  await post(`/api/v1/taxonomy/nodes/${other.id}/deprecate`, undefined, other.revision);
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes/*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow answer
+    }
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Class 11").getByLabel("Order (smaller comes first)").fill("3");
+  await item(page, "Class 11").getByRole("button", { name: "Save" }).click();
+
+  // Checked once, right now, while the save is on its way.
+  expect(await item(page, "Class 12").getByRole("button", { name: "Restore" }).isDisabled()).toBe(
+    true,
+  );
+  expect(await item(page, "Class 11").getByRole("button", { name: "Open" }).isDisabled()).toBe(
+    true,
+  );
+  await expect(item(page, "Class 11").getByRole("button", { name: "Open" })).toBeEnabled();
+  await expect(item(page, "Class 12").getByRole("button", { name: "Restore" })).toBeEnabled();
+});
+
+test("a change still on its way does not lock the level you moved to", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Unlock ${unique()}`);
+  const csrf = await csrfOf(context);
+  const make = async (data: object) => {
+    const response = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data,
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  const c11 = await make({ kind: "CLASS", name: "Class 11", sort_order: 1 });
+  await make({ kind: "CLASS", name: "Class 12", sort_order: 2 });
+  await make({ kind: "SUBJECT", parent_id: c11.id, name: "Physics" });
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes/*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      await new Promise((resolve) => setTimeout(resolve, 6000)); // a very slow answer
+    }
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await item(page, "Physics").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Physics").getByLabel("Order (smaller comes first)").fill("3");
+  await item(page, "Physics").getByRole("button", { name: "Save" }).click();
+  await page
+    .getByRole("navigation", { name: "Where you are" })
+    .getByRole("button", { name: "All classes" })
+    .click();
+  // The slow save is still on its way, but this level is free to use.
+  await expect(item(page, "Class 12").getByRole("button", { name: "Open" })).toBeEnabled({
+    timeout: 2000,
+  });
+});

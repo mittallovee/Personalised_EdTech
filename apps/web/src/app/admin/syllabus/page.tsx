@@ -48,6 +48,8 @@ export default function SyllabusPage() {
   // A retry of the same addition reuses its Idempotency-Key, so a lost response never means two.
   const addKey = useRef<{ key: string; fingerprint: string } | null>(null);
   const generation = useRef(0);
+  // A change to an item is on its way (any item): the page sends one at a time.
+  const changing = useRef(false);
   // Which level is on screen, counted up each time the person moves. Every request remembers the
   // level it was sent from; an answer for a level that is no longer on screen changes nothing.
   const level = useRef(0);
@@ -130,6 +132,8 @@ export default function SyllabusPage() {
   /** Move to another level: everything belonging to the one you leave is dropped. */
   function moveTo(next: (current: Node[]) => Node[]) {
     level.current += 1;
+    changing.current = false; // a change still on its way answers for the level just left
+    setBusyId(null);
     setPath(next);
     setNextCursor(null);
     setOpen(null);
@@ -162,6 +166,8 @@ export default function SyllabusPage() {
     run: () => Promise<{ data?: Node; error?: unknown; response: Response }>,
     done: (updated: Node) => void,
   ) {
+    if (changing.current) return; // one change at a time: a second would use a stale revision
+    changing.current = true;
     const mine = level.current;
     const parent = here;
     setBusyId(node.id);
@@ -185,7 +191,11 @@ export default function SyllabusPage() {
     } catch {
       if (level.current === mine) setItemError({ id: node.id, message: NETWORK });
     } finally {
-      setBusyId((current) => (current === node.id ? null : current));
+      // Moving to another level already released the page; this answer is not for it.
+      if (level.current === mine) {
+        changing.current = false;
+        setBusyId(null);
+      }
     }
   }
 
@@ -361,6 +371,7 @@ export default function SyllabusPage() {
                 canRestore={here?.state !== "DEPRECATED"}
                 panel={open?.id === node.id ? open.panel : null}
                 busy={busyId === node.id}
+                locked={busyId !== null && busyId !== node.id}
                 error={itemError?.id === node.id ? itemError.message : null}
                 onOpenPanel={(panel) => {
                   setItemError(null);

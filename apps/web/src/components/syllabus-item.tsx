@@ -24,6 +24,7 @@ export function SyllabusItem({
   canRestore,
   panel,
   busy,
+  locked,
   error,
   onOpenPanel,
   onSave,
@@ -38,6 +39,8 @@ export function SyllabusItem({
   canRestore: boolean;
   panel: Panel;
   busy: boolean;
+  /** Another item's change is running: nothing may be sent from here until it has answered. */
+  locked: boolean;
   error: string | null;
   onOpenPanel: (panel: Panel) => void;
   onSave: (changes: { name: string; sort_order: number; labels: Record<string, string> }) => void;
@@ -70,7 +73,7 @@ export function SyllabusItem({
         </div>
         <div className="flex flex-wrap gap-2">
           {onOpen && (
-            <button type="button" onClick={onOpen} className={BUTTON}>
+            <button type="button" disabled={locked || busy} onClick={onOpen} className={BUTTON}>
               Open
             </button>
           )}
@@ -85,7 +88,7 @@ export function SyllabusItem({
             </button>
           )}
           {canManage && retired && canRestore && (
-            <button type="button" disabled={busy} onClick={onRestore} className={BUTTON}>
+            <button type="button" disabled={busy || locked} onClick={onRestore} className={BUTTON}>
               Restore
             </button>
           )}
@@ -104,6 +107,7 @@ export function SyllabusItem({
           node={node}
           languages={languages}
           busy={busy}
+          locked={locked}
           onSave={onSave}
           onCancel={() => onOpenPanel(null)}
         />
@@ -114,7 +118,7 @@ export function SyllabusItem({
           question={`Retire ${node.name}?`}
           detail={`It can no longer be chosen for new questions, and nothing is deleted: questions that already use this ${KIND_NAME[node.kind]} keep it, and you can restore it any time.`}
           confirmLabel="Retire"
-          busy={busy}
+          busy={busy || locked}
           onConfirm={onRetire}
           onCancel={() => onOpenPanel(null)}
         />
@@ -137,12 +141,14 @@ function EditForm({
   node,
   languages,
   busy,
+  locked,
   onSave,
   onCancel,
 }: {
   node: Node;
   languages: Language[];
   busy: boolean;
+  locked: boolean;
   onSave: (changes: { name: string; sort_order: number; labels: Record<string, string> }) => void;
   onCancel: () => void;
 }) {
@@ -205,7 +211,7 @@ function EditForm({
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || locked}
           className="rounded-md bg-zinc-900 px-3 py-1 text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
         >
           {busy ? "Saving…" : "Save"}
