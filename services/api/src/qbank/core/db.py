@@ -20,13 +20,19 @@ class Database:
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
 
     @contextmanager
-    def transaction(self, context: TenantContext) -> Iterator[Session]:
+    def transaction(
+        self, context: TenantContext, *, isolation_level: str | None = None
+    ) -> Iterator[Session]:
         """Open a transaction with the tenant context set; commit on success, roll back on error.
 
         Every database access in request handlers and jobs goes through this, so row-level
-        security always sees the right coaching.
+        security always sees the right coaching. ``isolation_level="REPEATABLE READ"`` makes
+        every query in the transaction see the database as of its first query, for reads that
+        must be consistent with each other.
         """
         with self._sessions() as session, session.begin():
+            if isolation_level is not None:
+                session.connection(execution_options={"isolation_level": isolation_level})
             apply_tenant_context(session, context)
             yield session
 

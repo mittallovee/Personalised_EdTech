@@ -318,3 +318,41 @@ def test_the_app_role_cannot_delete_a_preview_or_rewrite_its_rows(
     with pytest.raises(DBAPIError, match="catalogue_imports_check"):  # noqa: SIM117
         with app_db.transaction(context) as session:
             session.execute(text("UPDATE catalogue_imports SET applied_at = NULL"))
+
+
+# --- The syllabus is read as it was at one moment ----------------------------------------
+
+
+def test_a_repeatable_read_transaction_ignores_what_is_committed_after_it_starts(
+    db: Database, owner_db: Database, team: dict[str, Member]
+) -> None:
+    context = TenantContext(organization_id=team["owner"].org_id, user_id=team["owner"].user_id)
+    count = text("SELECT count(*) FROM taxonomy_nodes")
+    with db.transaction(context, isolation_level="REPEATABLE READ") as session:
+        assert session.scalar(count) == 0
+        with owner_db.transaction(context) as other:  # another request commits meanwhile
+            other.execute(
+                text(
+                    "INSERT INTO taxonomy_nodes (id, organization_id, kind, name, name_key)"
+                    " VALUES (gen_random_uuid(), :org, 'CLASS', 'Class 11', 'class 11')"
+                ),
+                {"org": team["owner"].org_id},
+            )
+        assert session.scalar(count) == 0
+    with db.transaction(context) as session:
+        assert session.scalar(count) == 1
+
+
+def test_a_preview_reads_the_syllabus_in_one_repeatable_read_transaction(
+    client: TestClient, admin_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    levels: list[str | None] = []
+    original = Database.transaction
+
+    def spy(self: Database, context: TenantContext, *, isolation_level: str | None = None) -> Any:
+        levels.append(isolation_level)
+        return original(self, context, isolation_level=isolation_level)
+
+    monkeypatch.setattr(Database, "transaction", spy)
+    preview(client, admin_headers, FILE)
+    assert "REPEATABLE READ" in levels

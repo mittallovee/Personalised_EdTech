@@ -156,12 +156,14 @@ async def create_import(
     data = await _read_body(request)
 
     def preview() -> ImportOut:
+        snapshot = service.load_snapshot(database, principal.tenant_context)
         with database.transaction(principal.tenant_context) as session:
             created = service.create_preview(
                 session,
                 principal,
                 file_name=file_name,
                 data=data,
+                snapshot=snapshot,
                 idempotency_key=idempotency_key,
             )
             return _out(created)

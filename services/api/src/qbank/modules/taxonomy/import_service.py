@@ -13,10 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
+from qbank.core.db import Database
 from qbank.core.errors import NotFound
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
+from qbank.core.tenancy import TenantContext
 from qbank.modules.taxonomy.import_file import read_table
 from qbank.modules.taxonomy.import_plan import SnapConcept, SnapNode, Snapshot, build_plan
 from qbank.modules.taxonomy.models import (
@@ -29,8 +31,18 @@ from qbank.modules.taxonomy.models import (
 )
 
 
-def load_snapshot(session: Session) -> Snapshot:
-    """The syllabus as it is now (row-level security limits it to the caller's coaching)."""
+def load_snapshot(database: Database, context: TenantContext) -> Snapshot:
+    """The syllabus as it is now (row-level security limits it to the caller's coaching).
+
+    Read in one repeatable-read transaction of its own, so the items, their labels and aliases
+    all come from the same moment: a preview never mixes an item's old labels with its new
+    revision, and the fingerprint stored with it describes exactly what was compared.
+    """
+    with database.transaction(context, isolation_level="REPEATABLE READ") as session:
+        return _read_snapshot(session)
+
+
+def _read_snapshot(session: Session) -> Snapshot:
     node_labels: dict[UUID, dict[str, str]] = defaultdict(dict)
     for node_id, language, label in session.execute(
         select(TaxonomyLabel.node_id, TaxonomyLabel.language, TaxonomyLabel.label)
@@ -81,13 +93,15 @@ def create_preview(
     *,
     file_name: str,
     data: bytes,
+    snapshot: Snapshot,
     idempotency_key: str | None,
 ) -> CatalogueImport:
-    """Read the file, work out what it would do, and keep the result. Changes no syllabus item.
+    """Work out what the file would do to ``snapshot`` and keep the result. Changes no item.
 
-    A retry with the ``idempotency_key`` of an earlier request for the same file returns the
-    preview that request made. A file that cannot be read at all is an ``IMPORT_INVALID`` error;
-    a file with problem rows is a preview whose rows say so.
+    ``snapshot`` is the syllabus as read by ``load_snapshot``. A retry with the
+    ``idempotency_key`` of an earlier request for the same file returns the preview that request
+    made. A file that cannot be read at all is an ``IMPORT_INVALID`` error; a file with problem
+    rows is a preview whose rows say so.
     """
     require(principal, Action.MANAGE_CATALOGUES)
     organization_id = principal.tenant_context.organization_id
@@ -107,7 +121,7 @@ def create_preview(
         existing = session.get(CatalogueImport, import_id)
         if existing is not None:
             return existing
-    plan = build_plan(read_table(data), load_snapshot(session))
+    plan = build_plan(read_table(data), snapshot)
     preview = CatalogueImport(
         id=import_id,
         organization_id=organization_id,
