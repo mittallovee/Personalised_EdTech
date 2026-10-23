@@ -15,6 +15,7 @@ from qbank.core.errors import MalformedRequest
 from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
+from qbank.modules.taxonomy import import_apply, import_plan
 from qbank.modules.taxonomy import import_service as service
 from qbank.modules.taxonomy.import_file import MAX_FILE_BYTES, ImportFileInvalid
 from qbank.modules.taxonomy.import_plan import COLUMNS
@@ -65,7 +66,7 @@ def _out(preview: CatalogueImport) -> ImportOut:
         counts=counts,
         can_apply=preview.state == "PREVIEWED"
         and counts.error == 0
-        and counts.new + counts.changed > 0,
+        and 0 < counts.new + counts.changed <= import_plan.MAX_APPLY_ROWS,
         created_at=preview.created_at,
         applied_at=preview.applied_at,
     )
@@ -211,3 +212,38 @@ def read_import_rows(
         data = [ImportRowOut.model_validate(row) for row in rows]
     next_cursor = _row_cursor(data[-1].number) if has_more and data else None
     return ImportRowPage(data=data, page=PageInfo(next_cursor=next_cursor, has_more=has_more))
+
+
+@router.post(
+    "/imports/{import_id}/apply",
+    summary="Apply an import preview to the syllabus",
+    description=(
+        "Owner and admins. Adds the new items and fills in the changed ones, **all or nothing**,"
+        " exactly as the preview listed them. Nothing is removed, renamed, retired or restored."
+        " Applying a preview that is already applied changes nothing and returns it again. Refused"
+        " if any row is an error, if there is nothing to do, or if it would add or change more than"
+        f" {import_plan.MAX_APPLY_ROWS:,} rows at once (`IMPORT_INVALID`); and if the syllabus has"
+        " changed since the preview was made (`IMPORT_STALE`): upload the file again."
+    ),
+    responses={
+        **_DENIED,
+        **_NOT_FOUND,
+        409: {"description": "The syllabus changed after the preview (`IMPORT_STALE`)"},
+        422: {
+            "description": "Not applicable: error rows, nothing to do, too many (`IMPORT_INVALID`)"
+        },
+    },
+)
+def apply_import(
+    import_id: UUID,
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> ImportOut:
+    require(principal, Action.MANAGE_CATALOGUES)
+    snapshot = service.load_snapshot(database, principal.tenant_context)
+    with database.transaction(principal.tenant_context) as session:
+        applied = import_apply.apply_import(
+            session, principal, import_id, snapshot, request_id=request.state.request_id
+        )
+        return _out(applied)
