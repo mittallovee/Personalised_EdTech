@@ -41,6 +41,16 @@ ROLE = "CREATE ROLE app LOGIN BYPASSRLS"
 # ruleid: qbank-no-rls-bypass
 ALTERED = "alter role app with bypassrls"
 # ruleid: qbank-no-rls-bypass
+QUOTED = 'ALTER ROLE "qbank_app" BYPASSRLS'
+# ruleid: qbank-no-rls-bypass
+QUOTED_CLAUSE = "ALTER ROLE \"qbank_app\" WITH LOGIN PASSWORD 'secret' BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+SPLIT = "CREATE ROLE app LOGIN " "BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+MULTI = """ALTER ROLE app
+    LOGIN
+    BYPASSRLS"""
+# ruleid: qbank-no-rls-bypass
 OFF = "SET row_security = off"
 # ruleid: qbank-no-rls-bypass
 DROP = "ALTER TABLE t DISABLE ROW LEVEL SECURITY"
@@ -54,3 +64,5 @@ FORCE = "ALTER TABLE t FORCE ROW LEVEL SECURITY"
 READ = "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
 # ok: qbank-no-rls-bypass
 TALK = "The backup role must be a superuser or have BYPASSRLS."
+# ok: qbank-no-rls-bypass
+OTHER_STATEMENT = "CREATE ROLE app LOGIN; SELECT 'a role with BYPASSRLS would be bad'"

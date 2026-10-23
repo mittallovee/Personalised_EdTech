@@ -10,9 +10,10 @@ rules:
     languages: [generic]
     paths:
       include: ["/services/api/src/", "/services/api/migrations/", "/infra/"]
-    # Only the commands count, not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS (not
+    # Only the commands count, not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS in the
+    # same statement, on the same or the next two lines (quoted names and clauses included; not
     # NOBYPASSRLS, not the column name rolbypassrls), turning row_security off, un-forcing or disabling it.
-    pattern-regex: '(?is)((create|alter)\s+(role|user)\b[^;''"]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
+    pattern-regex: '(?is)((create|alter)\s+(role|user)\b(?:[^;\n]*\n){0,2}?[^;\n]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
 
   - id: qbank-sql-text-built-from-string
     message: >-
