@@ -1,0 +1,82 @@
+# Weekly dependency-update pull requests (K-01, standards §10). Dependabot only proposes: CI and
+# review run on its PRs like on any other, and the owner merges. Security advisories are handled
+# separately by pip-audit / pnpm audit in .github/workflows/security.yml.
+#
+# Patch and minor updates of one ecosystem arrive together as one PR (less noise, one CI run);
+# a major update arrives alone, because it is the one most likely to need real work.
+# (Written out in full, without YAML anchors, so that Dependabot's own parser cannot trip on it.)
+version: 2
+
+updates:
+  - package-ecosystem: uv # services/api (pyproject.toml + uv.lock)
+    directory: /services/api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm # the pnpm workspace: apps/*, packages/* (pnpm-lock.yaml)
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      web-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions # .github/workflows/*
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker # base images in infra/docker/*.Dockerfile, and the service image
+    # (postgres) in the CI workflow, which the github-actions updater does not read
+    directories:
+      - /infra/docker
+      - /.github/workflows
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      docker-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker-compose # images in compose.yaml (postgres, ...)
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      compose-minor-and-patch:
+        update-types: [minor, patch]

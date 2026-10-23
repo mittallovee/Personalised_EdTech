@@ -1,6 +1,10 @@
 # Backend image: FastAPI API (and, from M1 PR 4, the worker via a different command).
+# The uv tool image is its own named stage so that Dependabot (which reads FROM lines, not
+# COPY --from) can propose updates for it.
+FROM astral/uv:0.11 AS uv
+
 FROM python:3.14-slim AS build
-COPY --from=astral/uv:0.11 /uv /bin/uv
+COPY --from=uv /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 # Install dependencies first (cached layer), then the project itself.

@@ -176,6 +176,10 @@ web:      pnpm lint · typecheck · vitest · build · api-client regenerated ==
 e2e:      docker compose up --build → Playwright (Chromium) browser tests; report kept on failure
 security: secret scan (gitleaks) · ruff S rules (in backend) · dependency audit (pip-audit on uv.lock,
           pnpm audit --prod), also weekly. CodeQL needs a paid plan for private repos: not used.
+updates:  Dependabot opens one pull request a week per ecosystem (Python, web, GitHub Actions, Docker
+          images) in .github/dependabot.yml; patch and minor updates are grouped, a major update stands
+          alone. Such a PR is reviewed and merged like any other: CI must be green, and a major update
+          needs the owner's decision.
 ```
 
 ## 11. Definition of Done (per story / PR)
