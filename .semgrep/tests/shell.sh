@@ -17,6 +17,24 @@ psql <<'SQL'
 ALTER ROLE app
 BYPASSRLS;
 SQL
+# A statement longer than 500 characters before the keyword is still read to its semicolon.
+psql <<'SQL'
+# ruleid: qbank-no-rls-bypass-infra
+ALTER ROLE app
+    -- option note 00: kept on its own line to make the statement long
+    -- option note 01: kept on its own line to make the statement long
+    -- option note 02: kept on its own line to make the statement long
+    -- option note 03: kept on its own line to make the statement long
+    -- option note 04: kept on its own line to make the statement long
+    -- option note 05: kept on its own line to make the statement long
+    -- option note 06: kept on its own line to make the statement long
+    -- option note 07: kept on its own line to make the statement long
+    -- option note 08: kept on its own line to make the statement long
+    -- option note 09: kept on its own line to make the statement long
+    -- option note 10: kept on its own line to make the statement long
+    -- option note 11: kept on its own line to make the statement long
+    BYPASSRLS;
+SQL
 # ruleid: qbank-no-rls-bypass-infra
 psql -c "SET row_security = off"
 # ok: qbank-no-rls-bypass-infra

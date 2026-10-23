@@ -11,6 +11,9 @@ Until M7 the database runs on the owner's PC; after M7 it moves to a managed Pos
   a role that row-level security filters would look complete and not be.
 - A **restore drill runs in CI on every change** (`tests/integration/test_backup_restore.py`): back up, restore,
   compare structure, row counts, policies and privileges, and prove tenant isolation still holds in the copy.
+- The backup also records the database's own properties (`pg_dump --create`); the restore gives the new database
+  the same encoding, locale, settings and connect permissions, and refuses a server where `qbank_worker` is not a
+  member of `qbank_app`, because a backup cannot carry role memberships.
 - A checksum file beside each backup detects damage; the file is written with mode 600.
 - **From M7:** the provider's managed backups with point-in-time recovery become the primary protection, and the
   dump stays as a portable, provider-independent second copy.

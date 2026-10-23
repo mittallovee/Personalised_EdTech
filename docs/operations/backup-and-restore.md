@@ -62,14 +62,17 @@ A restore always goes into a **new** database. It never overwrites, so a mistake
 #    qbank_app and qbank_worker (infra/db/ensure-app-role.sh does both; the compose stack's db-init
 #    service already did it on yours), and any other role you gave access, such as a backup role with
 #    its own SELECT grants. The script checks first and, if one is missing, lists it and stops before
-#    restoring anything.
+#    restoring anything. It also stops if qbank_worker is not a member of qbank_app (a backup cannot carry
+#    memberships; ensure-app-role.sh sets it): the restored worker would otherwise fail on every table.
 # 2. Restore beside the old database:
 PGHOST=localhost PGUSER="$POSTGRES_USER" PGPASSWORD="$POSTGRES_PASSWORD" PG_DOCKER_IMAGE=postgres:17 \
   infra/scripts/restore-db.sh backups/qbank-2026-10-23-1030.dump qbank_restored
 ```
 
-The script checks the file against its checksum first and stops if it does not match. It stops at the first error and
-leaves a half-restored database in place so you can look at it.
+The script checks the file against its checksum first and stops if it does not match. The new database gets the old one's
+encoding and locale, its `ALTER DATABASE ... SET` settings and its connect permissions, which the backup carries, and not
+this server's defaults. (The database comment is not restored.) It stops at the first error and leaves a half-restored
+database in place so you can look at it.
 
 To **switch to the restored copy**: stop the API and the worker, point `DATABASE_URL` and the worker's URL at
 `qbank_restored`, start them, sign in and look around. Keep the old database until you are sure; drop it later.
@@ -82,15 +85,18 @@ against the migrated test database with two coachings in it, and then checks tha
 - tables, columns, indexes, constraints and database functions, and migration version;
 - number of rows in every table;
 - row-level-security switches and policies;
-- privileges of `qbank_app` and `qbank_worker`;
+- privileges of `qbank_app` and `qbank_worker`, including what each can really do through its memberships;
 
 and that, signed in as the runtime role, coaching A sees only coaching A, coaching B only B, and no coaching
 context sees nothing. It also checks the safety rules: a role that cannot bypass row-level security is refused, a
 restore never overwrites, a damaged file is refused, and a backup that grants privileges to a role the new server
-does not have stops with the role's name before anything is created (and restores once the role exists).
+does not have stops with the role's name before anything is created (and restores once the role exists), so does a server
+where `qbank_worker` is not a member of `qbank_app`. A separate test restores a database with a different locale, a
+setting and a connect permission, and checks the copy has the same.
 
-I checked that the drill has teeth by breaking the backup script three ways (leaving out the privileges, leaving out
-one table's rows, removing the role check); the drill failed each time with a message naming what differed.
+I checked that the drill has teeth by breaking the scripts five ways (leaving out the privileges, leaving out one
+table's rows, removing the role check, removing the membership check, ignoring the database properties); the drill
+failed each time with a message naming what differed.
 
 Run it yourself (needs PostgreSQL as described in the test setup, and `pg_dump` matching the server or
 `PG_DOCKER_IMAGE`):

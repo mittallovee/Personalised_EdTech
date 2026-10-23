@@ -123,6 +123,17 @@ _QUERIES: dict[str, str] = {
     "routine_grants": """
         SELECT routine_name, grantee, privilege_type FROM information_schema.routine_privileges
         WHERE routine_schema = 'public' AND grantee = ANY(%(roles)s) ORDER BY 1, 2, 3""",
+    # What each runtime role can really do, memberships included (qbank_worker works through
+    # qbank_app): the direct grants above would not show a missing membership.
+    "effective_table_access": """
+        SELECT r.rolname, c.relname, p.privilege,
+               has_table_privilege(r.rolname, c.oid, p.privilege)
+        FROM pg_roles r
+        CROSS JOIN pg_class c
+        CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) AS p (privilege)
+        WHERE r.rolname = ANY(%(roles)s)
+          AND c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+        ORDER BY 1, 2, 3""",
 }
 
 
@@ -297,5 +308,93 @@ def test_restore_stops_before_starting_when_a_named_role_is_missing(
             assert conn.execute(check.format(role=role)).fetchone() == (True,)  # type: ignore[arg-type]
     finally:
         drop_database(target)
+        with psycopg.connect(server, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))
+
+
+def test_restore_stops_when_the_worker_role_is_not_a_member_of_the_app_role(
+    migrated_database: MigratedDatabase, backup: Path, restored_name: str
+) -> None:
+    """A backup cannot carry role memberships. Without qbank_worker in qbank_app the restore would
+    succeed and the restored worker could not read the application tables."""
+    server = make_url(ADMIN_URL).set(drivername="postgresql").render_as_string(hide_password=False)
+    app, worker = sql.Identifier(APP_ROLE), sql.Identifier(WORKER_ROLE)
+    with psycopg.connect(server, autocommit=True) as conn:
+        conn.execute(sql.SQL("REVOKE {} FROM {}").format(app, worker))
+    try:
+        result = _run("restore-db.sh", backup, restored_name, env=_connection_env("postgres"))
+        assert result.returncode != 0
+        assert "not a member of qbank_app" in result.stderr
+        with psycopg.connect(server) as conn:
+            found = conn.execute(
+                "SELECT 1 FROM pg_database WHERE datname = %s", (restored_name,)
+            ).fetchone()
+        assert found is None  # it stopped before creating anything
+    finally:
+        with psycopg.connect(server, autocommit=True) as conn:
+            conn.execute(sql.SQL("GRANT {} TO {}").format(app, worker))
+
+
+def test_restore_gives_the_new_database_the_properties_of_the_old_one(
+    tmp_path: Path, restored_name: str
+) -> None:
+    """Encoding and locale, per-database settings and who may connect come from the backup, not
+    from the server it is restored onto (whose defaults can differ)."""
+    source = f"qbank_props_{secrets.token_hex(6)}"
+    role = f"qbank_props_{secrets.token_hex(4)}"
+    server = make_url(ADMIN_URL).set(drivername="postgresql").render_as_string(hide_password=False)
+    dump = tmp_path / "props.dump"
+
+    def properties(database: str) -> tuple[object, ...]:
+        query = """
+            SELECT pg_encoding_to_char(encoding), datcollate, datctype, datacl::text,
+                   (SELECT setconfig FROM pg_db_role_setting
+                    WHERE setdatabase = d.oid AND setrole = 0)
+            FROM pg_database d WHERE datname = %s"""
+        with psycopg.connect(server) as conn:
+            row = conn.execute(query, (database,)).fetchone()
+        assert row is not None
+        return row
+
+    try:
+        with psycopg.connect(server, autocommit=True) as conn:
+            default = conn.execute(
+                "SELECT datcollate FROM pg_database WHERE datname = 'postgres'"
+            ).fetchone()
+            assert default is not None
+            # A locale this server does not use by default, so a restore that ignored the backup
+            # would show.
+            locale = "POSIX" if default[0] == "C" else "C"
+            conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(role)))
+            conn.execute(
+                sql.SQL(
+                    "CREATE DATABASE {} TEMPLATE template0 ENCODING 'UTF8' "
+                    "LC_COLLATE {} LC_CTYPE {}"
+                ).format(sql.Identifier(source), sql.Literal(locale), sql.Literal(locale))
+            )
+            conn.execute(
+                sql.SQL("ALTER DATABASE {} SET statement_timeout = '45s'").format(
+                    sql.Identifier(source)
+                )
+            )
+            conn.execute(
+                sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
+                    sql.Identifier(source), sql.Identifier(role)
+                )
+            )
+        result = _run("backup-db.sh", dump, env=_connection_env(source))
+        assert result.returncode == 0, result.stderr
+        result = _run("restore-db.sh", dump, restored_name, env=_connection_env("postgres"))
+        assert result.returncode == 0, result.stderr
+
+        original, restored = properties(source), properties(restored_name)
+        assert original[1] == original[2] == locale != default[0]  # the test is not vacuous
+        assert original[4] == ["statement_timeout=45s"] and role in str(original[3])
+        # Same encoding, locale, setting and permissions. The access list names the database's
+        # owner, which is the role that ran the restore: the same one here.
+        assert restored == original
+    finally:
+        drop_database(source)
+        drop_database(restored_name)  # both hold a grant to the role, which cannot go before them
         with psycopg.connect(server, autocommit=True) as conn:
             conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))

@@ -30,7 +30,9 @@ partial="$out.partial"
 trap 'rm -f "$partial"' EXIT
 # --no-owner: the restoring role owns what it restores (a different cluster may name it differently).
 # Grants to qbank_app and qbank_worker are kept; those roles must exist before a restore.
-pg_tool pg_dump --format=custom --no-owner > "$partial"
+# --create: also records the database's own properties (encoding, locale, ALTER DATABASE ... SET
+# settings, who may connect) so restore-db.sh can give the new database the same ones.
+pg_tool pg_dump --format=custom --no-owner --create > "$partial"
 pg_tool pg_restore --list < "$partial" > /dev/null   # the file must at least be readable as a backup
 mv "$partial" "$out"
 trap - EXIT

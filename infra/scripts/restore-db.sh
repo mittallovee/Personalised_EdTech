@@ -25,16 +25,18 @@ fi
 
 export PGDATABASE=postgres
 
+# What the backup says about the database itself and about permissions. --create makes pg_restore print
+# the database's own properties too; with --schema-only no data is read.
+header="$(pg_tool pg_restore --create --schema-only --no-owner -f - < "$dump")"
+
 # The backup keeps who may do what (GRANT lines, and default privileges set FOR a role), so every role it
-# names must exist on this server, or the restore would stop part-way. Only the permissions are read
-# for this (--schema-only: no data).
-permissions="$(pg_tool pg_restore --schema-only --no-owner -f - < "$dump")"
+# names must exist on this server, or the restore would stop part-way.
 roles="$({
   # who is granted or revoked: ... GRANT ... TO role;   REVOKE ... FROM role;
-  printf '%s\n' "$permissions" | sed -n -E \
+  printf '%s\n' "$header" | sed -n -E \
     's/^(ALTER DEFAULT PRIVILEGES.* )?(GRANT|REVOKE) .* (TO|FROM) ("[^"]+"|[A-Za-z0-9_$]+)( WITH GRANT OPTION)?;$/\4/p'
   # whose future objects get privileges: ALTER DEFAULT PRIVILEGES FOR ROLE role ...
-  printf '%s\n' "$permissions" | sed -n -E \
+  printf '%s\n' "$header" | sed -n -E \
     's/^ALTER DEFAULT PRIVILEGES FOR ROLE ("[^"]+"|[A-Za-z0-9_$]+) .*/\1/p'
 } | tr -d '"' | sort -u | grep -vx 'PUBLIC' || true)"
 if [ -n "$roles" ]; then
@@ -48,6 +50,17 @@ if [ -n "$roles" ]; then
     echo "Create them first (infra/db/ensure-app-role.sh does qbank_app and qbank_worker), then restore again." >&2
     exit 1
   fi
+  # qbank_worker reaches the application tables only as a member of qbank_app (ensure-app-role.sh), and
+  # a backup cannot carry that: without it the restore succeeds and the worker then fails at run time.
+  if printf '%s\n' "$roles" | grep -qx 'qbank_worker'; then
+    not_member="$(echo "SELECT 1 WHERE NOT pg_has_role('qbank_worker', 'qbank_app', 'MEMBER')" \
+      | pg_tool psql -X -At)"
+    if [ -n "$not_member" ]; then
+      echo "On this server qbank_worker is not a member of qbank_app, so the restored worker could not" >&2
+      echo "read the application tables. Run infra/db/ensure-app-role.sh (or GRANT qbank_app TO qbank_worker), then restore again." >&2
+      exit 1
+    fi
+  fi
 fi
 
 exists="$(echo "SELECT 1 FROM pg_database WHERE datname = :'target'" | pg_tool psql -X -At -v "target=$target")"
@@ -55,7 +68,29 @@ if [ -n "$exists" ]; then
   echo "Database $target already exists; restore into a new name." >&2
   exit 1
 fi
-echo 'CREATE DATABASE :"target"' | pg_tool psql -X -v ON_ERROR_STOP=1 -v "target=$target" > /dev/null
+
+# The new database gets the old one's encoding and locale (a server with other defaults would behave
+# differently: sorting, case rules), and afterwards its per-database settings and connect permissions.
+# The backup names the old database in these statements; the new name replaces it.
+new_name="$(echo "SELECT quote_ident(:'target')" | pg_tool psql -X -At -v "target=$target")"
+create_line="$(printf '%s\n' "$header" | grep -m1 -E '^CREATE DATABASE ' || true)"
+old_name="$(printf '%s\n' "$create_line" | sed -n -E 's/^CREATE DATABASE ("([^"]|"")+"|[A-Za-z0-9_$]+) .*/\1/p')"
+create_options="$(printf '%s\n' "$create_line" | sed -n -E 's/^CREATE DATABASE ("([^"]|"")+"|[A-Za-z0-9_$]+) (.*)/\3/p')"
+properties=""
+if [ -n "$create_options" ]; then
+  create_sql="CREATE DATABASE $new_name $create_options"
+  while IFS= read -r line; do
+    properties+="${line/" DATABASE $old_name "/" DATABASE $new_name "}"$'\n'
+  done < <(printf '%s\n' "$header" | grep -E "^(ALTER DATABASE|GRANT .* ON DATABASE|REVOKE .* ON DATABASE) " || true)
+else
+  # Not seen with pg_restore 16 or later, which always names one; kept for any other client.
+  echo "Warning: this backup has no database properties (made without --create); using this server's defaults." >&2
+  create_sql="CREATE DATABASE $new_name;"
+fi
+printf '%s\n' "$create_sql" | pg_tool psql -X -v ON_ERROR_STOP=1 > /dev/null
 # Stop at the first error, and leave the half-restored database in place to look at.
 pg_tool pg_restore --exit-on-error --no-owner --dbname "$target" < "$dump"
+if [ -n "$properties" ]; then
+  printf '%s' "$properties" | pg_tool psql -X -v ON_ERROR_STOP=1 > /dev/null
+fi
 echo "Restored $dump into database $target"
