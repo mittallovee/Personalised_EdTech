@@ -1,0 +1,57 @@
+# Project rules for the web app (K-02). Each one enforces a line of AGENTS.md "Never".
+rules:
+  - id: qbank-no-raw-html
+    message: >-
+      Never render question or user content as raw HTML (AGENTS.md §3). Use the content renderer
+      (ADR-0016), which only builds elements it knows.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      include: ["/apps/web/src/", "/packages/"]
+    pattern-either:
+      - pattern: <$EL dangerouslySetInnerHTML={...} />
+      - pattern: <$EL dangerouslySetInnerHTML={...}>...</$EL>
+      - pattern: $X.innerHTML = $Y
+      - pattern: $X.outerHTML = $Y
+      - pattern: $X.insertAdjacentHTML(...)
+      - pattern: document.write(...)
+
+  - id: qbank-no-eval
+    message: Never execute text as code (AGENTS.md §3).
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      include: ["/apps/web/src/", "/packages/"]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: setTimeout("...", ...)
+      - pattern: setInterval("...", ...)
+
+  - id: qbank-no-next-server-code
+    message: >-
+      No business logic in Next.js server code (AGENTS.md §3, ADR-0006, ADR-0014): the web app
+      talks to /api/v1 through the proxy. No route handlers, no server actions.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["/apps/web/src/"]
+    pattern-regex: '(?m)(^\s*[''"]use server[''"]|^export\s+(async\s+)?(function|const)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b)'
+
+  - id: qbank-no-token-in-browser-storage
+    message: >-
+      Sessions live in HttpOnly cookies (standards §5.8). Do not keep a token, session or password
+      in localStorage or sessionStorage, where any script on the page can read it.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      include: ["/apps/web/src/", "/packages/"]
+    patterns:
+      - pattern-either:
+          - pattern: localStorage.setItem($K, ...)
+          - pattern: sessionStorage.setItem($K, ...)
+          - pattern: window.localStorage.setItem($K, ...)
+          - pattern: window.sessionStorage.setItem($K, ...)
+      - metavariable-regex:
+          metavariable: $K
+          regex: '(?is).*(token|session|password|secret|csrf|credential|auth)'

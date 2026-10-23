@@ -1,0 +1,62 @@
+# Project rules for the backend (K-02). Each one enforces a line of AGENTS.md "Never" that
+# ruff's S rules and import-linter do not already cover. Tests: .semgrep/tests (semgrep --test).
+rules:
+  - id: qbank-no-rls-bypass
+    message: >-
+      Do not weaken row-level security or the database role (AGENTS.md §3, ADR-0005): no
+      BYPASSRLS, no disabling or un-forcing row-level security, no `row_security = off`.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ["/services/api/src/", "/services/api/migrations/", "/infra/"]
+    pattern-regex: '(?i)(row_security\s*(=|to)\s*off|(?<!NO)BYPASSRLS|NO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY|DISABLE\s+ROW\s+LEVEL\s+SECURITY)'
+
+  - id: qbank-sql-text-built-from-string
+    message: >-
+      SQL must not be built by concatenating or formatting strings (AGENTS.md §3). Pass values as
+      bind parameters: text("... :name ..."), {"name": value}.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["/services/api/src/", "/services/api/migrations/"]
+    pattern-either:
+      - pattern: text(f"...", ...)
+      - pattern: text("..." + $X, ...)
+      - pattern: text($X + "...", ...)
+      - pattern: text("..." % $X, ...)
+      - pattern: text("...".format(...), ...)
+
+  - id: qbank-no-float-column
+    message: >-
+      Do not store money or numerical answers as floats (AGENTS.md §3): use Numeric / Integer.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["/services/api/src/", "/services/api/migrations/"]
+    pattern-either:
+      - pattern: Float(...)
+      - pattern: sa.Float(...)
+      - pattern: sqlalchemy.Float(...)
+      - pattern: Double(...)
+
+  - id: qbank-no-secret-in-log
+    message: >-
+      Do not log a password, token, secret or key (standards §5.5). Log an identifier instead.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["/services/api/src/"]
+    patterns:
+      - pattern-either:
+          - pattern: $LOG.debug(..., $K=$V, ...)
+          - pattern: $LOG.info(..., $K=$V, ...)
+          - pattern: $LOG.warning(..., $K=$V, ...)
+          - pattern: $LOG.error(..., $K=$V, ...)
+          - pattern: $LOG.exception(..., $K=$V, ...)
+          - pattern: $LOG.critical(..., $K=$V, ...)
+      - metavariable-regex:
+          metavariable: $LOG
+          regex: '^(log|logger|_log|_logger)$'
+      - metavariable-regex:
+          metavariable: $K
+          regex: '(?is).*(password|passwd|secret|token|api_?key|authorization|cookie|credential)'
