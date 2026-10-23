@@ -188,6 +188,22 @@ def test_a_csv_written_from_a_table_reads_back_the_same(
     assert result.rows == expected
 
 
+@given(st.integers(MAX_CELL_CHARS - 20, MAX_CELL_CHARS + 20), st.sampled_from(["a", "भ", "ﬁ"]))
+def test_a_cell_is_accepted_up_to_the_length_limit_and_refused_beyond_it(
+    length: int, char: str
+) -> None:
+    data = f"kind,path\nCLASS,{char * length}\n".encode()
+
+    if length <= MAX_CELL_CHARS:
+        assert read_table(data).rows[0].cells["path"] == char * length
+    else:
+        try:
+            read_table(data)
+        except ImportFileInvalid:
+            return
+        raise AssertionError("A cell over the limit was accepted.")
+
+
 # --- Planning ------------------------------------------------------------------------------------
 
 # Names that collide on purpose: the same name in other case or spacing, a name with the path
