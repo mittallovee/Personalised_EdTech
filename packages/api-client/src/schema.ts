@@ -688,6 +688,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exams, in name order
+         * @description Retired exams are included unless you ask for `state=ACTIVE`, which is what a picker for a new question should do.
+         */
+        get: operations["list_exams_api_v1_exams_get"];
+        put?: never;
+        /**
+         * Add an exam
+         * @description Owner and admins. Send an `Idempotency-Key` so a retry after a lost response returns the same exam instead of failing.
+         */
+        post: operations["create_exam_api_v1_exams_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{exam_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One exam
+         * @description The ETag is its revision, for changes that need `If-Match`.
+         */
+        get: operations["get_exam_api_v1_exams__exam_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename an exam or change its short code
+         * @description Send the ETag you last read in `If-Match`.
+         */
+        patch: operations["update_exam_api_v1_exams__exam_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/exams/{exam_id}/deprecate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retire an exam
+         * @description It can no longer be chosen for new questions; questions that use it keep it.
+         */
+        post: operations["deprecate_exam_api_v1_exams__exam_id__deprecate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exams/{exam_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring a retired exam back */
+        post: operations["restore_exam_api_v1_exams__exam_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sources, in name order
+         * @description Filter by `kind`. Retired sources are included unless you ask for `state=ACTIVE`.
+         */
+        get: operations["list_sources_api_v1_sources_get"];
+        put?: never;
+        /**
+         * Add a source
+         * @description Owner and admins. Send an `Idempotency-Key` so a retry after a lost response returns the same source instead of failing.
+         */
+        post: operations["create_source_api_v1_sources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One source
+         * @description The ETag is its revision, for changes that need `If-Match`.
+         */
+        get: operations["get_source_api_v1_sources__source_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename a source
+         * @description Send the ETag you last read in `If-Match`. The kind never changes.
+         */
+        patch: operations["update_source_api_v1_sources__source_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/sources/{source_id}/deprecate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retire a source
+         * @description It can no longer be chosen for new questions; questions that use it keep it.
+         */
+        post: operations["deprecate_source_api_v1_sources__source_id__deprecate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sources/{source_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring a retired source back */
+        post: operations["restore_source_api_v1_sources__source_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -818,6 +988,19 @@ export interface components {
              */
             new_role: "ADMIN" | "FACULTY";
         };
+        /** CreateExam */
+        CreateExam: {
+            /**
+             * Name
+             * @example JEE Main
+             */
+            name: string;
+            /**
+             * Short Code
+             * @example JEEM
+             */
+            short_code?: string | null;
+        };
         /** CreateNode */
         CreateNode: {
             /**
@@ -861,6 +1044,19 @@ export interface components {
             timezone: string;
             owner: components["schemas"]["NewOwner"];
         };
+        /** CreateSource */
+        CreateSource: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "BOOK" | "MODULE" | "TEST_SERIES" | "PYQ_PAPER" | "OTHER";
+            /**
+             * Name
+             * @example HC Verma, Concepts of Physics
+             */
+            name: string;
+        };
         /** CreatedOrganization */
         CreatedOrganization: {
             organization: components["schemas"]["OrganizationOut"];
@@ -903,6 +1099,42 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorInfo"];
+        };
+        /** ExamOut */
+        ExamOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Short Code */
+            short_code: string | null;
+            /**
+             * State
+             * @description DEPRECATED exams cannot be chosen for new questions.
+             * @enum {string}
+             */
+            state: "ACTIVE" | "DEPRECATED";
+            /** Revision */
+            revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ExamPage */
+        ExamPage: {
+            /** Data */
+            data: components["schemas"]["ExamOut"][];
+            page: components["schemas"]["PageInfo"];
         };
         /** GoogleActivationStartRequest */
         GoogleActivationStartRequest: {
@@ -1308,6 +1540,45 @@ export interface components {
              */
             grants: components["schemas"]["Grant"][];
         };
+        /** SourceOut */
+        SourceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "BOOK" | "MODULE" | "TEST_SERIES" | "PYQ_PAPER" | "OTHER";
+            /** Name */
+            name: string;
+            /**
+             * State
+             * @description DEPRECATED sources cannot be chosen for new questions.
+             * @enum {string}
+             */
+            state: "ACTIVE" | "DEPRECATED";
+            /** Revision */
+            revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SourcePage */
+        SourcePage: {
+            /** Data */
+            data: components["schemas"]["SourceOut"][];
+            page: components["schemas"]["PageInfo"];
+        };
         /** TransferOwnership */
         TransferOwnership: {
             /**
@@ -1322,6 +1593,16 @@ export interface components {
              * @description An active admin of this coaching, who becomes the Owner.
              */
             new_owner_membership_id: string;
+        };
+        /** UpdateExam */
+        UpdateExam: {
+            /** Name */
+            name?: string | null;
+            /**
+             * Short Code
+             * @description Send null to remove the short code; leave it out to keep it.
+             */
+            short_code?: string | null;
         };
         /** UpdateNode */
         UpdateNode: {
@@ -1346,6 +1627,14 @@ export interface components {
             display_name?: string | null;
             /** Timezone */
             timezone?: string | null;
+        };
+        /** UpdateSource */
+        UpdateSource: {
+            /**
+             * Name
+             * @description The kind never changes.
+             */
+            name?: string | null;
         };
     };
     responses: never;
@@ -4054,6 +4343,959 @@ export interface operations {
             };
             /** @description Its parent is retired; restore that first (`PARENT_DEPRECATED`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_exams_api_v1_exams_get: {
+        parameters: {
+            query?: {
+                state?: ("ACTIVE" | "DEPRECATED") | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamPage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_exam_api_v1_exams_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExam"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Another item has this name (`DUPLICATE_NAME`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_exam_api_v1_exams__exam_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                exam_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_exam_api_v1_exams__exam_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                exam_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExam"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Another item has this name (`DUPLICATE_NAME`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deprecate_exam_api_v1_exams__exam_id__deprecate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                exam_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_exam_api_v1_exams__exam_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                exam_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExamOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_sources_api_v1_sources_get: {
+        parameters: {
+            query?: {
+                kind?: ("BOOK" | "MODULE" | "TEST_SERIES" | "PYQ_PAPER" | "OTHER") | null;
+                state?: ("ACTIVE" | "DEPRECATED") | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcePage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_source_api_v1_sources_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSource"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Another item has this name (`DUPLICATE_NAME`), or the Idempotency-Key was used for a different request (`IDEMPOTENCY_KEY_REUSED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_source_api_v1_sources__source_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_source_api_v1_sources__source_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSource"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Another item has this name (`DUPLICATE_NAME`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deprecate_source_api_v1_sources__source_id__deprecate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed by someone else since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_source_api_v1_sources__source_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such item in your coaching (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

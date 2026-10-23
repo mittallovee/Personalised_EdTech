@@ -255,7 +255,7 @@ typeset. The author has a toggle to reveal the answer and solution. The preview 
 - Every create, checkpoint, archive/restore, catalogue change and import writes an **audit event**.
   Autosaves do not (they would bury the log); each revision row already records who and when.
 
-## 7. Database (migrations 0013 to 0017)
+## 7. Database (migrations 0013 onwards)
 
 All tables carry `organization_id`, `FORCE ROW LEVEL SECURITY` with the tenant policy, composite
 foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation test (T18 pattern).
@@ -264,9 +264,11 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 |---|---|
 | 0013 | **Built (PR 2a):** `taxonomy_nodes` (kind, parent referenced together with its kind, state, sort order, revision; sibling names unique) and `taxonomy_labels` (names in the other languages). The languages and Bloom levels are fixed lists in code, not tables |
 | 0014 | **Built (PR 2a follow-up):** the syllabus CHECK also requires the parent kind whenever there is a parent |
-| 0015 | `concepts` and their labels and aliases, `exams`, `sources`, `catalogue_imports` (the stored preview that apply uses) |
-| 0016 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
-| 0017 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
+| 0015 | **Built (PR 2b):** `exams` (name, optional short code) and `sources` (kind, name); retired, never deleted |
+| 0016 | `concepts` and their labels and aliases |
+| 0017 | `catalogue_imports` (the stored preview that apply uses) |
+| 0018 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
+| 0019 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
 
 ## 8. API (all under `/api/v1`)
 
@@ -275,7 +277,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `GET /languages` · `GET /catalogues/bloom` · `GET /catalogues/difficulty-guide` | Fixed lists (built in PR 2a) |
 | `GET /taxonomy/nodes` (filter by kind, parent, state) · `GET /{id}` · `POST` · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Syllabus (built in PR 2a) |
 | `GET/POST /taxonomy/concepts` · `PATCH /{id}` · `/deprecate` · `/restore` | Concepts and aliases |
-| `GET/POST /exams` · `GET/POST /sources` (+ `PATCH`, `/deprecate`, `/restore`) | Exams, sources |
+| `GET /exams` · `GET /sources` (+ `?kind=`) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Exams, sources (built in PR 2b) |
 | `GET /taxonomy/import-template` · `POST /taxonomy/imports` (file; creates the preview) · `GET /taxonomy/imports/{id}` · `POST /taxonomy/imports/{id}/apply` | Excel/CSV import |
 | `POST /questions` (`Idempotency-Key`) · `GET /questions` (mine, or all for admins; cursor pages) · `GET /questions/by-code/{code}` · `GET /questions/{id}` | Create and read; every read carries the findings |
 | `PUT /questions/{id}/working-revision` (`If-Match`) | Autosave |
@@ -343,16 +345,16 @@ New dependencies, each reviewed for licence and known vulnerabilities and pinned
 |---|---|
 | 1 | This design note + ADR-0016 (docs only) |
 | 2a | **Done:** syllabus items (migration 0013), the fixed lists (languages, Bloom, difficulty guide), permissions, audit |
-| 2b | Concepts with aliases, exams and sources (migration 0015) |
-| 2c | Taxonomy: Excel/CSV import (preview, apply) |
+| 2b | **Exams and sources** (migration 0015), then concepts with labels and aliases (migration 0016), as two PRs |
+| 2c | Taxonomy: Excel/CSV import (preview, apply; migration 0017) |
 | 2d | Web: Admin → Syllabus and Exams & sources, with browser tests |
 | 3a | Question content domain: blocks, the nine validators, answer limits, findings; spec-v1 fixtures as tests (no database yet) |
-| 3b | Questions persistence: migration 0016, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |
+| 3b | Questions persistence: migration 0018, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |
 | 3c | `packages/content-renderer` (KaTeX) with Vitest safety tests; preview component |
 | 3d | Web: editor for SCQ, multiple-correct, integer, single digit, numerical; metadata pickers; findings panel; autosave |
 | 3e | Web: editor for matching, assertion–reason, multiple statement |
 | 3f | Web: visual equation editor (MathLive), inline equations |
-| 3g | Images: migration 0017, `core/storage.py`, upload, serving, crop, image blocks |
+| 3g | Images: migration 0019, `core/storage.py`, upload, serving, crop, image blocks |
 | 3h | Passages: API and editor |
 | 3i | Answer limits settings (API and admin screen) |
 | 4 | M3 demo notes and exit checks |
