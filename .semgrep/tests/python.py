@@ -85,7 +85,16 @@ SAFE = "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS"
 FORCE = "ALTER TABLE t FORCE ROW LEVEL SECURITY"
 # ok: qbank-no-rls-bypass
 READ = "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
-# ok: qbank-no-rls-bypass
-TALK = "The backup role must be a superuser or have BYPASSRLS."
-# ok: qbank-no-rls-bypass
+# ruleid: qbank-no-rls-bypass
+TALK = "The backup role must be a superuser or have BYPASSRLS."  # prose in a string is flagged too, on purpose
+# ruleid: qbank-no-rls-bypass
 OTHER_STATEMENT = "CREATE ROLE app LOGIN; SELECT 'a role with BYPASSRLS would be bad'"
+# ruleid: qbank-no-rls-bypass
+PIECES = "ALTER ROLE app " + "BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+OPTION_ONLY = "BYPASSRLS"
+# ruleid: qbank-no-rls-bypass
+DIGIT_TAG = "ALTER ROLE app PASSWORD $tag1$a;b$tag1$ BYPASSRLS;"
+# A comment can talk about BYPASSRLS freely: only string literals are looked at.
+# ok: qbank-no-rls-bypass
+NO_BYPASS_COLUMN = "SELECT rolname FROM pg_roles WHERE NOT rolbypassrls AND rolname <> 'x'"

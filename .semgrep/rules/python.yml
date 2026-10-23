@@ -10,19 +10,20 @@ rules:
     languages: [python]
     paths:
       include: ["/services/api/src/", "/services/api/migrations/"]
-    # The text is looked for inside one string literal at a time (bound to $S), so a statement ends
-    # where its string ends and a long multi-line statement is read to the end. Only commands count,
-    # not text that talks about them: CREATE/ALTER ROLE ... BYPASSRLS before the next semicolon
-    # (a semicolon inside a quoted value, $$-string or comment does not count; quoted names and clauses included; not NOBYPASSRLS, not the column name rolbypassrls), turning
-    # row_security off, un-forcing or disabling it. (metavariable-regex matches from the start, hence
-    # the leading .*)
+    # Any string literal (f-strings too) in backend code that contains the word BYPASSRLS, or turns
+    # row_security off, or un-forces or disables row-level security, is a finding. Not
+    # NOBYPASSRLS and not the column name rolbypassrls (a letter before the word). Matching the
+    # bare word, not a whole CREATE/ALTER ROLE statement, also catches a command assembled from
+    # several pieces ("ALTER ROLE app " + option). Nothing in services/api/src or migrations uses the
+    # word today; if prose in a string ever needs it, keep it in a comment or add a reviewed
+    # `nosemgrep` that says why. (metavariable-regex matches from the start, hence the leading .*)
     patterns:
       - pattern-either:
           - pattern: '"$S"'
           - pattern: 'f"$S"'
       - metavariable-regex:
           metavariable: $S
-          regex: '(?is).*((create|alter)\s+(role|user)\b(?:[^;]*?|(?:''[^'']*''|"[^"]*"|--[^\n]*(?=\n|$)|/\*(?:(?!\*/).)*\*/|\$(?P<tag>[a-z_]*)\$(?:(?!\$(?P=tag)\$).)*\$(?P=tag)\$|[^;''"\-/$]|-(?!-)|/(?!\*)|\$(?![a-z_]*\$))*?)(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
+          regex: '(?is).*((?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
 
   - id: qbank-sql-text-built-from-string
     message: >-

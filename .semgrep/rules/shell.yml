@@ -19,4 +19,4 @@ rules:
     languages: [generic]
     paths:
       include: ["/infra/"]
-    pattern-regex: '(?is)((create|alter)\s+(role|user)\b(?:[^;]*?|(?:''[^'']*''|"[^"]*"|--[^\n]*(?=\n|$)|/\*(?:(?!\*/).)*\*/|\$(?P<tag>[a-z_]*)\$(?:(?!\$(?P=tag)\$).)*\$(?P=tag)\$|[^;''"\-/$]|-(?!-)|/(?!\*)|\$(?![a-z_]*\$))*?)(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
+    pattern-regex: '(?is)((create|alter)\s+(role|user)\b(?:[^;]*?|(?:''[^'']*''|"[^"]*"|--[^\n]*(?=\n|$)|/\*(?:(?!\*/).)*\*/|\$(?P<tag>(?:[a-z_][a-z_0-9]*)?)\$(?:(?!\$(?P=tag)\$).)*\$(?P=tag)\$|[^;''"\-/$]|-(?!-)|/(?!\*)|\$(?!(?:[a-z_][a-z_0-9]*)?\$))*?)(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
