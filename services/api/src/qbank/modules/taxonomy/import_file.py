@@ -35,6 +35,7 @@ MAX_CELL_CHARS = 2_000
 # What the archive may expand to in total. A syllabus of 20,000 rows is a few MB unpacked.
 MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 MAX_ARCHIVE_MEMBERS = 200
+MAX_PARTS_PER_ITEM = 2_000  # elements inside one cell or one shared text (runs of formatting)
 MAX_CELLS_PER_ROW = 16_384  # the columns of a sheet (A to XFD); a row cannot hold more
 
 _ZIP_MAGIC = b"PK\x03\x04"
@@ -141,15 +142,26 @@ def _column_number(reference: str) -> int:
 def _stream(source: IO[bytes], keep_inside: str = "") -> Iterator[Element]:
     """Each element of an XML part, as it ends. After the caller has seen it, it is released, so a
     part with millions of elements is read in constant memory. Elements inside a ``keep_inside``
-    element stay until that one ends, because its end is where they are read."""
+    element stay until that one ends, because its end is where they are read; there can be only so
+    many of them, so one cell cannot hold the server's memory either."""
     stack: list[Element] = []
+    inside = False
+    kept = 0
     for event, element in iterparse(source, events=("start", "end")):
         if event == "start":
             stack.append(element)
+            if not inside and _local(element.tag) == keep_inside:
+                inside, kept = True, 0
+            elif inside:
+                kept += 1
+                if kept > MAX_PARTS_PER_ITEM:
+                    raise ImportFileInvalid("A cell or text of the file is too complex.")
             continue
         stack.pop()
         yield element
-        if not any(_local(parent.tag) == keep_inside for parent in stack):
+        if inside and _local(element.tag) == keep_inside:
+            inside = False
+        if not inside:
             element.clear()
             if stack:
                 stack[-1].remove(element)
@@ -220,7 +232,10 @@ def _cell_text(cell: Element, strings: list[str]) -> str:
     if not raw:
         return ""
     if kind == "s":
-        return strings[int(raw)]
+        index = int(raw)
+        if not 0 <= index < len(strings):  # a negative number would count from the end
+            raise ImportFileInvalid("This is not a valid .xlsx file.")
+        return strings[index]
     if kind == "b":
         return "TRUE" if raw == "1" else "FALSE"
     if kind == "n":

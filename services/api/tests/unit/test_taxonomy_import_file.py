@@ -405,3 +405,44 @@ def test_values_of_every_kind_of_cell_are_read_as_text() -> None:
         target.writestr("xl/sharedStrings.xml", strings)
     table = read_table(result.getvalue())
     assert table.rows[0].cells == {"kind": "CLASS", "n": "3", "b": "TRUE", "s": "shared"}
+
+
+def test_one_cell_with_hundreds_of_thousands_of_children_is_refused_without_using_much_memory() -> (
+    None
+):
+    cell = b'<c r="A2" t="inlineStr"><is>' + b"<r/>" * 400_000 + b"</is></c>"
+    data = sheet_with_rows(b'<row r="2">' + cell + b"</row>")
+    tracemalloc.start()
+    try:
+        message = refused(data)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert "too complex" in message
+    assert peak < 20 * 1024 * 1024
+
+
+def test_a_shared_string_with_hundreds_of_thousands_of_parts_is_refused() -> None:
+    strings = b"<sst><si>" + b"<r/>" * 400_000 + b"</si></sst>"
+    assert "too complex" in refused(
+        with_part(xlsx(["kind"], ["CLASS"]), "xl/sharedStrings.xml", strings)
+    )
+
+
+def test_a_shared_string_index_outside_the_table_is_refused() -> None:
+    strings = b"<sst><si><t>only</t></si></sst>"
+    for index in (b"-1", b"1", b"x"):
+        row = b'<row r="2"><c r="A2" t="s"><v>' + index + b"</v></c></row>"
+        data = with_part(sheet_with_rows(row), "xl/sharedStrings.xml", strings)
+        assert "valid .xlsx" in refused(data)
+
+
+def with_part(data: bytes, name: str, content: bytes) -> bytes:
+    """The workbook with one part added or replaced."""
+    result = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(result, "w") as target:
+        for member in source.infolist():
+            if member.filename != name:
+                target.writestr(member, source.read(member))
+        target.writestr(name, content)
+    return result.getvalue()
