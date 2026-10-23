@@ -64,6 +64,8 @@ export default function SyllabusPage() {
 
   const load = useCallback(async (parent: Node | null, cursor: string | null) => {
     const mine = cursor ? generation.current : ++generation.current;
+    // A full reload starts the list over: a cursor from the old list must not be used on it.
+    if (!cursor) setNextCursor(null);
     let result;
     try {
       result = await api().GET("/api/v1/taxonomy/nodes", {

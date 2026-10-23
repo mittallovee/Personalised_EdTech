@@ -761,3 +761,42 @@ test("a change that finishes after you came back to the same level shows on it",
   ).toBeVisible({ timeout: 6000 });
   await expect(page.getByRole("form", { name: "Add a chapter" })).toHaveCount(0);
 });
+
+test("an old Show more is not offered while the list is being reloaded after a change", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Old Cursor ${unique()}`);
+  const csrf = await csrfOf(context);
+  for (let n = 1; n <= 201; n++) {
+    const created = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data: { kind: "CLASS", name: `Class ${String(n).padStart(3, "0")}`, sort_order: n },
+    });
+    expect(created.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  let slow = false;
+  await page.route(
+    (url) => url.pathname === "/api/v1/taxonomy/nodes" && !url.searchParams.has("cursor"),
+    async (route) => {
+      if (slow) await new Promise((resolve) => setTimeout(resolve, 2000)); // the reload is slow
+      await route.continue();
+    },
+  );
+  await page.goto("/admin/syllabus");
+  const items = page.getByRole("list", { name: "Syllabus items" }).getByRole("listitem");
+  await expect(items).toHaveCount(100);
+  await page.getByRole("button", { name: "Show more" }).click();
+  await expect(items).toHaveCount(200); // a cursor to the third page is still held
+
+  slow = true;
+  await item(page, "Class 001").getByRole("button", { name: "Edit" }).click();
+  await item(page, "Class 001").getByLabel("Order (smaller comes first)").fill("500");
+  await item(page, "Class 001").getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Class 001 was saved.")).toBeVisible();
+  // Checked once, while the list is being fetched again from the start.
+  expect(await page.getByRole("button", { name: "Show more" }).count()).toBe(0);
+  await expect(items).toHaveCount(100);
+  await expect(page.getByRole("button", { name: "Show more" })).toBeVisible();
+});
