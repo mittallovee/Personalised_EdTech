@@ -2,6 +2,7 @@
 
 import io
 import re
+import time
 import zipfile
 
 import pytest
@@ -198,3 +199,41 @@ def test_a_spreadsheet_cannot_hide_cells_by_declaring_a_small_size() -> None:
 def test_the_header_cells_have_the_length_cap_too(data: bytes) -> None:
     assert "column name" in refused(data)
     assert "column name" in refused(xlsx(["kind", "x" * 2001], ["CLASS", "a"]))
+
+
+def test_empty_cells_far_to_the_right_do_not_make_the_reader_walk_them() -> None:
+    """A style-only cell in the last column (XFD) of every row used to make the reader build all
+    16,384 cells of every row: a thousand rows took seconds, 20,000 rows would take minutes."""
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.append(["kind", "path"])
+    for number in range(2, 1502):
+        sheet.append(["CLASS", f"Class {number}"])
+        sheet.cell(row=number, column=16384).number_format = "0.00"  # empty, but styled
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    started = time.monotonic()
+    table = read_table(buffer.getvalue())
+    assert time.monotonic() - started < 1.0
+    assert len(table.rows) == 1500
+
+
+def test_a_value_far_to_the_right_is_still_refused_among_styled_empty_cells() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    assert sheet is not None
+    sheet.append(["kind"])
+    sheet.append(["CLASS"])
+    sheet.cell(row=2, column=16384).number_format = "0.00"
+    sheet.cell(row=2, column=5000).value = "hidden"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    assert "more than 40 columns" in refused(buffer.getvalue())
+
+
+def test_a_value_in_a_column_without_a_header_name_is_refused() -> None:
+    assert "no name" in refused(b"kind,,path\nCLASS,unexpected,Class 11\n")
+    assert "no name" in refused(xlsx(["kind", None, "path"], ["CLASS", "unexpected", "Class 11"]))
+    table = read_table(b"kind,,path\nCLASS,,Class 11\n")  # an empty unnamed column is harmless
+    assert table.rows[0].cells == {"kind": "CLASS", "path": "Class 11"}

@@ -16,6 +16,7 @@ import zipfile
 from dataclasses import dataclass
 from typing import Any
 
+from defusedxml.ElementTree import iterparse
 from openpyxl import load_workbook
 
 from qbank.core.errors import ValidationFailed
@@ -30,6 +31,12 @@ MAX_ARCHIVE_MEMBERS = 200
 
 _ZIP_MAGIC = b"PK\x03\x04"
 _OLD_EXCEL_MAGIC = bytes.fromhex("D0CF11E0A1B11AE1")
+
+
+_FORMULAS = (
+    "The file has cells with formulas, which are not accepted. Copy the cells and paste them as"
+    " values, then try again."
+)
 
 
 class ImportFileInvalid(ValidationFailed):
@@ -121,25 +128,54 @@ def _spreadsheet_lines(data: bytes) -> list[list[str]]:
         workbook.close()
 
 
+def _column_number(reference: str) -> int:
+    """The column of a cell reference such as "XFD12" (A is 1)."""
+    number = 0
+    for char in reference:
+        if not char.isalpha():
+            break
+        number = number * 26 + ord(char.upper()) - 64
+        if number > 1_000_000:  # not a real column; no need to count further
+            break
+    return number
+
+
+def _check_far_cells(sheet: Any) -> None:
+    """Refuse a populated cell past the column limit, without building the cells in between.
+
+    The reader below stops at the limit, so it would never see such a cell. A spreadsheet can also
+    hold empty, styled cells at the far right of every row; walking those (16,384 per row) would
+    keep the server busy for minutes, which is why the cells are looked at here one by one as they
+    are in the file, and only those with content are counted.
+    """
+    with sheet._get_source() as source:  # the sheet's XML, as stored in the archive
+        for _, element in iterparse(source):
+            tag = element.tag.rsplit("}", 1)[-1]
+            if tag == "c":
+                parts = {child.tag.rsplit("}", 1)[-1]: child for child in element}
+                if "f" in parts:
+                    raise ImportFileInvalid(_FORMULAS)
+                value, inline = parts.get("v"), parts.get("is")
+                filled = inline is not None or (value is not None and bool(value.text))
+                if filled and _column_number(element.get("r", "")) > MAX_COLUMNS:
+                    raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
+            elif tag == "row":
+                element.clear()
+
+
 def _sheet_lines(sheet: Any) -> list[list[str]]:
-    # The sheet's declared size is ignored: a file can declare it too small and hide cells, or too
-    # large and make the reader pad every row. Without it, rows are exactly as wide as their
-    # content, so a populated cell past the column limit (or a formula anywhere) is always seen.
+    # The sheet's declared size is ignored: a file can declare it too small and hide rows or cells.
     sheet.reset_dimensions()
+    _check_far_cells(sheet)
     lines: list[list[str]] = []
     # Blank rows count too: a file that declares a million empty rows is refused, not walked.
-    for row in sheet.iter_rows():
+    for row in sheet.iter_rows(max_col=MAX_COLUMNS):
         if len(lines) > MAX_ROWS + 1:
             raise ImportFileInvalid(f"The file has more than {MAX_ROWS:,} rows.")
         for cell in row:
             if cell.data_type == "f":
-                raise ImportFileInvalid(
-                    "The file has cells with formulas, which are not accepted. Copy the cells"
-                    " and paste them as values, then try again."
-                )
-        if any(cell.value is not None for cell in row[MAX_COLUMNS:]):
-            raise ImportFileInvalid(f"The file has more than {MAX_COLUMNS} columns.")
-        lines.append([_text(cell.value) for cell in row[:MAX_COLUMNS]])
+                raise ImportFileInvalid(_FORMULAS)
+        lines.append([_text(cell.value) for cell in row])
     return lines
 
 
@@ -173,6 +209,10 @@ def _from_lines(lines: list[list[str]]) -> Table:
                 " a comma must be put in quotes."
             )
         padded = (line + [""] * len(columns))[: len(columns)]
+        if any(value for name, value in zip(columns, padded, strict=True) if not name):
+            raise ImportFileInvalid(
+                f"Row {number} has a value in a column that has no name in the header."
+            )
         rows.append(
             TableRow(number=number, cells={c: v for c, v in zip(columns, padded, strict=True) if c})
         )
