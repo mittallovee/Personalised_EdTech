@@ -373,3 +373,67 @@ test("Show more of the level you left is not offered while the next level loads"
   expect(await page.getByRole("button", { name: "Show more" }).count()).toBe(0);
   await expect(item(page, "Physics")).toBeVisible();
 });
+
+test("a failed load can be tried again without refreshing the page", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Retry Syllabus ${unique()}`);
+  const setup = await context.newPage();
+  await setup.goto("/admin/syllabus");
+  await add(setup, "class", "Class 11");
+
+  const page = await context.newPage();
+  let failures = 1;
+  await page.route("**/api/v1/taxonomy/nodes?*", async (route) => {
+    if (failures-- > 0)
+      await route.abort("connectionrefused"); // the first load fails
+    else await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await expect(page.locator("main").getByRole("alert")).toContainText("Cannot reach the server");
+  await page.getByRole("button", { name: "Try again" }).click();
+  await expect(item(page, "Class 11")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+});
+
+test("a late failure to add belongs to the level it was sent from", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Late Error Syllabus ${unique()}`);
+  const csrf = await csrfOf(context);
+  const make = async (data: object) => {
+    const response = await context.request.post("/api/v1/taxonomy/nodes", {
+      headers: { Origin: baseURL!, "X-CSRF-Token": csrf },
+      data,
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()) as { id: string };
+  };
+  const c11 = await make({ kind: "CLASS", name: "Class 11", sort_order: 1 });
+  await make({ kind: "CLASS", name: "Class 12", sort_order: 2 });
+  await make({ kind: "SUBJECT", parent_id: c11.id, name: "Physics" });
+
+  const page = await context.newPage();
+  await page.route("**/api/v1/taxonomy/nodes", async (route) => {
+    if (route.request().method() === "POST") {
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // a slow answer
+    }
+    await route.continue();
+  });
+  await page.goto("/admin/syllabus");
+  await item(page, "Class 11").getByRole("button", { name: "Open" }).click();
+  await expect(item(page, "Physics")).toBeVisible();
+  // The same name again: refused, but only after the person has moved on.
+  const form = page.getByRole("form", { name: "Add a subject" });
+  await form.getByLabel("Name (English)").fill("physics");
+  await form.getByRole("button", { name: "Add subject" }).click();
+  const where = page.getByRole("navigation", { name: "Where you are" });
+  await where.getByRole("button", { name: "All classes" }).click();
+  await item(page, "Class 12").getByRole("button", { name: "Open" }).click();
+  await expect(page.getByText("No subjects yet.")).toBeVisible();
+
+  await page.waitForTimeout(2500); // the slow refusal has come by now
+  await expect(page.getByRole("form", { name: "Add a subject" }).getByRole("alert")).toHaveCount(0);
+});

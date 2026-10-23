@@ -262,11 +262,11 @@ export default function SyllabusPage() {
           setNewName("");
           setNewOrder(String(data.sort_order + 1));
         }
-      } else {
+      } else if (hereId.current === parentId) {
         setAddError(errorMessage(error, response.status));
       }
     } catch {
-      setAddError(NETWORK);
+      if (hereId.current === parentId) setAddError(NETWORK);
     } finally {
       setAdding(false);
     }
@@ -335,9 +335,21 @@ export default function SyllabusPage() {
           </p>
         )}
         {state === "failed" && (
-          <p role="alert" className={ALERT}>
-            {listError}
-          </p>
+          <>
+            <p role="alert" className={ALERT}>
+              {listError}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setState("loading");
+                void load(here, null);
+              }}
+              className="underline"
+            >
+              Try again
+            </button>
+          </>
         )}
         {state === "loading" && <p>Loading…</p>}
         {state === "ready" && items.length === 0 && (
