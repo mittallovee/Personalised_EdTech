@@ -279,7 +279,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | 0014 | **Built (PR 2a follow-up):** the syllabus CHECK also requires the parent kind whenever there is a parent |
 | 0015 | **Built (PR 2b):** `exams` (name, optional short code) and `sources` (kind, name); retired, never deleted |
 | 0016 | **Built (PR 2b, part 2):** `concepts` (under a subject; retired, never deleted), `concept_labels`, `concept_aliases` |
-| 0017 | `catalogue_imports` (the stored preview that apply uses) |
+| 0017 | **Built (PR 2c-2):** `catalogue_imports` (the checked rows of a preview, the counts and a fingerprint of the syllabus; never deleted, and only marked applied afterwards) |
 | 0018 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
 | 0019 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
 
@@ -291,7 +291,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `GET /taxonomy/nodes` (filter by kind, parent, state) · `GET /{id}` · `POST` · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Syllabus (built in PR 2a) |
 | `GET /taxonomy/concepts` (`?subject_id=`, `?state=`, `?q=` over names and aliases) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Concepts and aliases (built in PR 2b) |
 | `GET /exams` · `GET /sources` (+ `?kind=`) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Exams, sources (built in PR 2b) |
-| `GET /taxonomy/import-template` · `POST /taxonomy/imports` (file; creates the preview) · `GET /taxonomy/imports/{id}` · `POST /taxonomy/imports/{id}/apply` | Excel/CSV import |
+| `GET /taxonomy/import-template` · `POST /taxonomy/imports?file_name=` (the file is the request body; creates the preview, `Idempotency-Key`) · `GET /taxonomy/imports/{id}` · `GET /taxonomy/imports/{id}/rows?status=` · `POST /taxonomy/imports/{id}/apply` | Excel/CSV import (preview built in PR 2c-2; apply in 2c-3) |
 | `POST /questions` (`Idempotency-Key`) · `GET /questions` (mine, or all for admins; cursor pages) · `GET /questions/by-code/{code}` · `GET /questions/{id}` | Create and read; every read carries the findings |
 | `PUT /questions/{id}/working-revision` (`If-Match`) | Autosave |
 | `POST /questions/{id}/checkpoints` (`If-Match`) · `GET /questions/{id}/revisions` · `GET /questions/{id}/revisions/{n}` | Checkpoints and history |
@@ -301,7 +301,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `GET/PUT /settings/answer-rules` | Answer limits |
 
 New error codes go in `error-codes.md` in the PR that introduces them: `HIERARCHY_INVALID`,
-`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID`, `IMPORT_STALE`, `ASSET_INVALID`
+`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID` (built), `IMPORT_STALE`, `ASSET_INVALID`
 and `CONTENT_TOO_LARGE` are planned. A save with
 findings is **not** an error (it is 200 with the findings); only unreadable or oversize content is 422.
 
@@ -359,7 +359,7 @@ New dependencies, each reviewed for licence and known vulnerabilities and pinned
 | 1 | This design note + ADR-0016 (docs only) |
 | 2a | **Done:** syllabus items (migration 0013), the fixed lists (languages, Bloom, difficulty guide), permissions, audit |
 | 2b | **Exams and sources** (migration 0015), then concepts with labels and aliases (migration 0016), as two PRs |
-| 2c | Taxonomy: Excel/CSV import in two PRs. **2c-1 (built):** the safe file reader (`import_file.py`). **2c-2:** preview and apply (migration 0017, API) |
+| 2c | Taxonomy: Excel/CSV import in two PRs. **2c-1 (built):** the safe file reader (`import_file.py`). **2c-2 (built):** the preview (migration 0017, plan engine `import_plan.py`, upload, rows and template endpoints). **2c-3:** apply (`IMPORT_STALE`, one audit event) |
 | 2d | Web: Admin → Syllabus and Exams & sources, with browser tests |
 | 3a | Question content domain: blocks, the nine validators, answer limits, findings; spec-v1 fixtures as tests (no database yet) |
 | 3b | Questions persistence: migration 0018, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |

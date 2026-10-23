@@ -4703,6 +4703,412 @@
         }
       }
     },
+    "/api/v1/taxonomy/import-template": {
+      "get": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "A CSV file to start an import from",
+        "description": "One row per syllabus item or concept. Open it in Excel or any spreadsheet, fill it in, and upload it (as CSV or saved as .xlsx). Parts of a path are separated by `>`; a name that contains `>` is written with a backslash before it (`v \\> u`).",
+        "operationId": "import_template_api_v1_taxonomy_import_template_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/csv": {}
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/taxonomy/imports": {
+      "post": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "Upload a syllabus file and see what it would do",
+        "description": "Owner and admins. Send the file itself as the request body (`.xlsx` or UTF-8 `.csv`, up to 5 MB and 20,000 rows) and its name in `file_name`. **Nothing in the syllabus changes**: the result lists every row as new, changed, unchanged or an error, with the reason for each error. A file that cannot be read at all is refused (`IMPORT_INVALID`). Send an `Idempotency-Key` so a retry returns the same preview.",
+        "operationId": "create_import_api_v1_taxonomy_imports_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "file_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "File Name"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any unique string (e.g. a UUID). Retrying with the same key never creates twice.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Any unique string (e.g. a UUID). Retrying with the same key never creates twice."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Idempotency-Key was used for a different file (`IDEMPOTENCY_KEY_REUSED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The file cannot be read (`IMPORT_INVALID`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/taxonomy/imports/{import_id}": {
+      "get": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "One import preview: its totals",
+        "operationId": "read_import_api_v1_taxonomy_imports__import_id__get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Import Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such import in your coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/taxonomy/imports/{import_id}/rows": {
+      "get": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "The rows of an import preview, in file order",
+        "description": "Filter with `status=ERROR` to see only what needs fixing.",
+        "operationId": "read_import_rows_api_v1_taxonomy_imports__import_id__rows_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "import_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Import Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "NEW",
+                    "CHANGED",
+                    "UNCHANGED",
+                    "ERROR"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportRowPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such import in your coaching (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/exams": {
       "get": {
         "tags": [
@@ -7062,6 +7468,191 @@
         ],
         "title": "Grant",
         "description": "Extra rights for faculty. Owner and admins hold all of them implicitly."
+      },
+      "ImportCounts": {
+        "properties": {
+          "new": {
+            "type": "integer",
+            "title": "New",
+            "description": "Rows that would add something."
+          },
+          "changed": {
+            "type": "integer",
+            "title": "Changed",
+            "description": "Rows that would fill in or change something that exists."
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged",
+            "description": "Rows that match what is already there."
+          },
+          "error": {
+            "type": "integer",
+            "title": "Error",
+            "description": "Rows that cannot be imported. Any of these blocks applying."
+          }
+        },
+        "type": "object",
+        "required": [
+          "new",
+          "changed",
+          "unchanged",
+          "error"
+        ],
+        "title": "ImportCounts"
+      },
+      "ImportOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "file_name": {
+            "type": "string",
+            "title": "File Name"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PREVIEWED",
+              "APPLIED"
+            ],
+            "title": "State"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "can_apply": {
+            "type": "boolean",
+            "title": "Can Apply",
+            "description": "True when no row is an error and something would be added or changed."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "file_name",
+          "state",
+          "counts",
+          "can_apply",
+          "created_at",
+          "applied_at"
+        ],
+        "title": "ImportOut"
+      },
+      "ImportRowOut": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number",
+            "description": "The row's number in the file (the header is row 1)."
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "CHANGED",
+              "UNCHANGED",
+              "ERROR"
+            ],
+            "title": "Status"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message",
+            "description": "For an error: why, in plain words."
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Labels"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "kind",
+          "path",
+          "status",
+          "message",
+          "sort_order",
+          "labels",
+          "aliases"
+        ],
+        "title": "ImportRowOut"
+      },
+      "ImportRowPage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRowOut"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "page"
+        ],
+        "title": "ImportRowPage"
       },
       "InviteMember": {
         "properties": {

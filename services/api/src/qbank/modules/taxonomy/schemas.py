@@ -189,3 +189,42 @@ class ConceptOut(BaseModel):
 class ConceptPage(BaseModel):
     data: list[ConceptOut]
     page: PageInfo
+
+
+ImportStatus = Literal["NEW", "CHANGED", "UNCHANGED", "ERROR"]
+ImportState = Literal["PREVIEWED", "APPLIED"]
+
+
+class ImportCounts(BaseModel):
+    new: int = Field(description="Rows that would add something.")
+    changed: int = Field(description="Rows that would fill in or change something that exists.")
+    unchanged: int = Field(description="Rows that match what is already there.")
+    error: int = Field(description="Rows that cannot be imported. Any of these blocks applying.")
+
+
+class ImportOut(BaseModel):
+    id: UUID
+    file_name: str
+    state: ImportState
+    counts: ImportCounts
+    can_apply: bool = Field(
+        description="True when no row is an error and something would be added or changed."
+    )
+    created_at: datetime
+    applied_at: datetime | None
+
+
+class ImportRowOut(BaseModel):
+    number: int = Field(description="The row's number in the file (the header is row 1).")
+    kind: str
+    path: str
+    status: ImportStatus
+    message: str | None = Field(description="For an error: why, in plain words.")
+    sort_order: int | None
+    labels: dict[str, str]
+    aliases: list[str]
+
+
+class ImportRowPage(BaseModel):
+    data: list[ImportRowOut]
+    page: PageInfo
