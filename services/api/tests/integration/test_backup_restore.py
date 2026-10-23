@@ -232,54 +232,70 @@ def test_restore_refuses_a_damaged_backup(backup: Path, tmp_path: Path, restored
     assert found is None  # nothing was created
 
 
-def test_restore_stops_before_starting_when_a_granted_role_is_missing(
-    migrated_database: MigratedDatabase, tmp_path: Path
+# Two ways a backup can name a role besides qbank_app and qbank_worker: a plain GRANT to it, and
+# default privileges set FOR it. Each scenario: SQL that makes the backup name the role, SQL that
+# undoes it so the role can be dropped, and a check on the restored database ({role} is filled in).
+_ROLE_SCENARIOS = {
+    "grant": (
+        "GRANT SELECT ON organizations TO {role}",
+        "REVOKE SELECT ON organizations FROM {role}",
+        "SELECT has_table_privilege('{role}', 'organizations', 'SELECT')",
+    ),
+    "default_privileges_for_role": (
+        "ALTER DEFAULT PRIVILEGES FOR ROLE {role} IN SCHEMA public "
+        "GRANT SELECT ON TABLES TO qbank_app",
+        "ALTER DEFAULT PRIVILEGES FOR ROLE {role} IN SCHEMA public "
+        "REVOKE SELECT ON TABLES FROM qbank_app",
+        "SELECT EXISTS (SELECT 1 FROM pg_default_acl d JOIN pg_roles r ON r.oid = d.defaclrole "
+        "WHERE r.rolname = '{role}')",
+    ),
+}
+
+
+@pytest.mark.parametrize("scenario", list(_ROLE_SCENARIOS))
+def test_restore_stops_before_starting_when_a_named_role_is_missing(
+    scenario: str, migrated_database: MigratedDatabase, tmp_path: Path
 ) -> None:
-    """A backup keeps every GRANT. On a server without one of those roles it must stop with a clear
-    message and create nothing; once the role exists, the same file restores and keeps the grant."""
-    extra = f"qbank_extra_{secrets.token_hex(4)}"
+    """A backup keeps every GRANT and default privilege. On a server without a role it names, the
+    restore must stop with a clear message and create nothing; once the role exists, the same file
+    restores and keeps what it granted."""
+    make, undo, check = _ROLE_SCENARIOS[scenario]
+    role = f"qbank_extra_{secrets.token_hex(4)}"
     target = f"qbank_restore_{secrets.token_hex(6)}"
     admin = make_url(ADMIN_URL).set(drivername="postgresql")
     source = admin.set(database=migrated_database.name).render_as_string(hide_password=False)
     server = admin.render_as_string(hide_password=False)
     dump = tmp_path / "extra.dump"
+
+    def run_sql(url: str, statement: str) -> None:
+        with psycopg.connect(url, autocommit=True) as conn:
+            conn.execute(statement.format(role=sql.Identifier(role).as_string(conn)))  # type: ignore[arg-type]
+
     try:
-        with psycopg.connect(server, autocommit=True) as conn:
-            conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(extra)))
-        with psycopg.connect(source, autocommit=True) as conn:
-            conn.execute(
-                sql.SQL("GRANT SELECT ON organizations TO {}").format(sql.Identifier(extra))
-            )
+        run_sql(server, "CREATE ROLE {role}")
+        run_sql(source, make)
         result = _run("backup-db.sh", dump, env=_connection_env(migrated_database.name))
         assert result.returncode == 0, result.stderr
-        # A server that has never heard of the role: take it away from the source, then drop it.
-        with psycopg.connect(source, autocommit=True) as conn:
-            conn.execute(
-                sql.SQL("REVOKE SELECT ON organizations FROM {}").format(sql.Identifier(extra))
-            )
-        with psycopg.connect(server, autocommit=True) as conn:
-            conn.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(extra)))
+        # A server that has never heard of the role: undo it in the source, then drop the role.
+        run_sql(source, undo)
+        run_sql(server, "DROP ROLE {role}")
 
         result = _run("restore-db.sh", dump, target, env=_connection_env("postgres"))
         assert result.returncode != 0
-        assert extra in result.stderr and "do not exist" in result.stderr
+        assert role in result.stderr and "do not exist" in result.stderr
         with psycopg.connect(server) as conn:
             found = conn.execute(
                 "SELECT 1 FROM pg_database WHERE datname = %s", (target,)
             ).fetchone()
         assert found is None  # it stopped before creating anything
 
-        with psycopg.connect(server, autocommit=True) as conn:
-            conn.execute(sql.SQL("CREATE ROLE {}").format(sql.Identifier(extra)))
+        run_sql(server, "CREATE ROLE {role}")
         result = _run("restore-db.sh", dump, target, env=_connection_env("postgres"))
         assert result.returncode == 0, result.stderr
         restored = admin.set(database=target).render_as_string(hide_password=False)
         with psycopg.connect(restored) as conn:
-            granted = conn.execute(
-                "SELECT has_table_privilege(%s, 'organizations', 'SELECT')", (extra,)
-            ).fetchone()
-        assert granted == (True,)
+            assert conn.execute(check.format(role=role)).fetchone() == (True,)  # type: ignore[arg-type]
     finally:
         drop_database(target)
         with psycopg.connect(server, autocommit=True) as conn:
-            conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(extra)))
+            conn.execute(sql.SQL("DROP ROLE IF EXISTS {}").format(sql.Identifier(role)))

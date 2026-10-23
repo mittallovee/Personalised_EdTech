@@ -25,11 +25,18 @@ fi
 
 export PGDATABASE=postgres
 
-# The backup keeps who may do what (GRANT lines), so every role it names must exist on this server, or the
-# restore would stop part-way. Look at the permissions only (--schema-only: no data is read for this).
-roles="$(pg_tool pg_restore --schema-only --no-owner -f - < "$dump" \
-  | sed -n -E 's/^(ALTER DEFAULT PRIVILEGES.* )?(GRANT|REVOKE) .* (TO|FROM) ("[^"]+"|[A-Za-z0-9_$]+)( WITH GRANT OPTION)?;$/\4/p' \
-  | tr -d '"' | sort -u | grep -vx 'PUBLIC' || true)"
+# The backup keeps who may do what (GRANT lines, and default privileges set FOR a role), so every role it
+# names must exist on this server, or the restore would stop part-way. Only the permissions are read
+# for this (--schema-only: no data).
+permissions="$(pg_tool pg_restore --schema-only --no-owner -f - < "$dump")"
+roles="$({
+  # who is granted or revoked: ... GRANT ... TO role;   REVOKE ... FROM role;
+  printf '%s\n' "$permissions" | sed -n -E \
+    's/^(ALTER DEFAULT PRIVILEGES.* )?(GRANT|REVOKE) .* (TO|FROM) ("[^"]+"|[A-Za-z0-9_$]+)( WITH GRANT OPTION)?;$/\4/p'
+  # whose future objects get privileges: ALTER DEFAULT PRIVILEGES FOR ROLE role ...
+  printf '%s\n' "$permissions" | sed -n -E \
+    's/^ALTER DEFAULT PRIVILEGES FOR ROLE ("[^"]+"|[A-Za-z0-9_$]+) .*/\1/p'
+} | tr -d '"' | sort -u | grep -vx 'PUBLIC' || true)"
 if [ -n "$roles" ]; then
   missing="$(printf '%s\n' "$roles" \
     | pg_tool psql -X -At -c "CREATE TEMP TABLE wanted (r text)" -c "COPY wanted FROM STDIN" \

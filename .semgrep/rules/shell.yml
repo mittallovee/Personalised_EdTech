@@ -1,8 +1,9 @@
 # Project rules for infrastructure scripts (K-02). Same intent as qbank-no-rls-bypass in python.yml,
 # for SQL inside shell scripts and .sql files, where there is no string literal to bound a statement:
-# a statement runs to the next semicolon, and past a line break only onto an indented line (the way
-# multi-line SQL is written), so an unrelated line further down is never taken for part of it. The
-# limit: a statement whose later lines are not indented can slip past; review covers that.
+# a statement is read to the next semicolon (at most 500 characters), whatever its line breaks or
+# indentation. The price is a false alarm when a statement has no closing semicolon and the word
+# BYPASSRLS comes soon after in an unrelated place; end the statement with `;` or add a reviewed
+# `nosemgrep` comment that says why. For a guard on tenant isolation that is the right way round.
 rules:
   - id: qbank-no-rls-bypass-infra
     message: >-
@@ -14,4 +15,4 @@ rules:
     languages: [generic]
     paths:
       include: ["/infra/"]
-    pattern-regex: '(?is)((create|alter)\s+(role|user)\b(?:[^;\n]*?\n[ \t]+)*?[^;\n]*?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'
+    pattern-regex: '(?is)((create|alter)\s+(role|user)\b[^;]{0,500}?(?<![a-z])bypassrls\b|row_security\s*(=|to)\s*off|no\s+force\s+row\s+level\s+security|disable\s+row\s+level\s+security)'

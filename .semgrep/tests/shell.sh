@@ -12,14 +12,19 @@ psql -c "ALTER ROLE app
     PASSWORD 'x'
     CONNECTION LIMIT 5
     BYPASSRLS;"
+psql <<'SQL'
+# ruleid: qbank-no-rls-bypass-infra
+ALTER ROLE app
+BYPASSRLS;
+SQL
 # ruleid: qbank-no-rls-bypass-infra
 psql -c "SET row_security = off"
 # ok: qbank-no-rls-bypass-infra
-psql -c "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS"
+psql -c "CREATE ROLE app LOGIN NOSUPERUSER NOBYPASSRLS;"
 # ok: qbank-no-rls-bypass-infra
 psql -At -c "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
 # ok: qbank-no-rls-bypass-infra
 echo "Use a superuser or a role with BYPASSRLS."
 # ok: qbank-no-rls-bypass-infra
-psql -c "CREATE ROLE app LOGIN"
+psql -c "CREATE ROLE app LOGIN;"
 echo "A role with BYPASSRLS can read every coaching."
