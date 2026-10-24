@@ -3,6 +3,7 @@ preview. Previewing changes nothing in the syllabus (M3 design note §4.4, C-03)
 
 import base64
 import binascii
+import math
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -11,10 +12,11 @@ from starlette.concurrency import run_in_threadpool
 
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
-from qbank.core.errors import MalformedRequest
+from qbank.core.errors import MalformedRequest, TooManyRequests
 from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
+from qbank.core.ratelimit import ConcurrencyGate, SlidingWindowLimiter
 from qbank.modules.taxonomy import import_apply, import_plan
 from qbank.modules.taxonomy import import_service as service
 from qbank.modules.taxonomy.import_file import MAX_FILE_BYTES, ImportFileInvalid
@@ -34,6 +36,14 @@ router = APIRouter(prefix="/api/v1/taxonomy", tags=["syllabus import"])
 _DENIED: dict[int | str, dict[str, Any]] = {
     403: {"description": "Your role may not do this (`PERMISSION_DENIED`)"}
 }
+_TOO_MANY: dict[int | str, dict[str, Any]] = {
+    429: {
+        "description": "Too many uploads in a short time, or the server is busy reading other"
+        " files; see the Retry-After header (`RATE_LIMITED`)"
+    }
+}
+# A parse takes up to about 3 s (threat model, K-10); a refused upload may try again after this.
+_BUSY_RETRY_SECONDS = 5
 _NOT_FOUND: dict[int | str, dict[str, Any]] = {
     404: {"description": "No such import in your coaching (`NOT_FOUND`)"}
 }
@@ -127,7 +137,10 @@ def import_template(principal: CurrentPrincipal) -> Response:
         " to 5 MB and 20,000 rows) and its name in `file_name`. **Nothing in the syllabus"
         " changes**: the result lists every row as new, changed, unchanged or an error, with the"
         " reason for each error. A file that cannot be read at all is refused (`IMPORT_INVALID`)."
-        " Send an `Idempotency-Key` so a retry returns the same preview."
+        " Send an `Idempotency-Key` so a retry returns the same preview. Reading a file is heavy"
+        " work, so a user may upload only a few files in a short time and the server reads only a"
+        " few files at once: beyond that the answer is `429` (`RATE_LIMITED`) with a `Retry-After`"
+        " header."
     ),
     openapi_extra={
         "requestBody": {
@@ -139,6 +152,7 @@ def import_template(principal: CurrentPrincipal) -> Response:
     },
     responses={
         **_DENIED,
+        **_TOO_MANY,
         409: {
             "description": "The Idempotency-Key was used for a different file"
             " (`IDEMPOTENCY_KEY_REUSED`)"
@@ -155,20 +169,34 @@ async def create_import(
     idempotency_key: Annotated[str | None, IdempotencyKeyHeader] = None,
 ) -> ImportOut:
     require(principal, Action.MANAGE_CATALOGUES)  # before the file is read
+    limiter: SlidingWindowLimiter = request.app.state.import_upload_limiter
+    wait = limiter.hit(str(principal.user_id))  # before the body is read: a refusal costs nothing
+    if wait > 0:
+        raise TooManyRequests(
+            "You have uploaded several files in a short time. Please wait and try again.",
+            retry_after_seconds=math.ceil(wait),
+        )
     data = await _read_body(request)
+    gate: ConcurrencyGate = request.app.state.import_parse_gate
 
     def preview() -> ImportOut:
-        snapshot = service.load_snapshot(database, principal.tenant_context)
-        with database.transaction(principal.tenant_context) as session:
-            created = service.create_preview(
-                session,
-                principal,
-                file_name=file_name,
-                data=data,
-                snapshot=snapshot,
-                idempotency_key=idempotency_key,
-            )
-            return _out(created)
+        with gate.try_enter() as entered:  # a place is held in this thread until the parse is done
+            if not entered:
+                raise TooManyRequests(
+                    "The server is busy reading other files. Please try again in a few seconds.",
+                    retry_after_seconds=_BUSY_RETRY_SECONDS,
+                )
+            snapshot = service.load_snapshot(database, principal.tenant_context)
+            with database.transaction(principal.tenant_context) as session:
+                created = service.create_preview(
+                    session,
+                    principal,
+                    file_name=file_name,
+                    data=data,
+                    snapshot=snapshot,
+                    idempotency_key=idempotency_key,
+                )
+                return _out(created)
 
     result = await run_in_threadpool(preview)
     response.headers["Location"] = f"/api/v1/taxonomy/imports/{result.id}"

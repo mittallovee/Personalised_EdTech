@@ -95,11 +95,29 @@ What this says:
   20,000-row syllabus with labels in two languages), because every checked row is saved with its status, names
   and labels.
 
+### 4a. Two uploads at once against a third request (measured for K-10a, 24 Oct 2026)
+
+Same container; the largest spreadsheet the limits allow (20,000 rows, 20 columns), uploaded by one or two signed-in
+sessions at once while a third client asks the health endpoint 40 to 60 times in a row.
+
+| Running | The third request: median / worst | Time each upload took |
+|---|---|---|
+| Nothing | 3.4 ms / 11 ms | n/a |
+| 1 worst-case upload | 3.6 ms / **1.3 s** | 2.5 s |
+| 2 worst-case uploads (the cap) | 3.7 ms / **1.1 s** | **5.8 s** each |
+
+What this says: the API **stays responsive** for other requests (the median does not move), but each read causes
+a stall of **about a second** for whoever's request lands in it, and two reads at once each take more than twice
+as long because they share one interpreter. That is why the cap is 2 and not higher, and why the rate limit
+matters: a loop of uploads from one account is a loop of one-second stalls for everybody. (The upload "failed"
+with a 422 here because the generated labels are not template columns, after the file had been read in full: the
+cost measured is the read.)
+
 ## 5. Gaps found, and how they are closed
 
 | Gap | Problem | Proposed fix | Where it goes |
 |---|---|---|---|
-| **G1** | No limit on how often an admin may upload, and no cap on parses running at once (T9, T10) | A per-user limit on `POST /taxonomy/imports` (for example 10 per 10 minutes, using the limiter that already protects login) and a cap of **2 parses at the same time** in the process; an upload over the cap is refused at once with a clear "busy, try again in a moment" message and a `Retry-After` header | **K-10a**, before the import screen |
+| **G1** | No limit on how often an admin may upload, and no cap on parses running at once (T9, T10) | A per-user limit on `POST /taxonomy/imports` (for example 10 per 10 minutes, using the limiter that already protects login) and a cap of **2 parses at the same time** in the process; an upload over the cap is refused at once with a clear "busy, try again in a moment" message and a `Retry-After` header | **K-10a: built** (settings `IMPORT_UPLOADS_PER_USER`, `IMPORT_UPLOAD_WINDOW_SECONDS`, `IMPORT_PARSES_AT_ONCE`; tests in `test_catalogue_import.py`) |
 | **G2** | Previews are stored forever (T11) | Keep at most **20 unapplied previews per coaching** (the oldest is dropped when a 21st is made) and drop the stored rows of an unapplied preview after **30 days**. Applied previews keep their rows (they are the record of what was imported). This changes the design note's "never deleted" for previews that were never applied | **K-10b**, before the import screen. **Needs the owner's yes** |
 | **G3** | Several attacks were stopped by a library but had no test (T2 to T5) | Tests that pin the behaviour | **Done in this pull request** |
 
@@ -112,8 +130,8 @@ spreadsheets are refused (they start like an old `.xls` file and get the "Old .x
   accepts). The API reads at most 5 MB itself, but I did not test the web app's proxy with a 5 MB upload or a
   trickling one. Check it when the import screen is built (2d-3), in its browser test.
 - **Timings on the owner's PC and on the cloud host.** The numbers above are from a development container.
-- **Concurrent uploads.** The G1 cap is designed from the single-upload numbers; K-10a should measure two
-  parallel uploads against a third request.
+- **Concurrent uploads on a real host.** Measured once, in the development container (section 4a); repeat it on the
+  owner's PC and on the cloud host.
 
 ## 7. When this decision should be reopened
 

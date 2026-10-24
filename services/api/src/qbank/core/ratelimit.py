@@ -8,6 +8,8 @@ import math
 import threading
 import time
 from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 
 class SlidingWindowLimiter:
@@ -48,3 +50,26 @@ class LoginRateLimiter:
         """Return 0 if the attempt may proceed, else whole seconds the caller should wait."""
         wait = max(self._by_ip.hit(client_ip), self._by_email.hit(email.strip().lower()))
         return math.ceil(wait)
+
+
+class ConcurrencyGate:
+    """Lets at most ``limit`` pieces of work run at once; one more is turned away, not queued.
+
+    For work that is heavy on the processor (parsing an uploaded file): waiting in a queue would
+    hold the connection and the memory of the file, so the caller is told to try again instead.
+    Counts per process, like the limiter above.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._slots = threading.BoundedSemaphore(limit)
+
+    @contextmanager
+    def try_enter(self) -> Iterator[bool]:
+        """``with gate.try_enter() as entered:`` is ``True`` and holds a place until the block ends,
+        or ``False`` (and holds nothing) when all places are taken."""
+        entered = self._slots.acquire(blocking=False)
+        try:
+            yield entered
+        finally:
+            if entered:
+                self._slots.release()
