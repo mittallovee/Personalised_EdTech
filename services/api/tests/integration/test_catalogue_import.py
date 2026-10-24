@@ -1,7 +1,9 @@
 """M3 PR 2c-2: previewing a syllabus import file (C-03, T25). Nothing in the syllabus changes."""
 
 import io
+import threading
 from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +17,7 @@ from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
+from qbank.modules.taxonomy import import_service
 from qbank.modules.taxonomy.import_file import MAX_FILE_BYTES
 from tests.integration.conftest import Member, MigratedDatabase, make_member, sign_in
 
@@ -356,3 +359,102 @@ def test_a_preview_reads_the_syllabus_in_one_repeatable_read_transaction(
     monkeypatch.setattr(Database, "transaction", spy)
     preview(client, admin_headers, FILE)
     assert "REPEATABLE READ" in levels
+
+
+# --- Limits on uploading (K-10a, ADR-0018) -------------------------------------------------------
+
+
+@contextmanager
+def limited_client(migrated_database: MigratedDatabase, **limits: int) -> Iterator[TestClient]:
+    settings = Settings(
+        app_env=AppEnv.TEST,
+        database_url=migrated_database.app_url,
+        session_cookie_secure=False,
+        **limits,
+    )
+    with TestClient(create_app(settings)) as test_client:
+        yield test_client
+
+
+def test_a_user_may_upload_only_a_few_files_in_a_short_time(
+    migrated_database: MigratedDatabase, team: dict[str, Member]
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=3) as client:
+        admin = sign_in(client, team["admin"].email)
+        assert [upload(client, admin, FILE).status_code for _ in range(3)] == [201, 201, 201]
+
+        refused = upload(client, admin, FILE)
+        assert refused.status_code == 429
+        assert refused.json()["error"]["code"] == "RATE_LIMITED"
+        assert 1 <= int(refused.headers["Retry-After"]) <= 600
+
+        # Another person is not held back by it, and reading an earlier preview is not limited.
+        other = TestClient(client.app)  # its own sign-in, apart from the admin's
+        owner = sign_in(other, team["owner"].email)
+        earlier = preview(other, owner, FILE)["id"]
+        assert other.get(f"{IMPORTS}/{earlier}", headers=owner).status_code == 200
+        assert client.get(f"{IMPORTS}/{earlier}", headers=admin).status_code == 200
+
+
+def test_people_who_may_not_import_are_refused_before_the_limit_counts_them(
+    migrated_database: MigratedDatabase, team: dict[str, Member]
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=1) as client:
+        faculty = sign_in(client, team["faculty"].email)
+        assert [upload(client, faculty, FILE).status_code for _ in range(3)] == [403, 403, 403]
+
+
+def test_only_a_few_files_are_read_at_the_same_time_and_the_rest_are_turned_away(
+    migrated_database: MigratedDatabase,
+    team: dict[str, Member],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started, release = threading.Event(), threading.Event()
+    real_read = import_service.read_table
+
+    def slow_read(data: bytes) -> Any:
+        started.set()
+        assert release.wait(timeout=30)
+        return real_read(data)
+
+    monkeypatch.setattr(import_service, "read_table", slow_read)
+    with limited_client(migrated_database, import_parses_at_once=1) as client:
+        other = TestClient(client.app)  # its own sign-in, apart from the admin's
+        admin = sign_in(client, team["admin"].email)
+        owner = sign_in(other, team["owner"].email)
+        first: list[Any] = []
+
+        def first_upload() -> None:
+            try:
+                first.append(upload(client, admin, FILE))
+            except BaseException as error:  # shown by the assertion below, not lost in the thread
+                first.append(error)
+
+        worker = threading.Thread(target=first_upload)
+        worker.start()
+        try:
+            assert started.wait(timeout=30), first  # the first file is being read now
+
+            busy = upload(other, owner, FILE)  # a different person, at the same moment
+            assert busy.status_code == 429 and busy.json()["error"]["code"] == "RATE_LIMITED"
+            assert busy.headers["Retry-After"] == "5"
+            assert "busy" in busy.json()["error"]["message"]
+        finally:
+            release.set()
+            worker.join(timeout=30)
+        assert first[0].status_code == 201  # the first one was not harmed
+
+        # The place is free again once the first has finished.
+        assert upload(other, owner, FILE).status_code == 201
+
+
+def test_a_place_is_freed_when_the_file_turns_out_to_be_unreadable(
+    migrated_database: MigratedDatabase, team: dict[str, Member]
+) -> None:
+    with limited_client(migrated_database, import_parses_at_once=1) as client:
+        admin = sign_in(client, team["admin"].email)
+        for _ in range(
+            3
+        ):  # each failure must give its place back, or the next would be turned away
+            assert upload(client, admin, b"PK\x03\x04junk").status_code == 422
+        assert upload(client, admin, FILE).status_code == 201

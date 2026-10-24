@@ -1,7 +1,7 @@
 import pytest
 
 from qbank.core import ratelimit
-from qbank.core.ratelimit import LoginRateLimiter, SlidingWindowLimiter
+from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
 
 
 class FakeClock:
@@ -56,3 +56,34 @@ def test_login_limiter_ignores_email_case(clock: FakeClock) -> None:
     limiter.check("1.2.3.4", "Someone@Example.com")
 
     assert limiter.check("5.6.7.8", "someone@example.com") == 60
+
+
+def test_the_gate_holds_a_place_only_while_the_block_runs() -> None:
+    gate = ConcurrencyGate(limit=2)
+
+    with gate.try_enter() as first, gate.try_enter() as second, gate.try_enter() as third:
+        assert (first, second, third) == (True, True, False)  # a third is turned away, not queued
+
+    with gate.try_enter() as again, gate.try_enter() as and_again:
+        assert (again, and_again) == (True, True)  # the places were given back
+
+
+def test_the_gate_gives_its_place_back_when_the_work_fails() -> None:
+    gate = ConcurrencyGate(limit=1)
+
+    with pytest.raises(RuntimeError), gate.try_enter() as entered:
+        assert entered
+        raise RuntimeError("the work failed")
+
+    with gate.try_enter() as entered:
+        assert entered
+
+
+def test_a_turned_away_caller_does_not_free_somebody_elses_place() -> None:
+    gate = ConcurrencyGate(limit=1)
+
+    with gate.try_enter() as holder:
+        with gate.try_enter() as refused:
+            assert (holder, refused) == (True, False)
+        with gate.try_enter() as still_refused:  # leaving the refused block freed nothing
+            assert still_refused is False

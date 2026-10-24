@@ -804,7 +804,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a syllabus file and see what it would do
-         * @description Owner and admins. Send the file itself as the request body (`.xlsx` or UTF-8 `.csv`, up to 5 MB and 20,000 rows) and its name in `file_name`. **Nothing in the syllabus changes**: the result lists every row as new, changed, unchanged or an error, with the reason for each error. A file that cannot be read at all is refused (`IMPORT_INVALID`). Send an `Idempotency-Key` so a retry returns the same preview.
+         * @description Owner and admins. Send the file itself as the request body (`.xlsx` or UTF-8 `.csv`, up to 5 MB and 20,000 rows) and its name in `file_name`. **Nothing in the syllabus changes**: the result lists every row as new, changed, unchanged or an error, with the reason for each error. A file that cannot be read at all is refused (`IMPORT_INVALID`). Send an `Idempotency-Key` so a retry returns the same preview. Reading a file is heavy work, so a user may upload only a few files in a short time and the server reads only a few files at once: beyond that the answer is `429` (`RATE_LIMITED`) with a `Retry-After` header.
          */
         post: operations["create_import_api_v1_taxonomy_imports_post"];
         delete?: never;
@@ -5340,6 +5340,17 @@ export interface operations {
             /** @description The file cannot be read (`IMPORT_INVALID`) */
             422: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many uploads in a short time, or the server is busy reading other files; see the Retry-After header (`RATE_LIMITED`) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {

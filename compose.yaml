@@ -67,6 +67,11 @@ services:
       # (apps/e2e) make all their requests from one address, so CI raises these for them.
       LOGIN_ATTEMPTS_PER_IP: ${LOGIN_ATTEMPTS_PER_IP:-20}
       LOGIN_ATTEMPTS_PER_EMAIL: ${LOGIN_ATTEMPTS_PER_EMAIL:-10}
+      # Syllabus import uploads per signed-in user in the window (seconds), and files read at once
+      # (ADR-0018). The browser tests upload many files as one user, so CI can raise the first two.
+      IMPORT_UPLOADS_PER_USER: ${IMPORT_UPLOADS_PER_USER:-10}
+      IMPORT_UPLOAD_WINDOW_SECONDS: ${IMPORT_UPLOAD_WINDOW_SECONDS:-600}
+      IMPORT_PARSES_AT_ONCE: ${IMPORT_PARSES_AT_ONCE:-2}
       # Sign in with Google is off while these are empty (docs/operations/google-login.md).
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}

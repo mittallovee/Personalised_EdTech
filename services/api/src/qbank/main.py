@@ -12,7 +12,7 @@ from qbank.core.logging import configure_logging, install_request_logging
 from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
-from qbank.core.ratelimit import LoginRateLimiter
+from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
 from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
@@ -58,6 +58,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         per_email=settings.login_attempts_per_email,
         window_seconds=settings.login_rate_window_seconds,
     )
+    app.state.import_upload_limiter = SlidingWindowLimiter(
+        settings.import_uploads_per_user, settings.import_upload_window_seconds
+    )
+    app.state.import_parse_gate = ConcurrencyGate(settings.import_parses_at_once)
 
     # Google sign-in is available only when its client ID and secret are configured (B-02).
     app.state.google = (

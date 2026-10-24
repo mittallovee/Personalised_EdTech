@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     login_attempts_per_email: int = Field(default=10, ge=1)
     login_rate_window_seconds: int = Field(default=300, ge=1)
 
+    # Syllabus import uploads (ADR-0018, K-10a): per signed-in user, and how many files this API
+    # process reads at the same time. One parse costs up to about 3 s of a processor and 25 MB.
+    import_uploads_per_user: int = Field(default=10, ge=1)
+    import_upload_window_seconds: int = Field(default=600, ge=1)
+    import_parses_at_once: int = Field(default=2, ge=1)
+
     # Google sign-in (B-02) is off until both are set; see docs/operations/google-login.md. The
     # secret never appears in logs or reprs (SecretStr) and must never be committed.
     google_client_id: str | None = None

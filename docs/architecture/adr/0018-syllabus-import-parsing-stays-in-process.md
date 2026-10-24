@@ -1,5 +1,5 @@
 # ADR-0018: The syllabus import is parsed inside the API request, with added limits; documents go to a worker
-- Status: Proposed · Date: 2026-10-24 · Requirements: K-10, K-10a, K-10b (C-03, T25) · Evidence: [threat model](../threat-model-import.md)
+- Status: **Accepted** (owner, by merging PR #56, 24 Oct 2026) · Date: 2026-10-24 · Requirements: K-10, K-10a, K-10b (C-03, T25) · Evidence: [threat model](../threat-model-import.md)
 ## Context
 The Excel/CSV syllabus import parses an untrusted file inside the API process (a worker thread of the request). It
 already has hard limits (5 MB, 20,000 rows, 40 columns, 20 MB unpacked, a streaming reader of our own, no formulas,
