@@ -120,6 +120,7 @@ modules/questions/
 | Layer | Tool | What | Where |
 |---|---|---|---|
 | Unit | pytest | Domain rules: validators for all 9 formats, state machine, permission decisions, code generator, budget maths | `tests/unit` |
+| Property | pytest + Hypothesis | A rule that must hold for *every* input, checked on hundreds of generated ones (and shrunk to the smallest failing example): the import file reader and plan engine now; the answer validators from M3 3a. Deterministic in CI | `tests/unit/*_properties.py` |
 | Integration | pytest + real PostgreSQL | Repositories, RLS isolation, transactions, migrations, jobs | `tests/integration` |
 | API | pytest + httpx | Endpoints: auth, status codes, error envelope, ETag/idempotency, permission denials | `tests/api` |
 | Contract | OpenAPI diff | No unintended breaking API change | CI |
@@ -136,6 +137,10 @@ When each runs:
 3. **After merging, at the end of a milestone** (the owner, by hand): the milestone demo script in
    `docs/operations/` on their own PC, checking it does what the requirements say.
 4. **Weekly** (CI schedule): the dependency audits again, because new advisories appear for unchanged code.
+
+Property tests run with a fixed seed in CI, so a red build can always be reproduced. To look for new failures
+locally, run `HYPOTHESIS_PROFILE=explore uv run pytest tests/unit -k properties` (2,000 examples per rule, random);
+when it finds one, add the printed example as a normal test next to the fix.
 
 Rules:
 - **Every bug fix starts with a failing test.**
