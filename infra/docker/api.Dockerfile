@@ -1,7 +1,7 @@
 # Backend image: FastAPI API (and, from M1 PR 4, the worker via a different command).
 # The uv tool image is its own named stage so that Dependabot (which reads FROM lines, not
 # COPY --from) can propose updates for it.
-FROM astral/uv:0.11 AS uv
+FROM astral/uv:0.12 AS uv
 
 FROM python:3.14-slim AS build
 COPY --from=uv /uv /bin/uv
