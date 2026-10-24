@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import {
   expect,
   type APIRequestContext,
@@ -158,4 +159,22 @@ export function coaching(page: Page, name: string) {
     .getByRole("list", { name: "Coachings" })
     .getByRole("listitem")
     .filter({ hasText: name });
+}
+
+/**
+ * Fails the test when the page on screen has a serious or critical accessibility problem (K-09),
+ * such as a form field without a label or text too faint to read. axe is a free checker that
+ * looks for the problems a machine can find; it does not replace trying the screen with a keyboard.
+ */
+export async function expectNoSeriousA11yViolations(page: Page): Promise<void> {
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+  const serious = violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+  expect(
+    serious.map(
+      (v) => `${v.id}: ${v.help} at ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`,
+    ),
+    "serious accessibility violations",
+  ).toEqual([]);
 }

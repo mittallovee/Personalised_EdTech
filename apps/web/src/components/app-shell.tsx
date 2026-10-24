@@ -36,7 +36,8 @@ function showsCoachings(me: Me): boolean {
   return me.is_platform_admin;
 }
 
-export type Page = "home" | "users" | "coachings" | "audit" | "syllabus" | "profile";
+export type Page =
+  "home" | "users" | "coachings" | "audit" | "syllabus" | "concepts" | "exams-sources" | "profile";
 
 const ITEM = "block rounded-md px-3 py-2";
 const CURRENT = "bg-zinc-100 font-medium dark:bg-zinc-800";
@@ -147,6 +148,28 @@ export function AppShell({
                 </Link>
               </li>
             )}
+            {showsSyllabus(me) && (
+              <li>
+                <Link
+                  href="/admin/concepts"
+                  aria-current={current === "concepts" ? "page" : undefined}
+                  className={`${ITEM} ${current === "concepts" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Concepts
+                </Link>
+              </li>
+            )}
+            {showsSyllabus(me) && (
+              <li>
+                <Link
+                  href="/admin/exams-sources"
+                  aria-current={current === "exams-sources" ? "page" : undefined}
+                  className={`${ITEM} ${current === "exams-sources" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Exams &amp; sources
+                </Link>
+              </li>
+            )}
             <li>
               <Link
                 href="/profile"
@@ -159,7 +182,7 @@ export function AppShell({
             {UPCOMING.map((name) => (
               <li
                 key={name}
-                className="px-3 py-2 text-zinc-400"
+                className="px-3 py-2 text-zinc-500 dark:text-zinc-400"
                 title="Coming in a later milestone"
               >
                 {name}
