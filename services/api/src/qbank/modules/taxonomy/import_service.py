@@ -7,6 +7,7 @@ later (a separate step) acts on exactly what the admin saw.
 import hashlib
 from collections import defaultdict
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
@@ -20,7 +21,7 @@ from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.core.tenancy import TenantContext
-from qbank.modules.taxonomy.import_file import read_table
+from qbank.modules.taxonomy.import_file import ImportExpired, read_table
 from qbank.modules.taxonomy.import_plan import SnapConcept, SnapNode, Snapshot, build_plan
 from qbank.modules.taxonomy.models import (
     CatalogueImport,
@@ -162,10 +163,23 @@ def create_preview(
     return preview
 
 
+def check_not_expired(preview: CatalogueImport) -> None:
+    """Refuse (410) a preview whose rows are dropped, or old enough to be dropped soon.
+
+    An applied preview never expires."""
+    too_old = preview.created_at < datetime.now(UTC) - timedelta(days=PREVIEW_KEEP_DAYS)
+    if preview.state == "EXPIRED" or (preview.state == "PREVIEWED" and too_old):
+        raise ImportExpired(
+            f"This preview has expired: previews are kept for {PREVIEW_KEEP_DAYS} days and only the"
+            f" newest {PREVIEWS_KEPT} are kept. Upload the file again."
+        )
+
+
 def get_import(session: Session, import_id: UUID) -> CatalogueImport:
     found = session.get(CatalogueImport, import_id)  # row-level security hides other coachings'
     if found is None:
         raise NotFound("No such import.")
+    check_not_expired(found)
     return found
 
 

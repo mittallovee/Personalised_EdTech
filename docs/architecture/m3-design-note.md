@@ -284,7 +284,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | 0015 | **Built (PR 2b):** `exams` (name, optional short code) and `sources` (kind, name); retired, never deleted |
 | 0016 | **Built (PR 2b, part 2):** `concepts` (under a subject; retired, never deleted), `concept_labels`, `concept_aliases` |
 | 0017 | **Built (PR 2c-2):** `catalogue_imports` (the checked rows of a preview, the counts and a fingerprint of the syllabus; never deleted; marked applied afterwards, or **expired** by migration 0018 (K-10b): an unapplied preview keeps its rows only while it is among its coaching's newest 20 and under 30 days old, and an applied one keeps them always) |
-| 0018 | **Built (K-10b):** state `EXPIRED` for previews and `catalogue_imports_expire(keep_days, keep_count)`, a SECURITY DEFINER function the runtime role calls to drop the rows of the caller's own unapplied previews that are older than 30 days or beyond the newest 20 (the role still cannot delete or rewrite a preview itself) |
+| 0018 | **Built (K-10b):** state `EXPIRED` (inside the database only: the API answers `410 IMPORT_EXPIRED`, so its `state` stays `PREVIEWED` or `APPLIED`) for previews and `catalogue_imports_expire(keep_days, keep_count)`, a SECURITY DEFINER function the runtime role calls to drop the rows of the caller's own unapplied previews that are older than 30 days or beyond the newest 20 (the role still cannot delete or rewrite a preview itself) |
 | 0019 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
 | 0020 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
 
@@ -306,7 +306,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `GET/PUT /settings/answer-rules` | Answer limits |
 
 New error codes go in `error-codes.md` in the PR that introduces them: `HIERARCHY_INVALID`,
-`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID` and `IMPORT_STALE` (built), `ASSET_INVALID`
+`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID`, `IMPORT_STALE` and `IMPORT_EXPIRED` (built), `ASSET_INVALID`
 and `CONTENT_TOO_LARGE` are planned. A save with
 findings is **not** an error (it is 200 with the findings); only unreadable or oversize content is 422.
 

@@ -492,16 +492,17 @@ def test_only_the_newest_twenty_unapplied_previews_keep_their_rows(
         assert counts["PREVIEWED"] == 20 and counts["PREVIEWED+rows"] == 20
         assert counts["EXPIRED"] == 3 and counts["EXPIRED+rows"] == 0
 
-        oldest = client.get(f"{IMPORTS}/{ids[0]}", headers=admin).json()
-        assert oldest["state"] == "EXPIRED" and oldest["can_apply"] is False
-        assert oldest["counts"]["new"] > 0  # the totals stay, only the stored rows are gone
-        assert rows_of(client, admin, ids[0]).json()["data"] == []
+        # An expired preview is gone as far as the API is concerned: 410, with a message that says
+        # what to do. (Its small record stays in the database: who, when, the counts.)
+        for gone in (
+            client.get(f"{IMPORTS}/{ids[0]}", headers=admin),
+            rows_of(client, admin, ids[0]),
+            client.post(f"{IMPORTS}/{ids[0]}/apply", headers=admin),
+        ):
+            assert gone.status_code == 410 and gone.json()["error"]["code"] == "IMPORT_EXPIRED"
+            assert "Upload the file again" in gone.json()["error"]["message"]
         newest = client.get(f"{IMPORTS}/{ids[-1]}", headers=admin).json()
         assert newest["state"] == "PREVIEWED" and newest["can_apply"] is True
-
-        refused = client.post(f"{IMPORTS}/{ids[0]}/apply", headers=admin)
-        assert refused.status_code == 422 and refused.json()["error"]["code"] == "IMPORT_INVALID"
-        assert "expired" in refused.json()["error"]["message"]
         assert client.post(f"{IMPORTS}/{ids[-1]}/apply", headers=admin).status_code == 200
 
 
@@ -512,6 +513,11 @@ def test_an_applied_preview_keeps_its_rows_however_many_come_after(
         admin = sign_in(client, team["admin"].email)
         applied = preview(client, admin, FILE)["id"]
         assert client.post(f"{IMPORTS}/{applied}/apply", headers=admin).status_code == 200
+        context = TenantContext(organization_id=team["owner"].org_id, user_id=team["owner"].user_id)
+        with owner_db.transaction(context) as session:  # a year old: age must not matter to it
+            session.execute(
+                text("UPDATE catalogue_imports SET created_at = now() - interval '400 days'")
+            )
         for _ in range(25):
             assert upload(client, admin, OTHER_FILE).status_code == 201
 
@@ -535,16 +541,18 @@ def test_a_preview_older_than_thirty_days_is_expired_and_cannot_be_applied(
             ),
             {"i": UUID(old)},
         )
-    # Not yet swept, but already shown as something that cannot be applied.
-    assert client.get(f"{IMPORTS}/{old}", headers=admin_headers).json()["can_apply"] is False
-
-    refused = client.post(f"{IMPORTS}/{old}/apply", headers=admin_headers)
-    assert refused.status_code == 422 and "expired" in refused.json()["error"]["message"]
-    # Its rows are dropped by the next upload (a refused apply changes nothing).
-    assert client.get(f"{IMPORTS}/{old}", headers=admin_headers).json()["state"] == "PREVIEWED"
+    # Not yet swept, but already gone as far as the API is concerned.
+    for gone in (
+        client.get(f"{IMPORTS}/{old}", headers=admin_headers),
+        rows_of(client, admin_headers, old),
+        client.post(f"{IMPORTS}/{old}/apply", headers=admin_headers),
+    ):
+        assert gone.status_code == 410 and gone.json()["error"]["code"] == "IMPORT_EXPIRED"
+    # A refused apply writes nothing; the next upload drops its rows.
+    assert states_of(owner_db, team["owner"].org_id, team["owner"].user_id)["PREVIEWED"] == 2
     assert upload(client, admin_headers, FILE).status_code == 201
-    assert client.get(f"{IMPORTS}/{old}", headers=admin_headers).json()["state"] == "EXPIRED"
-    assert rows_of(client, admin_headers, old).json()["data"] == []
+    counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+    assert counts["EXPIRED"] == 1 and counts["EXPIRED+rows"] == 0
     assert client.post(f"{IMPORTS}/{recent}/apply", headers=admin_headers).status_code == 200
 
 

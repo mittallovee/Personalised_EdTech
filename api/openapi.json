@@ -4975,6 +4975,16 @@
               }
             }
           },
+          "410": {
+            "description": "The preview was kept too long and its rows are gone; upload the file again (`IMPORT_EXPIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
             "content": {
@@ -5115,6 +5125,16 @@
               }
             }
           },
+          "410": {
+            "description": "The preview was kept too long and its rows are gone; upload the file again (`IMPORT_EXPIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
             "content": {
@@ -5197,6 +5217,16 @@
           },
           "409": {
             "description": "The syllabus changed after the preview (`IMPORT_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The preview was kept too long and its rows are gone; upload the file again (`IMPORT_EXPIRED`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7635,8 +7665,7 @@
             "type": "string",
             "enum": [
               "PREVIEWED",
-              "APPLIED",
-              "EXPIRED"
+              "APPLIED"
             ],
             "title": "State"
           },

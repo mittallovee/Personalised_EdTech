@@ -192,7 +192,7 @@ class ConceptPage(BaseModel):
 
 
 ImportStatus = Literal["NEW", "CHANGED", "UNCHANGED", "ERROR"]
-ImportState = Literal["PREVIEWED", "APPLIED", "EXPIRED"]
+ImportState = Literal["PREVIEWED", "APPLIED"]  # an expired preview is gone: 410, never shown
 
 
 class ImportCounts(BaseModel):

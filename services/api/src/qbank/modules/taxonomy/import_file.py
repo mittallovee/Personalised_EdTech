@@ -27,7 +27,7 @@ from xml.etree.ElementTree import Element
 
 from defusedxml.ElementTree import iterparse
 
-from qbank.core.errors import ValidationFailed
+from qbank.core.errors import AppError, ValidationFailed
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 20_000
@@ -53,6 +53,13 @@ _FORMULAS = (
 
 class ImportFileInvalid(ValidationFailed):
     code = "IMPORT_INVALID"
+
+
+class ImportExpired(AppError):
+    """The preview was kept too long and its rows are gone (K-10b): upload the file again."""
+
+    status_code = 410
+    code = "IMPORT_EXPIRED"
 
 
 @dataclass(frozen=True)
