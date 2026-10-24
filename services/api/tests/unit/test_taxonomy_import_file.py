@@ -456,6 +456,78 @@ def test_deeply_nested_xml_is_refused_quickly() -> None:
     assert time.monotonic() - started < 2.0
 
 
+# --- Attacks named in the import threat model (docs/architecture/threat-model-import.md, K-10) ---
+
+_BILLION_LAUGHS = (
+    b'<?xml version="1.0"?><!DOCTYPE lolz ['
+    b'<!ENTITY a "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">'
+    b'<!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;"><!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">'
+    b'<!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;"><!ENTITY e "&d;&d;&d;&d;&d;&d;&d;&d;&d;&d;">'
+    b'<!ENTITY f "&e;&e;&e;&e;&e;&e;&e;&e;&e;&e;"><!ENTITY g "&f;&f;&f;&f;&f;&f;&f;&f;&f;&f;">'
+    b']><worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>&g;</t></is></c>'
+    b"</row></sheetData></worksheet>"
+)
+_FILE_ENTITY = (
+    b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY secret SYSTEM "file:///etc/passwd">]>'
+    b'<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>&secret;</t></is></c>'
+    b"</row></sheetData></worksheet>"
+)
+_URL_ENTITY = _FILE_ENTITY.replace(b"file:///etc/passwd", b"http://127.0.0.1:9/leak")
+
+
+@pytest.mark.parametrize("sheet", [_BILLION_LAUGHS, _FILE_ENTITY, _URL_ENTITY])
+def test_xml_entities_are_refused_in_a_sheet_and_nothing_is_read_or_fetched(sheet: bytes) -> None:
+    """The "billion laughs" expansion and external entities (a local file, a web address) are the
+    classic attacks on XML readers. defusedxml refuses any entity declaration, so none of them is
+    expanded, read or fetched."""
+    started = time.monotonic()
+    message = refused(with_part(xlsx(["kind"], ["CLASS"]), "xl/worksheets/sheet1.xml", sheet))
+    assert "valid .xlsx" in message and "root:" not in message
+    assert time.monotonic() - started < 2.0
+
+
+def test_xml_entities_are_refused_in_the_shared_strings_too() -> None:
+    data = with_part(xlsx(["kind"], ["CLASS"]), "xl/sharedStrings.xml", _BILLION_LAUGHS)
+    assert "valid .xlsx" in refused(data)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "../../../etc/passwd",  # up and out of the archive
+        "/etc/passwd",  # an absolute path
+        "http://127.0.0.1:9/sheet1.xml",  # a web address
+        "file:///etc/passwd",
+    ],
+)
+def test_a_sheet_relationship_that_points_outside_the_archive_is_refused(target: str) -> None:
+    """The reader only ever looks a part up by name inside the archive in memory. It never opens a
+    file path or a web address taken from the workbook."""
+    good = xlsx(["kind"], ["CLASS"])
+    with zipfile.ZipFile(io.BytesIO(good)) as archive:
+        rels = archive.read("xl/_rels/workbook.xml.rels").decode()
+    pointed = rels.replace('Target="/xl/worksheets/sheet1.xml"', f'Target="{target}"')
+    assert pointed != rels
+    assert "valid .xlsx" in refused(with_part(good, "xl/_rels/workbook.xml.rels", pointed.encode()))
+
+
+def test_an_archive_that_understates_the_size_of_a_part_cannot_slip_more_data_past_the_cap() -> (
+    None
+):
+    """The unpacked-size check trusts the sizes written in the archive, which an attacker writes.
+    The zip reader stops at the declared size and then fails its own checks, so a lie gives a
+    refusal, not extra data."""
+    honest = bytearray(
+        sheet_with_rows(b'<row r="2"><c r="A2" t="inlineStr"><is><t>x</t></is></c></row>')
+    )
+    assert read_table(bytes(honest)).rows  # the same file is fine until the sizes are falsified
+    lying = bytearray(honest)
+    for match in re.finditer(rb"PK\x01\x02", bytes(lying)):  # each part's entry in the directory
+        position = match.start() + 24  # its "uncompressed size" field
+        lying[position : position + 4] = (10).to_bytes(4, "little")
+    assert "valid .xlsx" in refused(bytes(lying))
+
+
 def test_a_csv_of_millions_of_commas_is_refused_before_it_is_split_into_fields() -> None:
     data = b"," * 5_000_000
     tracemalloc.start()

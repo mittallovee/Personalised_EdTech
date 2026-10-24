@@ -114,6 +114,10 @@ Importing is a **preview, then apply** flow, so nothing changes until the admin 
   uploads again. An import never deletes or deprecates anything: removal is a deliberate click.
 - Every apply is one audit event naming the counts. Real coaching syllabus files are never committed; tests
   use a small synthetic file.
+- **Security review (K-10, 24 Oct 2026):** [threat model](./threat-model-import.md) and
+  [ADR-0018](./adr/0018-syllabus-import-parsing-stays-in-process.md). The parse stays inside the API request; before
+  the import screen two controls are added (K-10a upload rate limit and a cap on parses at once; K-10b retention
+  of previews that were never applied).
 
 ## 5. Questions (questions module)
 
