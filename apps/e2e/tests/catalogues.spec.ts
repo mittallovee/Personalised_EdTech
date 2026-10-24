@@ -157,3 +157,41 @@ test("the Owner keeps exams and sources: add, edit, filter, retire and restore",
   await vol1.getByRole("button", { name: "Restore" }).click();
   await expect(vol1).not.toContainText("Retired");
 });
+
+test("a save that finishes after you changed the source filter does not bring back the old list", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Late save ${unique()}`);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  for (const [kind, name] of [
+    ["BOOK", "Late Book"],
+    ["PYQ_PAPER", "Late Paper"],
+  ]) {
+    const res = await context.request.post("/api/v1/sources", { headers, data: { kind, name } });
+    expect(res.status()).toBe(201);
+  }
+  const page = await context.newPage();
+  await page.goto("/admin/exams-sources");
+  await expect(entry(page, "Sources", "Late Book")).toBeVisible();
+
+  // The save is slow; while it is on its way, the person narrows the list to papers.
+  await page.route("**/api/v1/sources/*", async (route) => {
+    if (route.request().method() === "PATCH") await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  const book = entry(page, "Sources", "Late Book");
+  await book.getByRole("button", { name: "Edit" }).click();
+  await book
+    .getByRole("form", { name: "Edit Late Book" })
+    .getByLabel(/^Name/)
+    .fill("Late Book, 2nd edition");
+  await book.getByRole("button", { name: "Save" }).click();
+  await page.getByLabel("Show").selectOption("PYQ_PAPER");
+  await expect(entry(page, "Sources", "Late Paper")).toBeVisible();
+
+  // When the save answers, the list still shows only what the filter asks for.
+  await expect(page.getByRole("status")).toContainText("Late Book, 2nd edition was saved.");
+  await expect(entry(page, "Sources", "Late Paper")).toBeVisible();
+  await expect(entry(page, "Sources", "Late Book")).toHaveCount(0);
+});

@@ -25,48 +25,52 @@ export function useCatalogueList<T extends { id: string }>(
   const [listError, setListError] = useState<string | null>(null);
   const generation = useRef(0);
   const moreInFlight = useRef<number | null>(null);
+  // The newest `fetchPage`. A reload started by a change that finishes late must read the filters
+  // on screen now, not the ones the change was sent under.
+  const latestFetch = useRef(fetchPage);
+  useEffect(() => {
+    latestFetch.current = fetchPage;
+  }, [fetchPage]);
 
-  const load = useCallback(
-    async (cursor: string | null) => {
-      const mine = cursor ? generation.current : ++generation.current;
-      if (!cursor) setNextCursor(null);
-      let result;
-      try {
-        result = await fetchPage(cursor);
-      } catch {
-        if (mine === generation.current) {
-          setState("failed");
-          setListError(NETWORK);
-        }
-        return;
-      }
-      if (mine !== generation.current) return;
-      if (result.response.status === 403) {
-        setState("denied");
-        return;
-      }
-      if (!result.data) {
+  const load = useCallback(async (cursor: string | null) => {
+    const mine = cursor ? generation.current : ++generation.current;
+    if (!cursor) setNextCursor(null);
+    let result;
+    try {
+      result = await latestFetch.current(cursor);
+    } catch {
+      if (mine === generation.current) {
         setState("failed");
-        setListError(errorMessage(result.error as never, result.response.status));
-        return;
+        setListError(NETWORK);
       }
-      const page = result.data.data;
-      // An item already shown is not added twice.
-      setItems((current) =>
-        cursor ? [...current, ...page.filter((n) => !current.some((c) => c.id === n.id))] : page,
-      );
-      setNextCursor(result.data.page.next_cursor ?? null);
-      setState("ready");
-      setListError(null);
-    },
-    [fetchPage],
-  );
+      return;
+    }
+    if (mine !== generation.current) return;
+    if (result.response.status === 403) {
+      setState("denied");
+      return;
+    }
+    if (!result.data) {
+      setState("failed");
+      setListError(errorMessage(result.error as never, result.response.status));
+      return;
+    }
+    const page = result.data.data;
+    // An item already shown is not added twice.
+    setItems((current) =>
+      cursor ? [...current, ...page.filter((n) => !current.some((c) => c.id === n.id))] : page,
+    );
+    setNextCursor(result.data.page.next_cursor ?? null);
+    setState("ready");
+    setListError(null);
+  }, []);
 
+  // New filters start the list over.
   useEffect(() => {
     // `load` sets state only after the network call returns, never during this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load(null);
-  }, [load]);
+  }, [load, fetchPage]);
 
   const reload = useCallback(() => load(null), [load]);
 
