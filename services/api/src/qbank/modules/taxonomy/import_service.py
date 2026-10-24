@@ -9,7 +9,8 @@ from collections import defaultdict
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+import structlog
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
@@ -29,6 +30,28 @@ from qbank.modules.taxonomy.models import (
     TaxonomyLabel,
     TaxonomyNode,
 )
+
+log = structlog.get_logger("qbank.taxonomy")
+
+# How long an unapplied preview keeps its rows, and how many a coaching may have (ADR-0018,
+# K-10b). A preview can be 6 to 8 MB. The rows of an applied one are kept: they are the record of
+# the import.
+PREVIEW_KEEP_DAYS = 30
+PREVIEWS_KEPT = 20
+
+
+def expire_old_previews(session: Session, *, keep_count: int = PREVIEWS_KEPT) -> int:
+    """Drop the rows of the caller's unapplied previews that are older than ``PREVIEW_KEEP_DAYS``
+    or beyond the newest ``keep_count``; they become ``EXPIRED``. Returns how many.
+
+    Done by one database function that can touch only unapplied previews of the caller's own
+    coaching and cannot do anything else to them (migration 0018); the runtime role has no right
+    to delete or rewrite a preview itself.
+    """
+    expired = session.scalar(select(func.catalogue_imports_expire(PREVIEW_KEEP_DAYS, keep_count)))
+    if expired:
+        log.info("import_previews_expired", count=expired)
+    return expired or 0
 
 
 def load_snapshot(database: Database, context: TenantContext) -> Snapshot:
@@ -123,6 +146,7 @@ def create_preview(
         if existing is not None:
             return existing
     plan = build_plan(read_table(data), snapshot)
+    expire_old_previews(session, keep_count=PREVIEWS_KEPT - 1)  # room for this one: 20 at most
     preview = CatalogueImport(
         id=import_id,
         organization_id=organization_id,

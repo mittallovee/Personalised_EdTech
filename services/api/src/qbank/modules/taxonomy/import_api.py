@@ -4,6 +4,7 @@ preview. Previewing changes nothing in the syllabus (M3 design note §4.4, C-03)
 import base64
 import binascii
 import math
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -75,6 +76,7 @@ def _out(preview: CatalogueImport) -> ImportOut:
         state=preview.state,
         counts=counts,
         can_apply=preview.state == "PREVIEWED"
+        and preview.created_at > datetime.now(UTC) - timedelta(days=service.PREVIEW_KEEP_DAYS)
         and counts.error == 0
         and 0 < counts.new + counts.changed <= import_plan.MAX_APPLY_ROWS,
         created_at=preview.created_at,

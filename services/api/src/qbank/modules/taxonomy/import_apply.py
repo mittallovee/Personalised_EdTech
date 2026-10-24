@@ -6,7 +6,7 @@ functions as the screens do (permissions, the rules for names and aliases, audit
 import can never do what an admin could not. Nothing is removed, renamed, retired or restored.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -29,7 +29,11 @@ from qbank.modules.taxonomy.import_plan import (
     apply_order,
     node_index,
 )
-from qbank.modules.taxonomy.import_service import read_snapshot
+from qbank.modules.taxonomy.import_service import (
+    PREVIEW_KEEP_DAYS,
+    PREVIEWS_KEPT,
+    read_snapshot,
+)
 from qbank.modules.taxonomy.locks import lock_syllabus_for_import
 from qbank.modules.taxonomy.models import CatalogueImport
 from qbank.modules.taxonomy.schemas import CreateConcept, CreateNode, UpdateConcept, UpdateNode
@@ -72,6 +76,12 @@ def apply_import(
         raise NotFound("No such import.")
     if preview.state == "APPLIED":
         return preview
+    too_old = preview.created_at < datetime.now(UTC) - timedelta(days=PREVIEW_KEEP_DAYS)
+    if preview.state == "EXPIRED" or too_old:  # its rows are dropped by the next upload
+        raise ImportFileInvalid(
+            f"This preview has expired: previews are kept for {PREVIEW_KEEP_DAYS} days and only the"
+            f" newest {PREVIEWS_KEPT} are kept. Upload the file again."
+        )
     counts = preview.counts
     if counts["ERROR"]:
         raise ImportFileInvalid(

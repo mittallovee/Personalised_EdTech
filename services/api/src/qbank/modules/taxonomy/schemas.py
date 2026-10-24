@@ -192,7 +192,7 @@ class ConceptPage(BaseModel):
 
 
 ImportStatus = Literal["NEW", "CHANGED", "UNCHANGED", "ERROR"]
-ImportState = Literal["PREVIEWED", "APPLIED"]
+ImportState = Literal["PREVIEWED", "APPLIED", "EXPIRED"]
 
 
 class ImportCounts(BaseModel):

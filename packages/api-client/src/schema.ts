@@ -1495,7 +1495,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "PREVIEWED" | "APPLIED";
+            state: "PREVIEWED" | "APPLIED" | "EXPIRED";
             counts: components["schemas"]["ImportCounts"];
             /**
              * Can Apply

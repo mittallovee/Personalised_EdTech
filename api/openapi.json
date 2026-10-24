@@ -7635,7 +7635,8 @@
             "type": "string",
             "enum": [
               "PREVIEWED",
-              "APPLIED"
+              "APPLIED",
+              "EXPIRED"
             ],
             "title": "State"
           },
