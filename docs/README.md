@@ -23,6 +23,7 @@
 8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [M2 demo](./operations/m2-demo.md): check identity and coaching admin yourself; [remote access](./operations/remote-access.md) on your own domain;
    [Google login](./operations/google-login.md): one-time Google Cloud setup (M2).
    [Backup and restore](./operations/backup-and-restore.md): taking and restoring database backups, targets, the restore drill (K-03).
+   [GitHub settings checklist](./operations/github-settings.md): branch protection, required checks, secret scanning; applied by the owner (K-05).
 
 ## Review reading order (history)
 
