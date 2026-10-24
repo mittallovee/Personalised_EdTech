@@ -210,6 +210,8 @@ requirements N-02, N-03, N-06, N-07, N-10 and N-12 into practice.
 | K-08 | Load tests (k6) for search and listing on a one-lakh-question fixture (N-03) | P1 | R |
 | K-09 | Accessibility checks (axe) inside the browser tests (N-10) | P1 | R |
 | K-10 | Threat model and an ADR for the taxonomy/Excel import, which already parses untrusted files in the API process: keep in-request with documented limits, or move to a separate low-resource worker. Done before the import screen (M3 PR 2d-3) is built | P1 | R |
+| K-10a | Limits on the import endpoint found by K-10: a per-user rate limit and a cap on parses running at once (ADR-0018). Done before the import screen | P1 | R |
+| K-10b | Retention of import previews found by K-10: a count and age limit on previews that were never applied (ADR-0018; the owner confirms, it changes the design note). Done before the import screen | P1 | R |
 | K-11 | Threat model for AI input and output (provider prompts, one-off user prompts, AI-generated text and corrections, keys), before M5 | P1 | R |
 | K-12 | Feature flags: ship a feature switched off | P1 | R |
 | K-13 | Written service targets (uptime, speed) and alerts (SLOs) | P1 | R |
