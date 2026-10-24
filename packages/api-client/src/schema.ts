@@ -5424,6 +5424,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The preview was kept too long and its rows are gone; upload the file again (`IMPORT_EXPIRED`) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
                 headers: {
@@ -5495,6 +5504,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The preview was kept too long and its rows are gone; upload the file again (`IMPORT_EXPIRED`) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
                 headers: {
@@ -5555,6 +5573,15 @@ export interface operations {
             };
             /** @description The syllabus changed after the preview (`IMPORT_STALE`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The preview was kept too long and its rows are gone; upload the file again (`IMPORT_EXPIRED`) */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };

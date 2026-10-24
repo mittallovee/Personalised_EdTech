@@ -24,6 +24,7 @@
    [Google login](./operations/google-login.md): one-time Google Cloud setup (M2).
    [Backup and restore](./operations/backup-and-restore.md): taking and restoring database backups, targets, the restore drill (K-03).
    [GitHub settings checklist](./operations/github-settings.md): branch protection, required checks, secret scanning; applied by the owner (K-05).
+   [Handoff to a local PC session](./operations/handoff-local-pc.md): current state, next steps and open owner items for a fresh Claude Code session.
    [Import threat model](./architecture/threat-model-import.md): what a hostile syllabus file or admin can do, what stops it, what is missing (K-10).
 
 ## Review reading order (history)

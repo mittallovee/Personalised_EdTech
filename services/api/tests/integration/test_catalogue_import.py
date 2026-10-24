@@ -15,7 +15,7 @@ from sqlalchemy.exc import DBAPIError
 
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
-from qbank.core.tenancy import TenantContext
+from qbank.core.tenancy import NO_CONTEXT, TenantContext
 from qbank.main import create_app
 from qbank.modules.taxonomy import import_service
 from qbank.modules.taxonomy.import_file import MAX_FILE_BYTES
@@ -458,3 +458,203 @@ def test_a_place_is_freed_when_the_file_turns_out_to_be_unreadable(
         ):  # each failure must give its place back, or the next would be turned away
             assert upload(client, admin, b"PK\x03\x04junk").status_code == 422
         assert upload(client, admin, FILE).status_code == 201
+
+
+# --- Previews that are never applied do not pile up (K-10b, ADR-0018) -----------------------------
+
+OTHER_FILE = "kind,path\nCLASS,Class 12\n"
+
+
+def states_of(db: Database, org_id: UUID, user_id: UUID) -> dict[str, int]:
+    """How many previews of a coaching are in each state, and how many still hold their rows."""
+    context = TenantContext(organization_id=org_id, user_id=user_id)
+    with db.transaction(context) as session:
+        found = session.execute(
+            text(
+                "SELECT state, count(*), count(*) FILTER (WHERE jsonb_array_length(rows) > 0)"
+                " FROM catalogue_imports WHERE organization_id = :org GROUP BY state"
+            ),
+            {"org": org_id},  # asked for by name: an owner connection may see every coaching
+        ).all()
+    return {f"{state}": count for state, count, _ in found} | {
+        f"{state}+rows": with_rows for state, _, with_rows in found
+    }
+
+
+def test_only_the_newest_twenty_unapplied_previews_keep_their_rows(
+    migrated_database: MigratedDatabase, team: dict[str, Member], owner_db: Database
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=100) as client:
+        admin = sign_in(client, team["admin"].email)
+        ids = [preview(client, admin, FILE)["id"] for _ in range(23)]
+
+        counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+        assert counts["PREVIEWED"] == 20 and counts["PREVIEWED+rows"] == 20
+        assert counts["EXPIRED"] == 3 and counts["EXPIRED+rows"] == 0
+
+        # An expired preview is gone as far as the API is concerned: 410, with a message that says
+        # what to do. (Its small record stays in the database: who, when, the counts.)
+        for gone in (
+            client.get(f"{IMPORTS}/{ids[0]}", headers=admin),
+            rows_of(client, admin, ids[0]),
+            client.post(f"{IMPORTS}/{ids[0]}/apply", headers=admin),
+        ):
+            assert gone.status_code == 410 and gone.json()["error"]["code"] == "IMPORT_EXPIRED"
+            assert "Upload the file again" in gone.json()["error"]["message"]
+        newest = client.get(f"{IMPORTS}/{ids[-1]}", headers=admin).json()
+        assert newest["state"] == "PREVIEWED" and newest["can_apply"] is True
+        assert client.post(f"{IMPORTS}/{ids[-1]}/apply", headers=admin).status_code == 200
+
+
+def test_an_applied_preview_keeps_its_rows_however_many_come_after(
+    migrated_database: MigratedDatabase, team: dict[str, Member], owner_db: Database
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=100) as client:
+        admin = sign_in(client, team["admin"].email)
+        applied = preview(client, admin, FILE)["id"]
+        assert client.post(f"{IMPORTS}/{applied}/apply", headers=admin).status_code == 200
+        context = TenantContext(organization_id=team["owner"].org_id, user_id=team["owner"].user_id)
+        with owner_db.transaction(context) as session:  # a year old: age must not matter to it
+            session.execute(
+                text("UPDATE catalogue_imports SET created_at = now() - interval '400 days'")
+            )
+        for _ in range(25):
+            assert upload(client, admin, OTHER_FILE).status_code == 201
+
+        again = client.get(f"{IMPORTS}/{applied}", headers=admin).json()
+        assert again["state"] == "APPLIED"
+        assert len(rows_of(client, admin, applied).json()["data"]) > 0
+        counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+        assert counts["APPLIED+rows"] == 1 and counts["PREVIEWED"] == 20
+
+
+def test_a_preview_older_than_thirty_days_is_expired_and_cannot_be_applied(
+    client: TestClient, admin_headers: dict[str, str], team: dict[str, Member], owner_db: Database
+) -> None:
+    old = preview(client, admin_headers, FILE)["id"]
+    recent = preview(client, admin_headers, OTHER_FILE)["id"]
+    context = TenantContext(organization_id=team["owner"].org_id, user_id=team["owner"].user_id)
+    with owner_db.transaction(context) as session:
+        session.execute(
+            text(
+                "UPDATE catalogue_imports SET created_at = now() - interval '31 days' WHERE id = :i"
+            ),
+            {"i": UUID(old)},
+        )
+    # Not yet swept, but already gone as far as the API is concerned.
+    for gone in (
+        client.get(f"{IMPORTS}/{old}", headers=admin_headers),
+        rows_of(client, admin_headers, old),
+        client.post(f"{IMPORTS}/{old}/apply", headers=admin_headers),
+    ):
+        assert gone.status_code == 410 and gone.json()["error"]["code"] == "IMPORT_EXPIRED"
+    # A refused apply writes nothing; the next upload drops its rows.
+    assert states_of(owner_db, team["owner"].org_id, team["owner"].user_id)["PREVIEWED"] == 2
+    assert upload(client, admin_headers, FILE).status_code == 201
+    counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+    assert counts["EXPIRED"] == 1 and counts["EXPIRED+rows"] == 0
+    assert client.post(f"{IMPORTS}/{recent}/apply", headers=admin_headers).status_code == 200
+
+
+def test_another_coachings_previews_are_never_touched(
+    migrated_database: MigratedDatabase,
+    team: dict[str, Member],
+    owner_db: Database,
+    db: Database,
+) -> None:
+    neighbour = make_member(owner_db, "OWNER", coaching_name="Neighbour Coaching")
+    with limited_client(migrated_database, import_uploads_per_user=100) as client:
+        other = TestClient(client.app)
+        theirs = sign_in(other, neighbour.email)
+        for _ in range(3):
+            preview(other, theirs, FILE)
+        admin = sign_in(client, team["admin"].email)
+        for _ in range(23):
+            preview(client, admin, FILE)
+
+        assert states_of(owner_db, neighbour.org_id, neighbour.user_id) == {
+            "PREVIEWED": 3,
+            "PREVIEWED+rows": 3,
+        }
+        # The function itself, called straight from the runtime role, only reaches the caller's own
+        # coaching, and does nothing at all without one.
+        mine = TenantContext(organization_id=neighbour.org_id, user_id=neighbour.user_id)
+        with db.transaction(mine) as session:
+            assert session.scalar(text("SELECT catalogue_imports_expire(0, 0)")) == 3
+        assert states_of(owner_db, team["owner"].org_id, team["owner"].user_id)["PREVIEWED"] == 20
+        with db.transaction(NO_CONTEXT) as session:
+            assert session.scalar(text("SELECT catalogue_imports_expire(0, 0)")) == 0
+        assert states_of(owner_db, team["owner"].org_id, team["owner"].user_id)["PREVIEWED"] == 20
+
+
+def test_the_expiry_function_cannot_be_used_to_rewrite_or_delete_anything_else(
+    migrated_database: MigratedDatabase, team: dict[str, Member], owner_db: Database, db: Database
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=100) as client:
+        admin = sign_in(client, team["admin"].email)
+        applied = preview(client, admin, FILE)["id"]
+        client.post(f"{IMPORTS}/{applied}/apply", headers=admin)
+        context = TenantContext(organization_id=team["owner"].org_id, user_id=team["owner"].user_id)
+        with db.transaction(context) as session:  # even asked to expire everything, now
+            session.execute(text("SELECT catalogue_imports_expire(0, 0)"))
+        counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+        assert counts == {"APPLIED": 1, "APPLIED+rows": 1}
+
+
+def test_two_uploads_at_once_cannot_both_find_room_and_leave_more_than_twenty(
+    migrated_database: MigratedDatabase,
+    team: dict[str, Member],
+    owner_db: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_sweep = import_service.expire_old_previews
+
+    def slow_sweep(*args: Any, **kwargs: Any) -> int:
+        expired = real_sweep(*args, **kwargs)
+        threading.Event().wait(0.6)  # widen the gap between "making room" and "inserting"
+        return expired
+
+    with limited_client(
+        migrated_database, import_uploads_per_user=100, import_parses_at_once=2
+    ) as client:
+        other = TestClient(client.app)
+        admin, owner = sign_in(client, team["admin"].email), sign_in(other, team["owner"].email)
+        for _ in range(19):  # one short of full
+            preview(client, admin, FILE)
+        monkeypatch.setattr(import_service, "expire_old_previews", slow_sweep)
+        codes: list[int] = []
+
+        def go(browser: TestClient, headers: dict[str, str]) -> None:
+            codes.append(upload(browser, headers, FILE).status_code)
+
+        threads = [
+            threading.Thread(target=go, args=(client, admin)),
+            threading.Thread(target=go, args=(other, owner)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+
+        assert codes == [201, 201]
+        counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+        assert counts["PREVIEWED"] == 20 and counts["PREVIEWED+rows"] == 20
+        assert counts["EXPIRED"] == 1
+
+
+def test_a_retry_with_the_same_key_of_a_preview_that_has_expired_is_a_410_not_a_server_error(
+    migrated_database: MigratedDatabase, team: dict[str, Member]
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=100) as client:
+        admin = sign_in(client, team["admin"].email)
+        key = {"Idempotency-Key": "retry-after-expiry"}
+        first = upload(client, admin, FILE, **key)
+        assert first.status_code == 201
+        for _ in range(20):  # twenty newer ones push it out
+            assert upload(client, admin, OTHER_FILE).status_code == 201
+        assert client.get(f"{IMPORTS}/{first.json()['id']}", headers=admin).status_code == 410
+
+        retry = upload(client, admin, FILE, **key)  # the same request, sent again
+        assert retry.status_code == 410 and retry.json()["error"]["code"] == "IMPORT_EXPIRED"
+        # A new request (a new key) is a new preview, as the message says.
+        assert upload(client, admin, FILE, **{"Idempotency-Key": "a-new-key"}).status_code == 201

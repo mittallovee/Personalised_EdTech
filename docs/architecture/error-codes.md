@@ -39,6 +39,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `PARENT_DEPRECATED` | 409 | The parent item is retired: nothing new goes under it, and an item under it cannot be restored until the parent is | M3 |
 | `NAME_TOO_LONG` | 422 | A name (or alias) is too long once its special characters are written out in full for comparing names (for example a ligature becomes three letters) | M3 |
 | `IMPORT_INVALID` | 422 | A syllabus import file cannot be read at all: too large, not a spreadsheet or UTF-8 CSV, formulas, unknown or missing columns, too many rows or cells, damaged. Also when applying: a row is an error, there is nothing to import, or more than 5,000 rows would be added or changed at once. (Problem *rows* are not an error when previewing: the preview lists them) | M3 |
+| `IMPORT_EXPIRED` | 410 | A syllabus import preview was kept too long (30 days, or beyond the newest 20 of its coaching) and its rows are gone, so it can no longer be read or applied; upload the file again. Applied previews never expire | M3 |
 | `IMPORT_STALE` | 409 | The syllabus changed after an import preview was made (or something it would add appeared meanwhile), so it was not applied; upload the file again | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in), too many syllabus import uploads in a short time, or the server is busy reading other import files; wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |

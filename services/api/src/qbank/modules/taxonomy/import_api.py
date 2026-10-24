@@ -44,6 +44,12 @@ _TOO_MANY: dict[int | str, dict[str, Any]] = {
 }
 # A parse takes up to about 3 s (threat model, K-10); a refused upload may try again after this.
 _BUSY_RETRY_SECONDS = 5
+_EXPIRED: dict[int | str, dict[str, Any]] = {
+    410: {
+        "description": "The preview was kept too long and its rows are gone; upload the file"
+        " again (`IMPORT_EXPIRED`)"
+    }
+}
 _NOT_FOUND: dict[int | str, dict[str, Any]] = {
     404: {"description": "No such import in your coaching (`NOT_FOUND`)"}
 }
@@ -206,7 +212,7 @@ async def create_import(
 @router.get(
     "/imports/{import_id}",
     summary="One import preview: its totals",
-    responses={**_DENIED, **_NOT_FOUND},
+    responses={**_DENIED, **_NOT_FOUND, **_EXPIRED},
 )
 def read_import(
     import_id: UUID,
@@ -222,7 +228,7 @@ def read_import(
     "/imports/{import_id}/rows",
     summary="The rows of an import preview, in file order",
     description="Filter with `status=ERROR` to see only what needs fixing.",
-    responses={**_DENIED, **_NOT_FOUND},
+    responses={**_DENIED, **_NOT_FOUND, **_EXPIRED},
 )
 def read_import_rows(
     import_id: UUID,
@@ -256,6 +262,7 @@ def read_import_rows(
     responses={
         **_DENIED,
         **_NOT_FOUND,
+        **_EXPIRED,
         409: {"description": "The syllabus changed after the preview (`IMPORT_STALE`)"},
         422: {
             "description": "Not applicable: error rows, nothing to do, too many (`IMPORT_INVALID`)"

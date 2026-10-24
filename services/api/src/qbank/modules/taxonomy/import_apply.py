@@ -29,7 +29,7 @@ from qbank.modules.taxonomy.import_plan import (
     apply_order,
     node_index,
 )
-from qbank.modules.taxonomy.import_service import read_snapshot
+from qbank.modules.taxonomy.import_service import check_not_expired, read_snapshot
 from qbank.modules.taxonomy.locks import lock_syllabus_for_import
 from qbank.modules.taxonomy.models import CatalogueImport
 from qbank.modules.taxonomy.schemas import CreateConcept, CreateNode, UpdateConcept, UpdateNode
@@ -72,6 +72,7 @@ def apply_import(
         raise NotFound("No such import.")
     if preview.state == "APPLIED":
         return preview
+    check_not_expired(preview)  # one that is over its time is refused; the next upload drops it
     counts = preview.counts
     if counts["ERROR"]:
         raise ImportFileInvalid(

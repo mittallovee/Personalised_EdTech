@@ -7,9 +7,11 @@ later (a separate step) acts on exactly what the admin saw.
 import hashlib
 from collections import defaultdict
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
+import structlog
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
@@ -19,8 +21,9 @@ from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import Action, require
 from qbank.core.tenancy import TenantContext
-from qbank.modules.taxonomy.import_file import read_table
+from qbank.modules.taxonomy.import_file import ImportExpired, read_table
 from qbank.modules.taxonomy.import_plan import SnapConcept, SnapNode, Snapshot, build_plan
+from qbank.modules.taxonomy.locks import lock_import_previews
 from qbank.modules.taxonomy.models import (
     CatalogueImport,
     Concept,
@@ -29,6 +32,28 @@ from qbank.modules.taxonomy.models import (
     TaxonomyLabel,
     TaxonomyNode,
 )
+
+log = structlog.get_logger("qbank.taxonomy")
+
+# How long an unapplied preview keeps its rows, and how many a coaching may have (ADR-0018,
+# K-10b). A preview can be 6 to 8 MB. The rows of an applied one are kept: they are the record of
+# the import.
+PREVIEW_KEEP_DAYS = 30
+PREVIEWS_KEPT = 20
+
+
+def expire_old_previews(session: Session, *, keep_count: int = PREVIEWS_KEPT) -> int:
+    """Drop the rows of the caller's unapplied previews that are older than ``PREVIEW_KEEP_DAYS``
+    or beyond the newest ``keep_count``; they become ``EXPIRED``. Returns how many.
+
+    Done by one database function that can touch only unapplied previews of the caller's own
+    coaching and cannot do anything else to them (migration 0018); the runtime role has no right
+    to delete or rewrite a preview itself.
+    """
+    expired = session.scalar(select(func.catalogue_imports_expire(PREVIEW_KEEP_DAYS, keep_count)))
+    if expired:
+        log.info("import_previews_expired", count=expired)
+    return expired or 0
 
 
 def load_snapshot(database: Database, context: TenantContext) -> Snapshot:
@@ -121,8 +146,12 @@ def create_preview(
         )
         existing = session.get(CatalogueImport, import_id)
         if existing is not None:
+            check_not_expired(existing)  # a retry of a preview that has since expired is a 410
             return existing
     plan = build_plan(read_table(data), snapshot)
+    # One upload of a coaching at a time from here to the commit, so two cannot both find room.
+    lock_import_previews(session, organization_id)
+    expire_old_previews(session, keep_count=PREVIEWS_KEPT - 1)  # room for this one: 20 at most
     preview = CatalogueImport(
         id=import_id,
         organization_id=organization_id,
@@ -138,10 +167,23 @@ def create_preview(
     return preview
 
 
+def check_not_expired(preview: CatalogueImport) -> None:
+    """Refuse (410) a preview whose rows are dropped, or old enough to be dropped soon.
+
+    An applied preview never expires."""
+    too_old = preview.created_at < datetime.now(UTC) - timedelta(days=PREVIEW_KEEP_DAYS)
+    if preview.state == "EXPIRED" or (preview.state == "PREVIEWED" and too_old):
+        raise ImportExpired(
+            f"This preview has expired: previews are kept for {PREVIEW_KEEP_DAYS} days and only the"
+            f" newest {PREVIEWS_KEPT} are kept. Upload the file again."
+        )
+
+
 def get_import(session: Session, import_id: UUID) -> CatalogueImport:
     found = session.get(CatalogueImport, import_id)  # row-level security hides other coachings'
     if found is None:
         raise NotFound("No such import.")
+    check_not_expired(found)
     return found
 
 

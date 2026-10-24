@@ -151,7 +151,7 @@ class CatalogueImport(Base):
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     file_name: Mapped[str] = mapped_column(String(200))
     file_sha256: Mapped[str] = mapped_column(String(64))
-    state: Mapped[str] = mapped_column(String(20), default="PREVIEWED")  # or APPLIED
+    state: Mapped[str] = mapped_column(String(20), default="PREVIEWED")  # APPLIED or EXPIRED
     counts: Mapped[dict[str, int]] = mapped_column(JSONB)
     base_fingerprint: Mapped[str] = mapped_column(String(64))  # the syllabus the preview saw
     rows: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
