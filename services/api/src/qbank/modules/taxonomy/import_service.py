@@ -23,6 +23,7 @@ from qbank.core.permissions import Action, require
 from qbank.core.tenancy import TenantContext
 from qbank.modules.taxonomy.import_file import ImportExpired, read_table
 from qbank.modules.taxonomy.import_plan import SnapConcept, SnapNode, Snapshot, build_plan
+from qbank.modules.taxonomy.locks import lock_import_previews
 from qbank.modules.taxonomy.models import (
     CatalogueImport,
     Concept,
@@ -147,6 +148,8 @@ def create_preview(
         if existing is not None:
             return existing
     plan = build_plan(read_table(data), snapshot)
+    # One upload of a coaching at a time from here to the commit, so two cannot both find room.
+    lock_import_previews(session, organization_id)
     expire_old_previews(session, keep_count=PREVIEWS_KEPT - 1)  # room for this one: 20 at most
     preview = CatalogueImport(
         id=import_id,

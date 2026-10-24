@@ -599,3 +599,44 @@ def test_the_expiry_function_cannot_be_used_to_rewrite_or_delete_anything_else(
             session.execute(text("SELECT catalogue_imports_expire(0, 0)"))
         counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
         assert counts == {"APPLIED": 1, "APPLIED+rows": 1}
+
+
+def test_two_uploads_at_once_cannot_both_find_room_and_leave_more_than_twenty(
+    migrated_database: MigratedDatabase,
+    team: dict[str, Member],
+    owner_db: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_sweep = import_service.expire_old_previews
+
+    def slow_sweep(*args: Any, **kwargs: Any) -> int:
+        expired = real_sweep(*args, **kwargs)
+        threading.Event().wait(0.6)  # widen the gap between "making room" and "inserting"
+        return expired
+
+    with limited_client(
+        migrated_database, import_uploads_per_user=100, import_parses_at_once=2
+    ) as client:
+        other = TestClient(client.app)
+        admin, owner = sign_in(client, team["admin"].email), sign_in(other, team["owner"].email)
+        for _ in range(19):  # one short of full
+            preview(client, admin, FILE)
+        monkeypatch.setattr(import_service, "expire_old_previews", slow_sweep)
+        codes: list[int] = []
+
+        def go(browser: TestClient, headers: dict[str, str]) -> None:
+            codes.append(upload(browser, headers, FILE).status_code)
+
+        threads = [
+            threading.Thread(target=go, args=(client, admin)),
+            threading.Thread(target=go, args=(other, owner)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+
+        assert codes == [201, 201]
+        counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
+        assert counts["PREVIEWED"] == 20 and counts["PREVIEWED+rows"] == 20
+        assert counts["EXPIRED"] == 1

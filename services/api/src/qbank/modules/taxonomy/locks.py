@@ -6,6 +6,10 @@ by side, as before). Applying an import takes it *exclusively*: it waits for cha
 holds off new ones until it commits, and so checks "has the syllabus changed since the preview?"
 and writes without anyone slipping a change in between. Both are held until the transaction ends.
 Always taken before any row lock, so the two kinds of caller cannot deadlock each other.
+
+A second lock per coaching serialises the making of import previews (K-10b): the sweep that expires
+old ones and the insert of the new one happen as one step, so two uploads at once cannot both
+find room and leave more than the allowed number.
 """
 
 from uuid import UUID
@@ -21,6 +25,11 @@ _EXCLUSIVE = text("SELECT pg_advisory_xact_lock(hashtextextended(:name, 0))")
 
 def _name(organization_id: UUID) -> dict[str, str]:
     return {"name": f"syllabus:{organization_id}"}
+
+
+def lock_import_previews(session: Session, organization_id: UUID) -> None:
+    """Held until the transaction ends: the next upload of this coaching waits for this one."""
+    session.execute(_EXCLUSIVE, {"name": f"import-previews:{organization_id}"})
 
 
 def lock_syllabus_for_change(session: Session, principal: Principal) -> None:
