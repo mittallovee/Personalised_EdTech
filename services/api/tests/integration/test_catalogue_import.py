@@ -640,3 +640,21 @@ def test_two_uploads_at_once_cannot_both_find_room_and_leave_more_than_twenty(
         counts = states_of(owner_db, team["owner"].org_id, team["owner"].user_id)
         assert counts["PREVIEWED"] == 20 and counts["PREVIEWED+rows"] == 20
         assert counts["EXPIRED"] == 1
+
+
+def test_a_retry_with_the_same_key_of_a_preview_that_has_expired_is_a_410_not_a_server_error(
+    migrated_database: MigratedDatabase, team: dict[str, Member]
+) -> None:
+    with limited_client(migrated_database, import_uploads_per_user=100) as client:
+        admin = sign_in(client, team["admin"].email)
+        key = {"Idempotency-Key": "retry-after-expiry"}
+        first = upload(client, admin, FILE, **key)
+        assert first.status_code == 201
+        for _ in range(20):  # twenty newer ones push it out
+            assert upload(client, admin, OTHER_FILE).status_code == 201
+        assert client.get(f"{IMPORTS}/{first.json()['id']}", headers=admin).status_code == 410
+
+        retry = upload(client, admin, FILE, **key)  # the same request, sent again
+        assert retry.status_code == 410 and retry.json()["error"]["code"] == "IMPORT_EXPIRED"
+        # A new request (a new key) is a new preview, as the message says.
+        assert upload(client, admin, FILE, **{"Idempotency-Key": "a-new-key"}).status_code == 201

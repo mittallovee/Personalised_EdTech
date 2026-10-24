@@ -146,6 +146,7 @@ def create_preview(
         )
         existing = session.get(CatalogueImport, import_id)
         if existing is not None:
+            check_not_expired(existing)  # a retry of a preview that has since expired is a 410
             return existing
     plan = build_plan(read_table(data), snapshot)
     # One upload of a coaching at a time from here to the commit, so two cannot both find room.
