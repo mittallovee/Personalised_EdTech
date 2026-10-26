@@ -5,7 +5,7 @@ description = "Question bank platform backend (API + worker)"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "fastapi>=0.144,<0.145",
+    "fastapi>=0.144,<0.147",
     "uvicorn[standard]>=0.54,<0.55",
     "pydantic>=2.14,<3",
     "pydantic-settings>=2.16,<3",
