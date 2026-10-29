@@ -10,7 +10,7 @@ Rules are spec-v1's question types; the numbers are defaults in ``Rules`` (D-03)
 import re
 from decimal import Decimal
 
-from qbank.modules.questions.blocks import as_dict, check_blocks
+from qbank.modules.questions.blocks import as_dict, check_blocks, has_content
 from qbank.modules.questions.findings import Findings, at_index, at_key
 from qbank.modules.questions.rules import Rules
 
@@ -84,10 +84,10 @@ def check_options(content: dict[str, object], rules: Rules, out: Findings) -> li
             ids.append(option_id)
         content_where = at_key(where, "content")
         blocks = obj.get("content")
-        if blocks is None or blocks == []:
-            out.incomplete(content_where, "OPTION_EMPTY", "This option has no content yet.")
-        else:
+        if blocks is not None:
             check_blocks(blocks, content_where, rules, out)
+        if blocks is None or (isinstance(blocks, list) and not has_content(blocks)):
+            out.incomplete(content_where, "OPTION_EMPTY", "This option has no content yet.")
     return ids
 
 

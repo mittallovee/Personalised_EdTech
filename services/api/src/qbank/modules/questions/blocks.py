@@ -35,6 +35,27 @@ def as_dict(value: object) -> dict[str, object] | None:
     return value if isinstance(value, dict) else None
 
 
+def has_content(value: object) -> bool:
+    """Whether a list of blocks holds anything beyond blank paragraphs and empty equations.
+
+    A blank paragraph is allowed beside real content, but a field made only of blanks is empty.
+    """
+    if not isinstance(value, list):
+        return False
+    for block in value:
+        obj = as_dict(block)
+        if obj is None:
+            continue
+        kind = obj.get("kind")
+        if kind in (PARAGRAPH, EQUATION):
+            text = obj.get("text" if kind == PARAGRAPH else "source")
+            if isinstance(text, str) and text.strip():
+                return True
+        elif kind in (IMAGE, TABLE, LIST):
+            return True
+    return False
+
+
 def check_blocks(
     value: object,
     path: str,

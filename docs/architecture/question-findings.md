@@ -27,7 +27,7 @@ numerical). PR 3a-2 adds matching, assertion-reason, multiple-statement, passage
 | `FIELD_NOT_ALLOWED` | error | A field that belongs to another format (for example `options` on an integer question) |
 | `LANGUAGE_MISSING` | incomplete | No language chosen |
 | `LANGUAGE_INVALID` | error | Not a language code like `en` or `hi` |
-| `STEM_EMPTY` | incomplete | The question has no text yet |
+| `STEM_EMPTY` | incomplete | The question has no text yet (blank paragraphs alone do not count) |
 | `VIDEO_URL_INVALID` | error | The video link is not an `http(s)` address |
 
 ## Blocks
@@ -66,7 +66,7 @@ numerical). PR 3a-2 adds matching, assertion-reason, multiple-statement, passage
 | `OPTIONS_NOT_LIST` / `OPTION_NOT_OBJECT` | error | Options shape is wrong |
 | `OPTIONS_COUNT` | incomplete (fewer) / error (more) | There must be exactly four options |
 | `OPTION_ID_INVALID` / `OPTION_ID_DUPLICATE` | error | Ids are 1 to 20 letters, digits, `_` or `-`, and unique |
-| `OPTION_EMPTY` | incomplete | An option with no content |
+| `OPTION_EMPTY` | incomplete | An option with no content, or only blank paragraphs and empty equations |
 | `ANSWER_MISSING` | incomplete | No answer chosen yet |
 | `ANSWER_SHAPE` | error | The answer is not in the form the format needs |
 | `ANSWER_FIELD_UNKNOWN` | error | A field the answer does not have |

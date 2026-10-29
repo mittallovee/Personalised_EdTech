@@ -127,8 +127,9 @@ def test_a_huge_document_is_refused_without_being_walked() -> None:
 
 
 def stem(*blocks: object) -> dict[str, Any]:
+    """An integer question whose stem is a real paragraph followed by the blocks being tested."""
     content = ready("INTEGER")
-    content["stem"] = list(blocks)
+    content["stem"] = [{"kind": "paragraph", "text": "What is it?"}, *blocks]
     return content
 
 
@@ -246,6 +247,30 @@ def test_an_empty_option_is_incomplete_not_wrong() -> None:
     content["options"][3]["content"] = []
     [finding] = validate_content(content)
     assert (finding.code, finding.level) == ("OPTION_EMPTY", Level.INCOMPLETE)
+
+
+def test_blank_blocks_do_not_count_as_content() -> None:
+    blank = {"kind": "paragraph", "text": "   "}
+    blank_equation = {"kind": "equation", "format": "latex", "source": " "}
+    # An option or a question that holds only blank blocks is still empty.
+    content = ready("SCQ")
+    content["options"][3]["content"] = [blank]
+    found = validate_content(content)
+    assert [(f.code, f.level) for f in found] == [
+        ("PARAGRAPH_EMPTY", Level.WARNING),
+        ("OPTION_EMPTY", Level.INCOMPLETE),
+    ]
+    content["options"][3]["content"] = [blank_equation]
+    assert codes(content) == ["EQUATION_EMPTY", "OPTION_EMPTY"]
+    only_blank = ready("INTEGER")
+    only_blank["stem"] = [blank]
+    assert codes(only_blank) == ["PARAGRAPH_EMPTY", "STEM_EMPTY"]
+    # A blank paragraph beside real content is only a warning.
+    content["options"][3]["content"] = [blank, {"kind": "paragraph", "text": "7"}]
+    assert codes(content) == ["PARAGRAPH_EMPTY"]
+    picture = {"kind": "image", "asset_id": "00000000-0000-4000-8000-0000000000aa", "alt_text": "x"}
+    content["options"][3]["content"] = [picture]
+    assert codes(content) == []
 
 
 def test_scq_answer_shapes() -> None:

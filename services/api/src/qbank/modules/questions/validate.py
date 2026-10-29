@@ -18,7 +18,7 @@ from qbank.modules.questions.answers import (
     check_scq_answer,
     check_whole_number_answer,
 )
-from qbank.modules.questions.blocks import as_dict, check_blocks
+from qbank.modules.questions.blocks import as_dict, check_blocks, has_content
 from qbank.modules.questions.findings import Finding, Findings, at_key
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 
@@ -137,10 +137,10 @@ def _check_envelope(obj: dict[str, object], rules: Rules, out: Findings) -> str 
         out.error("language", "LANGUAGE_INVALID", "The language must be a code like en or hi.")
 
     stem = obj.get("stem")
-    if stem is None or stem == []:
-        out.incomplete("stem", "STEM_EMPTY", "Write the question.")
-    else:
+    if stem is not None:
         check_blocks(stem, "stem", rules, out)
+    if stem is None or (isinstance(stem, list) and not has_content(stem)):
+        out.incomplete("stem", "STEM_EMPTY", "Write the question.")
 
     solution = obj.get("solution")
     if solution is not None:
