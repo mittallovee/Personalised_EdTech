@@ -155,6 +155,11 @@ Rules:
 - **Structured JSON logs** (structlog) with `request_id`, `job_id`, `organization_id`, `user_id`, `operation`,
   `duration_ms`, `outcome`. Never log secrets or full question content.
 - Every HTTP response carries `X-Request-ID`; jobs inherit the request ID that created them.
+- **How to log** ([ADR-0019](../architecture/adr/0019-monitoring-stack-and-logging-rules.md)): `log.info("snake_case_event", some_id=...)`
+  with IDs and counts, never content, emails or tokens. `request_id`, `trace_id`, `organization_id` and `user_id` are
+  added to every line automatically. The client IP is logged only in security events (`login_failed`, `rate_limited`).
+  A redaction step (`core/logredact.py`) blanks forbidden fields as a safety net; it does not replace care. Every
+  state change recorded with `record_event` is also logged as `audit_recorded` (names and IDs, not before/after data).
 - **OpenTelemetry** traces for API, DB and outgoing AI calls; metrics for request rate/latency/errors,
   job queue depth/age, AI tokens/cost/errors.
 - Errors to Sentry when `SENTRY_DSN` is set.
