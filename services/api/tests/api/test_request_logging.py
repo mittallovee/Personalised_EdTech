@@ -106,9 +106,10 @@ def test_credentials_in_a_request_never_reach_the_logs(
     test_client: TestClient, stream: io.StringIO
 ) -> None:
     # The database is unreachable in this test, so the sign-in fails; the failure is logged.
+    credentials = {"email": "ann.bait@example.com", "password": "hunter2-bait-pw"}  # gitleaks:allow
     test_client.post(
         "/api/v1/auth/login?token=QUERYSECRET",
-        json={"email": "ann.bait@example.com", "password": "hunter2-bait-pw"},
+        json=credentials,
         headers={
             "Authorization": "Bearer headerbait0123456789",
             "Cookie": "qb_session=cookiebait0123456789",

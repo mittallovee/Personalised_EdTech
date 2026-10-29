@@ -4,6 +4,7 @@ coaching content are blanked by the log pipeline even when code logs them by mis
 import io
 import json
 import logging
+import secrets
 from collections.abc import Iterator
 from typing import Any
 
@@ -17,7 +18,7 @@ from qbank.core.logging import (
     end_log_context,
 )
 
-TOKEN = "Zk3v9Qx7LmN2pR8sT1uW4yB6cD0eF5gH7jK9aXq2Vb4"  # 43 characters, like token_urlsafe(32)
+TOKEN = secrets.token_urlsafe(32)  # 43 characters, like our real tokens; made fresh per run
 BAITS = {
     "password": "hunter2-correct-horse",
     "csrf_token": "csrf-bait-value",
