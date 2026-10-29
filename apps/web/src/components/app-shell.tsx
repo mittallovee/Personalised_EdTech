@@ -37,7 +37,15 @@ function showsCoachings(me: Me): boolean {
 }
 
 export type Page =
-  "home" | "users" | "coachings" | "audit" | "syllabus" | "concepts" | "exams-sources" | "profile";
+  | "home"
+  | "users"
+  | "coachings"
+  | "audit"
+  | "syllabus"
+  | "concepts"
+  | "exams-sources"
+  | "import"
+  | "profile";
 
 const ITEM = "block rounded-md px-3 py-2";
 const CURRENT = "bg-zinc-100 font-medium dark:bg-zinc-800";
@@ -167,6 +175,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "exams-sources" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Exams &amp; sources
+                </Link>
+              </li>
+            )}
+            {showsUsers(me) && (
+              <li>
+                <Link
+                  href="/admin/syllabus-import"
+                  aria-current={current === "import" ? "page" : undefined}
+                  className={`${ITEM} ${current === "import" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Bulk import
                 </Link>
               </li>
             )}
