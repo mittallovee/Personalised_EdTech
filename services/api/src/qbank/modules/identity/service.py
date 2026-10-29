@@ -13,6 +13,7 @@ from qbank.core.config import Settings
 from qbank.core.db import Database
 from qbank.core.errors import Conflict, Unauthenticated
 from qbank.core.ids import new_id
+from qbank.core.metrics import LOGIN_ATTEMPTS
 from qbank.core.security import hash_password, hash_token, new_token, verify_password
 from qbank.core.tenancy import NO_CONTEXT, TenantContext, apply_tenant_context
 from qbank.modules.audit.public import record_event
@@ -135,8 +136,10 @@ def login(
                 failure = "no_active_access"
 
     if result is None:
+        LOGIN_ATTEMPTS.labels("password", "failure", failure or "unknown").inc()
         log.info("login_failed", reason=failure, user_id=str(found.user_id) if found else None)
         raise Unauthenticated(LOGIN_FAILED)
+    LOGIN_ATTEMPTS.labels("password", "success", "").inc()
     log.info("login_succeeded", user_id=str(result.principal.user_id))
     return result
 
@@ -312,7 +315,9 @@ def redeem_link(
                 request_id=request_id,
             )
     if result is None:
+        LOGIN_ATTEMPTS.labels("link", "failure", "link_invalid").inc()
         log.info("link_redeem_failed")
         raise Unauthenticated(LINK_INVALID, code="LINK_INVALID")
+    LOGIN_ATTEMPTS.labels("link", "success", "").inc()
     log.info("link_redeemed", user_id=str(result.principal.user_id), purpose=purpose)
     return result

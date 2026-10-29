@@ -7,6 +7,7 @@ from qbank.core.clientip import client_address
 from qbank.core.config import Settings
 from qbank.core.db import Database, get_database
 from qbank.core.errors import TooManyRequests
+from qbank.core.metrics import RATE_LIMITED
 from qbank.core.permissions import Grant, has_grant
 from qbank.core.ratelimit import LoginRateLimiter
 from qbank.core.security import hash_token
@@ -88,6 +89,7 @@ def login(
     client_ip = client_address(request)
     wait = limiter.check(client_ip, body.email)
     if wait:
+        RATE_LIMITED.labels("login").inc()
         raise TooManyRequests(
             "Too many sign-in attempts. Please wait and try again.", retry_after_seconds=wait
         )
@@ -123,6 +125,7 @@ def redeem_link(
     # Counted per client address and per link, like sign-in counts per address and per email.
     wait = limiter.check(client_address(request), f"link:{hash_token(body.token)}")
     if wait:
+        RATE_LIMITED.labels("link").inc()
         raise TooManyRequests(
             "Too many attempts. Please wait and try again.", retry_after_seconds=wait
         )

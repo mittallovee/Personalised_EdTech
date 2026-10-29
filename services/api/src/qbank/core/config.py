@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     app_env: AppEnv = AppEnv.LOCAL
     log_level: str = "INFO"
+    # Port for the Prometheus /metrics page (ADR-0019); 0 = off. Never published to the host.
+    metrics_port: int = Field(default=0, ge=0, le=65535)
 
     # Runtime connection: the restricted `qbank_app` role (never the table owner). See ADR-0005.
     database_url: str = Field(min_length=1)

@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
 from qbank.core.ids import new_id
+from qbank.core.metrics import JOB_DURATION, JOBS_FINISHED, org_label
 from qbank.core.tenancy import TenantContext
 
 log = structlog.get_logger("qbank.jobs")
@@ -253,6 +254,7 @@ class Worker:
                 if not completed:
                     raise _LeaseLost
         except _LeaseLost:
+            self._count(job, "lease_lost")
             log.warning("job_lease_lost", job_type=job.type, attempt=job.attempts)
         except PermanentJobError as exc:
             self._fail(job, str(exc) or type(exc).__name__, retry=False)
@@ -262,12 +264,19 @@ class Worker:
             )
             self._fail(job, f"{type(exc).__name__}: {exc}", retry=True)
         else:
+            seconds = time.perf_counter() - started
+            self._count(job, "succeeded")
+            JOB_DURATION.labels(job.type).observe(seconds)
             log.info(
                 "job_succeeded",
                 job_type=job.type,
                 attempt=job.attempts,
-                duration_ms=round((time.perf_counter() - started) * 1000, 1),
+                duration_ms=round(seconds * 1000, 1),
             )
+
+    @staticmethod
+    def _count(job: Job, outcome: str) -> None:
+        JOBS_FINISHED.labels(job.type, outcome, org_label(job.organization_id)).inc()
 
     @contextmanager
     def _lease_kept(self, job: Job) -> Iterator[None]:
@@ -309,6 +318,7 @@ class Worker:
                     "retry_in": retry_delay(job.attempts) if retry else None,
                 },
             ).scalar()
+        self._count(job, "failed" if state == "FAILED" else "retried")
         log.warning(
             "job_failed" if state == "FAILED" else "job_retry_scheduled",
             job_type=job.type,

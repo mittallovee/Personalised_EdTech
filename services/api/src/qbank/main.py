@@ -9,6 +9,7 @@ from qbank.core.config import AppEnv, Settings, get_settings
 from qbank.core.db import Database
 from qbank.core.errors import install_error_handlers
 from qbank.core.logging import configure_logging, install_request_logging
+from qbank.core.metrics import install_request_metrics, start_metrics_server, watch_pool
 from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
@@ -33,6 +34,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
     database = Database(settings.database_url)
+    watch_pool(database)
+    if settings.metrics_port:
+        start_metrics_server(settings.metrics_port)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -72,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     install_origin_check(app, settings.allowed_origins)  # added first, so it runs inside logging
     install_request_logging(app)
+    install_request_metrics(app)  # after logging: outermost, so it also counts logged 500s
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(identity_router)
