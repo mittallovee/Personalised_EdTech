@@ -24,3 +24,4 @@ Status values: `Proposed` → `Accepted` (owner approved) → `Superseded by ADR
 | [0016](./0016-question-content-format-and-renderer.md) | Question content as typed blocks, LaTeX equations, one shared renderer | Proposed |
 | [0017](./0017-backups-and-restore.md) | Backups: logical dumps with a tested restore now; managed point-in-time recovery from M7 | Proposed |
 | [0018](./0018-syllabus-import-parsing-stays-in-process.md) | The syllabus import is parsed inside the API request, with added limits; untrusted documents go to a worker | **Accepted** |
+| [0019](./0019-monitoring-stack-and-logging-rules.md) | Monitoring in practice: one log shape, never-log list, traces, metrics, opt-in local stack (extends 0010) | Proposed |
