@@ -155,6 +155,8 @@ Rules:
 - **Structured JSON logs** (structlog) with `request_id`, `job_id`, `organization_id`, `user_id`, `operation`,
   `duration_ms`, `outcome`. Never log secrets or full question content.
 - Every HTTP response carries `X-Request-ID`; jobs inherit the request ID that created them.
+- The web server (`apps/web/src/proxy.ts`) gives every call to the API an `X-Request-ID` (`web_…` when the browser sent none)
+  and a W3C `traceparent`, and logs one `request_forwarded` line, so one ID follows a request from browser to API to job.
 - **OpenTelemetry** traces for API, DB and outgoing AI calls; metrics for request rate/latency/errors,
   job queue depth/age, AI tokens/cost/errors.
 - Errors to Sentry when `SENTRY_DSN` is set.
