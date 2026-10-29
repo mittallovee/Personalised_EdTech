@@ -20,7 +20,7 @@ def build_registry() -> JobRegistry:
 
 def main() -> int:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, service="worker", environment=settings.app_env.value)
     database = Database(settings.database_url)
     worker = Worker(database, build_registry())
 
