@@ -314,6 +314,12 @@ function PreviewPanel({
           Everything in this file is already in the syllabus. There is nothing to apply.
         </p>
       )}
+      {!applied && counts.error === 0 && changes > 0 && !preview.can_apply && (
+        <p role="alert" className={`max-w-2xl ${ALERT}`}>
+          This file would add or change {changes} items, and one import can do at most 5,000. Split
+          the file into smaller files and import them one after the other. Nothing was imported.
+        </p>
+      )}
       {expired && (
         <p role="alert" className={`max-w-2xl ${ALERT}`}>
           This preview was kept too long and is gone. Upload the file again.
@@ -327,11 +333,16 @@ function PreviewPanel({
 
       <div className="flex flex-wrap items-center gap-3">
         {!applied && preview.can_apply && !confirming && !expired && (
-          <button type="button" onClick={() => setConfirming(true)} className={PRIMARY}>
+          <button
+            type="button"
+            disabled={applying}
+            onClick={() => setConfirming(true)}
+            className={PRIMARY}
+          >
             Apply the import
           </button>
         )}
-        <button type="button" onClick={onStartOver} className={BUTTON}>
+        <button type="button" onClick={onStartOver} disabled={applying} className={BUTTON}>
           {applied ? "Import another file" : "Upload a different file"}
         </button>
       </div>

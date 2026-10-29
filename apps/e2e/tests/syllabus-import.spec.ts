@@ -157,3 +157,52 @@ test("a file over 5 MB is refused before it is sent", async ({ browser, baseURL 
   await expect(page.locator("main").getByRole("alert")).toContainText("bigger than 5 MB");
   await expect(page.getByRole("button", { name: "Check the file" })).toBeDisabled();
 });
+
+test("a valid file with more than 5,000 changes says why it cannot be applied", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Import limit ${unique()}`);
+  const page = await context.newPage();
+  await openImport(page);
+
+  const lines = [
+    HEADER,
+    "CLASS,Lim,1,,,,,,,",
+    "SUBJECT,Lim > S,1,,,,,,,",
+    "CHAPTER,Lim > S > C,1,,,,,,,",
+  ];
+  for (let i = 0; i < 5000; i++) lines.push(`TOPIC,Lim > S > C > Topic ${i},${i},,,,,,,`);
+  await pick(page, "many.csv", lines.join("\r\n") + "\r\n");
+  await page.getByRole("button", { name: "Check the file" }).click();
+
+  await expect(page.getByLabel("Totals")).toContainText("5003"); // no row is wrong
+  await expect(page.getByRole("button", { name: "Apply the import" })).toHaveCount(0);
+  await expect(page.locator("main").getByRole("alert")).toContainText("5,000");
+  await expect(page.locator("main").getByRole("alert")).toContainText("Split");
+});
+
+test("while an import is being applied, another file cannot be started", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Import busy ${unique()}`);
+  const page = await context.newPage();
+  await openImport(page);
+  await pick(page, "one.csv", [HEADER, "CLASS,Busy,1,,,,,,,", ""].join("\r\n"));
+  await page.getByRole("button", { name: "Check the file" }).click();
+  await expect(page.getByRole("button", { name: "Apply the import" })).toBeVisible();
+
+  // The answer to "Apply" is slow; meanwhile the person tries to start over.
+  await page.route("**/api/v1/taxonomy/imports/*/apply", async (route) => {
+    await new Promise((r) => setTimeout(r, 2000));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Apply the import" }).click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Upload a different file" })).toBeDisabled();
+
+  // When the answer comes, the result of this import is what is shown.
+  await expect(page.getByRole("status")).toContainText("1 added");
+  await expect(page.getByRole("button", { name: "Import another file" })).toBeEnabled();
+});
