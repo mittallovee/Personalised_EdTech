@@ -20,6 +20,7 @@ from fastapi import FastAPI, Request, Response
 from qbank.core.errors import internal_error_response
 from qbank.core.ids import new_id
 from qbank.core.logredact import redact_event
+from qbank.core.telemetry import add_trace_ids
 
 REQUEST_ID_HEADER = "X-Request-ID"
 TRACEPARENT_HEADER = "traceparent"
@@ -84,6 +85,7 @@ def configure_logging(
     shared: list[Any] = [
         structlog.contextvars.merge_contextvars,
         _merge_event_context,
+        add_trace_ids,
         add_service,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,

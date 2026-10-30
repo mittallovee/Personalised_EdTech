@@ -13,6 +13,7 @@ from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
+from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
 from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
@@ -32,7 +33,9 @@ from qbank.modules.taxonomy.import_api import router as import_router
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, service="api", environment=settings.app_env.value)
+    setup_tracing(settings, "api")
     database = Database(settings.database_url)
+    instrument_database(database.engine)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -72,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     install_origin_check(app, settings.allowed_origins)  # added first, so it runs inside logging
     install_request_logging(app)
+    install_request_tracing(app)  # after logging: outermost, so log lines carry the trace ID
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(identity_router)

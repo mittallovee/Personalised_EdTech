@@ -8,6 +8,7 @@ from qbank.core.config import get_settings
 from qbank.core.db import Database
 from qbank.core.jobs import JobRegistry, Worker
 from qbank.core.logging import configure_logging
+from qbank.core.telemetry import instrument_database, setup_tracing
 from qbank.modules.health.jobs import register_jobs as register_health_jobs
 
 
@@ -21,7 +22,9 @@ def build_registry() -> JobRegistry:
 def main() -> int:
     settings = get_settings()
     configure_logging(settings.log_level, service="worker", environment=settings.app_env.value)
+    setup_tracing(settings, "worker")
     database = Database(settings.database_url)
+    instrument_database(database.engine)
     worker = Worker(database, build_registry())
 
     def request_stop(_signum: int, _frame: FrameType | None) -> None:
