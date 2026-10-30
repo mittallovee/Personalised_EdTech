@@ -75,6 +75,10 @@ services:
       # Sign in with Google is off while these are empty (docs/operations/google-login.md).
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Monitoring (ADR-0019, docs/operations/observability.md). The metrics page is reachable only
+      # inside the compose network; traces go out only when an endpoint is set (see the profile below).
+      METRICS_PORT: 9100
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -100,6 +104,8 @@ services:
       # Same settings as the api: the worker loads and validates the same configuration.
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
+      METRICS_PORT: 9101
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     stop_grace_period: 30s   # lets the current job finish on `docker compose down`
     restart: unless-stopped  # come back by itself after a crash or a PC restart
     depends_on:
@@ -116,5 +122,68 @@ services:
       api:
         condition: service_healthy
 
+  # --- Monitoring (opt-in) ---------------------------------------------------------------------
+  # Not started by a plain `docker compose up`. To turn it on, put these in the git-ignored .env:
+  #   COMPOSE_PROFILES=observability
+  #   OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+  # then `docker compose up -d`. Grafana: http://localhost:3001 (docs/operations/observability.md).
+  # Only Grafana is reachable from this PC, and only on 127.0.0.1; the rest talk inside the network.
+  # Logs and traces are kept 7 days, metrics 15 days (ADR-0019).
+  otel-collector:
+    profiles: ["observability"]
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
+    depends_on: [tempo, loki]
+
+  tempo:
+    profiles: ["observability"]
+    image: grafana/tempo:2.7.1
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./infra/observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempodata:/var/tempo
+
+  loki:
+    profiles: ["observability"]
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki.yaml"]
+    volumes:
+      - ./infra/observability/loki.yaml:/etc/loki.yaml:ro
+      - lokidata:/loki
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.1.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:11.4.0
+    environment:
+      # Local-only default like the database passwords above; set your own in .env.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-local}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./infra/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on: [prometheus, loki, tempo]
+
 volumes:
   pgdata:
+  tempodata:
+  lokidata:
+  promdata:
+  grafanadata:

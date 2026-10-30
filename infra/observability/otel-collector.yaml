@@ -1,0 +1,41 @@
+# OpenTelemetry Collector: the one address the API and worker send traces and logs to (ADR-0019).
+# Swapping Tempo or Loki for a cloud's monitoring later changes only this file, not the app.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  # Safety net on top of the app's own care: URLs can carry query strings, so drop them here too.
+  attributes/no_urls:
+    actions:
+      - {key: http.url, action: delete}
+      - {key: http.target, action: delete}
+      - {key: url.full, action: delete}
+      - {key: url.query, action: delete}
+  batch: {}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/no_urls, batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]
