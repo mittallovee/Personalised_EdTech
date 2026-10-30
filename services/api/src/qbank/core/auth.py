@@ -14,6 +14,7 @@ from fastapi import Depends, Request, Security
 from fastapi.security import APIKeyCookie
 
 from qbank.core.errors import Unauthenticated
+from qbank.core.logging import add_log_context
 from qbank.core.tenancy import TenantContext
 
 # How the web app signs in (style guide §7). Part of the API contract, so defined here.
@@ -68,6 +69,11 @@ def get_optional_principal(request: Request) -> Principal | None:
         if principal is not None:
             break
     request.state.principal = principal
+    if principal is not None:
+        add_log_context(
+            user_id=str(principal.user_id),
+            organization_id=str(principal.tenant_context.organization_id or "") or None,
+        )
     return principal
 
 

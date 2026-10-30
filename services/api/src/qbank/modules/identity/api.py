@@ -1,5 +1,6 @@
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from qbank.core.auth import SESSION_COOKIE, CurrentPrincipal, Principal
@@ -21,6 +22,7 @@ from qbank.modules.identity.schemas import (
 )
 
 router = APIRouter(prefix="/api/v1", tags=["identity"])
+log = structlog.get_logger("qbank.identity")
 
 
 def get_settings_from_app(request: Request) -> Settings:
@@ -88,10 +90,13 @@ def login(
     client_ip = client_address(request)
     wait = limiter.check(client_ip, body.email)
     if wait:
+        log.info("rate_limited", scope="login", client_ip=client_ip, retry_after_seconds=wait)
         raise TooManyRequests(
             "Too many sign-in attempts. Please wait and try again.", retry_after_seconds=wait
         )
-    result = service.login(database, settings, body.email, body.password, request.state.request_id)
+    result = service.login(
+        database, settings, body.email, body.password, request.state.request_id, client_ip
+    )
     set_auth_cookies(response, settings, result)
     return LoginResponse(user=to_me(result.principal), csrf_token=result.csrf_token)
 
@@ -121,8 +126,10 @@ def redeem_link(
 ) -> LoginResponse:
     limiter: LoginRateLimiter = request.app.state.login_limiter
     # Counted per client address and per link, like sign-in counts per address and per email.
-    wait = limiter.check(client_address(request), f"link:{hash_token(body.token)}")
+    client_ip = client_address(request)
+    wait = limiter.check(client_ip, f"link:{hash_token(body.token)}")
     if wait:
+        log.info("rate_limited", scope="link", client_ip=client_ip, retry_after_seconds=wait)
         raise TooManyRequests(
             "Too many attempts. Please wait and try again.", retry_after_seconds=wait
         )

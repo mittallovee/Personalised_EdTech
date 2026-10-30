@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
 from qbank.core.ids import new_id
+from qbank.core.logging import begin_log_context, end_log_context
 from qbank.core.tenancy import TenantContext
 
 log = structlog.get_logger("qbank.jobs")
@@ -209,11 +210,16 @@ class Worker:
         job = self._claim()
         if job is None:
             return False
-        structlog.contextvars.bind_contextvars(job_id=str(job.id), request_id=job.request_id)
+        begin_log_context(
+            job_id=str(job.id),
+            request_id=job.request_id,
+            organization_id=str(job.organization_id) if job.organization_id else None,
+            user_id=str(job.created_by) if job.created_by else None,
+        )
         try:
             self._run(job)
         finally:
-            structlog.contextvars.unbind_contextvars("job_id", "request_id")
+            end_log_context()
         return True
 
     def _claim(self) -> Job | None:

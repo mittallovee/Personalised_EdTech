@@ -54,12 +54,7 @@ def install_origin_check(app: FastAPI, allowed_origins: Iterable[str]) -> None:
         if request.method not in SAFE_METHODS:
             origin = request_origin(request)
             if origin is not None and origin not in allowed:
-                log.warning(
-                    "origin_refused",
-                    origin=origin[:200],
-                    method=request.method,
-                    path=request.url.path,
-                )
+                log.warning("origin_refused", origin=origin[:200], method=request.method)
                 body = error_body(
                     request,
                     "ORIGIN_NOT_ALLOWED",
