@@ -98,7 +98,12 @@ def load_principal(
 
 
 def login(
-    database: Database, settings: Settings, email: str, password: str, request_id: str | None
+    database: Database,
+    settings: Settings,
+    email: str,
+    password: str,
+    request_id: str | None,
+    client_ip: str | None = None,
 ) -> LoginResult:
     """Check the password and start a session. Every failure raises the same ``Unauthenticated``.
 
@@ -137,7 +142,12 @@ def login(
 
     if result is None:
         LOGIN_ATTEMPTS.labels("password", "failure", failure or "unknown").inc()
-        log.info("login_failed", reason=failure, user_id=str(found.user_id) if found else None)
+        log.info(
+            "login_failed",
+            reason=failure,
+            user_id=str(found.user_id) if found else None,
+            client_ip=client_ip,  # security event: the one place an address is logged (ADR-0019)
+        )
         raise Unauthenticated(LOGIN_FAILED)
     LOGIN_ATTEMPTS.labels("password", "success", "").inc()
     log.info("login_succeeded", user_id=str(result.principal.user_id))

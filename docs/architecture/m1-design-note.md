@@ -147,8 +147,7 @@ See ADR-0007's implementation note.
 ## 10. Observability (M1)
 
 - structlog JSON logs for API and worker; `X-Request-ID` middleware; request ID passed into jobs.
-- OpenTelemetry instrumentation wired, exporting only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
-- Sentry initialised only when `SENTRY_DSN` is set.
+- OpenTelemetry and Sentry were planned here but are **not built yet**; K-06 delivers them as decided in [ADR-0019](adr/0019-monitoring-stack-and-logging-rules.md).
 
 ## 11. CI (`.github/workflows/ci.yml`)
 

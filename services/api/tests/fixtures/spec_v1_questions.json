@@ -1,0 +1,752 @@
+{
+  "_about": "Copied from docs/spec-v1/docs/QUESTION_SCHEMA_EXAMPLES.md (reference input, never edited). Synthetic content.",
+  "SCQ": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "SCQ",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What is 2 + 3?"
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "SCQ",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What is 2 + 3?"
+        }
+      ],
+      "answer": {
+        "option_id": "B"
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      },
+      "options": [
+        {
+          "id": "A",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "4"
+            }
+          ]
+        },
+        {
+          "id": "B",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "5"
+            }
+          ]
+        },
+        {
+          "id": "C",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "6"
+            }
+          ]
+        },
+        {
+          "id": "D",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "7"
+            }
+          ]
+        }
+      ]
+    },
+    "invalid_answer": {
+      "answer": {
+        "option_id": "Z"
+      }
+    }
+  },
+  "MULTI_CORRECT": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "MULTI_CORRECT",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Which listed numbers are prime?"
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "MULTI_CORRECT",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Which listed numbers are prime?"
+        }
+      ],
+      "answer": {
+        "option_ids": [
+          "A",
+          "C"
+        ]
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      },
+      "options": [
+        {
+          "id": "A",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "2"
+            }
+          ]
+        },
+        {
+          "id": "B",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "4"
+            }
+          ]
+        },
+        {
+          "id": "C",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "3"
+            }
+          ]
+        },
+        {
+          "id": "D",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "6"
+            }
+          ]
+        }
+      ]
+    },
+    "invalid_answer": {
+      "answer": {
+        "option_ids": []
+      }
+    }
+  },
+  "INTEGER": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "INTEGER",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What is 499 + 500?"
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "INTEGER",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What is 499 + 500?"
+        }
+      ],
+      "answer": {
+        "value": 999
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      }
+    },
+    "invalid_answer": {
+      "answer": {
+        "value": 1000
+      }
+    }
+  },
+  "SINGLE_DIGIT": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "SINGLE_DIGIT",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What is 2 + 3?"
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "SINGLE_DIGIT",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What is 2 + 3?"
+        }
+      ],
+      "answer": {
+        "value": 5
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      }
+    },
+    "invalid_answer": {
+      "answer": {
+        "value": 10
+      }
+    }
+  },
+  "NUMERICAL": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "NUMERICAL",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "A measurement is accepted between 9.79 and 9.81 inclusive. Give its numerical value."
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "NUMERICAL",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "A measurement is accepted between 9.79 and 9.81 inclusive. Give its numerical value."
+        }
+      ],
+      "answer": {
+        "mode": "range",
+        "lower": "9.79",
+        "upper": "9.81"
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      }
+    },
+    "invalid_answer": {
+      "answer": {
+        "mode": "exact",
+        "value": "9.805"
+      }
+    }
+  },
+  "MATCHING": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "MATCHING",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Match each expression to every equal value in the right list."
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "MATCHING",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Match each expression to every equal value in the right list."
+        }
+      ],
+      "answer": {
+        "option_id": "A"
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      },
+      "left": [
+        {
+          "id": "L1",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "1 + 1"
+            }
+          ]
+        },
+        {
+          "id": "L2",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "1 + 2"
+            }
+          ]
+        }
+      ],
+      "right": [
+        {
+          "id": "R1",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "2"
+            }
+          ]
+        },
+        {
+          "id": "R2",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "3"
+            }
+          ]
+        },
+        {
+          "id": "R3",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "2.0"
+            }
+          ]
+        },
+        {
+          "id": "R4",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "5"
+            }
+          ]
+        }
+      ],
+      "options": [
+        {
+          "id": "A",
+          "mapping": {
+            "L1": [
+              "R1",
+              "R3"
+            ],
+            "L2": [
+              "R2"
+            ]
+          }
+        },
+        {
+          "id": "B",
+          "mapping": {
+            "L1": [
+              "R2"
+            ],
+            "L2": [
+              "R1"
+            ]
+          }
+        },
+        {
+          "id": "C",
+          "mapping": {
+            "L1": [
+              "R1"
+            ],
+            "L2": [
+              "R1"
+            ]
+          }
+        },
+        {
+          "id": "D",
+          "mapping": {
+            "L1": [
+              "R4"
+            ],
+            "L2": [
+              "R3"
+            ]
+          }
+        }
+      ]
+    },
+    "invalid_answer": {
+      "answer": {
+        "option_id": "C"
+      }
+    }
+  },
+  "ASSERTION_REASON": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "ASSERTION_REASON",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Select the correct interpretation."
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "ASSERTION_REASON",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Select the correct interpretation."
+        }
+      ],
+      "answer": {
+        "option_id": "A"
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      },
+      "assertion": [
+        {
+          "kind": "paragraph",
+          "text": "2 is even."
+        }
+      ],
+      "reason": [
+        {
+          "kind": "paragraph",
+          "text": "2 is divisible by 2."
+        }
+      ],
+      "options": [
+        {
+          "id": "A",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "Both are true and the reason explains the assertion."
+            }
+          ]
+        },
+        {
+          "id": "B",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "Both are true but the reason does not explain the assertion."
+            }
+          ]
+        },
+        {
+          "id": "C",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "Only the assertion is true."
+            }
+          ]
+        },
+        {
+          "id": "D",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "Only the reason is true."
+            }
+          ]
+        }
+      ]
+    },
+    "invalid_answer": {
+      "answer": {
+        "option_id": "E"
+      }
+    }
+  },
+  "MULTIPLE_STATEMENT": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "MULTIPLE_STATEMENT",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Choose the true statements."
+        }
+      ]
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "MULTIPLE_STATEMENT",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "Choose the true statements."
+        }
+      ],
+      "answer": {
+        "option_id": "A"
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      },
+      "statements": [
+        {
+          "id": "S1",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "2 is prime."
+            }
+          ]
+        },
+        {
+          "id": "S2",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "4 is prime."
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "6 is even."
+            }
+          ]
+        }
+      ],
+      "options": [
+        {
+          "id": "A",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "S1 and S3 only"
+            }
+          ]
+        },
+        {
+          "id": "B",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "S1 and S2 only"
+            }
+          ]
+        },
+        {
+          "id": "C",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "S2 and S3 only"
+            }
+          ]
+        },
+        {
+          "id": "D",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "All three"
+            }
+          ]
+        }
+      ]
+    },
+    "invalid_answer": {
+      "answer": {
+        "option_ids": [
+          "A",
+          "B"
+        ]
+      }
+    }
+  },
+  "PASSAGE_CHILD": {
+    "draft": {
+      "schema_version": 1,
+      "question_type": "SCQ",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What distance is travelled?"
+        }
+      ],
+      "context": {
+        "passage_revision_id": "00000000-0000-4000-8000-00000000001e",
+        "ordinal": 1
+      }
+    },
+    "ready": {
+      "schema_version": 1,
+      "question_type": "SCQ",
+      "language": "en",
+      "stem": [
+        {
+          "kind": "paragraph",
+          "text": "What distance is travelled?"
+        }
+      ],
+      "answer": {
+        "option_id": "C"
+      },
+      "metadata": {
+        "class_id": "00000000-0000-4000-8000-000000000001",
+        "subject_id": "00000000-0000-4000-8000-000000000002",
+        "chapter_id": "00000000-0000-4000-8000-000000000003",
+        "topic_id": "00000000-0000-4000-8000-000000000004",
+        "subtopic_id": null,
+        "primary_concept_id": "00000000-0000-4000-8000-000000000005",
+        "secondary_concept_ids": [],
+        "difficulty": 4,
+        "bloom_level": "APPLY",
+        "is_pyq": false
+      },
+      "options": [
+        {
+          "id": "A",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "2 m"
+            }
+          ]
+        },
+        {
+          "id": "B",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "3 m"
+            }
+          ]
+        },
+        {
+          "id": "C",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "6 m"
+            }
+          ]
+        },
+        {
+          "id": "D",
+          "content": [
+            {
+              "kind": "paragraph",
+              "text": "9 m"
+            }
+          ]
+        }
+      ],
+      "context": {
+        "passage_revision_id": "00000000-0000-4000-8000-00000000001e",
+        "ordinal": 1
+      }
+    },
+    "invalid_answer": {
+      "answer": {
+        "option_id": "Z"
+      }
+    }
+  }
+}

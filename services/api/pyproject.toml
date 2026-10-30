@@ -82,6 +82,7 @@ modules = [
     "qbank.modules.health",
     "qbank.modules.identity",
     "qbank.modules.organizations",
+    "qbank.modules.questions",
     "qbank.modules.taxonomy",
 ]
 ignore_imports = [

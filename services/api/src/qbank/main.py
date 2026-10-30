@@ -32,7 +32,7 @@ from qbank.modules.taxonomy.import_api import router as import_router
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, service="api", environment=settings.app_env.value)
     database = Database(settings.database_url)
     watch_pool(database)
     if settings.metrics_port:
