@@ -3,9 +3,8 @@
 ``validate_content`` never raises: whatever it is given, the answer is a list of findings, so an
 incomplete or mistaken draft can always be saved and the person sees what to fix.
 
-This pull request checks the envelope, the blocks, and the formats SCQ, multiple correct, integer,
-single digit and numerical. The parts of matching, assertion-reason and multiple-statement
-questions, the metadata and the passage context are checked in the next pull request.
+This checks the envelope, the blocks, all eight concrete formats and the passage context. The
+metadata is checked in the next pull request.
 """
 
 import json
@@ -20,6 +19,13 @@ from qbank.modules.questions.answers import (
 )
 from qbank.modules.questions.blocks import as_dict, check_blocks, has_content
 from qbank.modules.questions.findings import Finding, Findings, at_key
+from qbank.modules.questions.formats import (
+    check_context,
+    check_correct_mapping,
+    check_items,
+    check_mapping_options,
+    check_text_part,
+)
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 
 SCHEMA_VERSION = 1
@@ -149,6 +155,7 @@ def _check_envelope(obj: dict[str, object], rules: Rules, out: Findings) -> str 
     video = obj.get("video_solution_url")
     if video is not None:
         _check_video_url(video, out)
+    check_context(obj.get("context"), out)
     return known
 
 
@@ -170,15 +177,40 @@ def _check_video_url(video: object, out: Findings) -> None:
 
 def _check_type(question_type: str, obj: dict[str, object], rules: Rules, out: Findings) -> None:
     option_ids: list[str] | None = None
+    mappings: dict[str, dict[str, list[str]]] = {}
     if question_type in (SCQ, MULTI_CORRECT):
         option_ids = check_options(obj, rules, out)
+    elif question_type == ASSERTION_REASON:
+        check_text_part(obj, "assertion", rules, out)
+        check_text_part(obj, "reason", rules, out)
+        option_ids = check_options(obj, rules, out)
+    elif question_type == MULTIPLE_STATEMENT:
+        option_ids = check_options(obj, rules, out)
+        check_items(
+            obj,
+            "statements",
+            rules.statements_min,
+            rules.statements_max,
+            "statements",
+            rules,
+            out,
+            set(option_ids or []),
+        )
+    elif question_type == MATCHING:
+        taken: set[str] = set()
+        low, high = rules.matching_min_items, rules.matching_max_items
+        left = check_items(obj, "left", low, high, "left items", rules, out, taken)
+        right = check_items(obj, "right", low, high, "right items", rules, out, taken)
+        option_ids, mappings = check_mapping_options(obj, left, right, taken, rules, out)
 
     answer = obj.get("answer")
     if answer is None:
         out.incomplete("answer", "ANSWER_MISSING", "Choose the correct answer.")
         return
-    if question_type == SCQ:
+    if question_type in (SCQ, ASSERTION_REASON, MULTIPLE_STATEMENT, MATCHING):
         check_scq_answer(answer, option_ids, out)
+        if question_type == MATCHING:
+            check_correct_mapping(answer, mappings, out)
     elif question_type == MULTI_CORRECT:
         check_multi_answer(answer, option_ids, out)
     elif question_type == INTEGER:
@@ -187,4 +219,3 @@ def _check_type(question_type: str, obj: dict[str, object], rules: Rules, out: F
         check_whole_number_answer(answer, rules.digit_min, rules.digit_max, "single-digit", out)
     elif question_type == NUMERICAL:
         check_numerical_answer(answer, rules, out)
-    # MATCHING, ASSERTION_REASON and MULTIPLE_STATEMENT: checked in the next pull request.

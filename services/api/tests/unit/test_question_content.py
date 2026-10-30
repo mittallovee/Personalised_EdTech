@@ -1,4 +1,4 @@
-"""T23 (part 1): the checks on a question's content: envelope, blocks, and the first five formats.
+"""T23: the checks on a question's content: envelope, blocks, the eight formats, the context.
 
 The fixtures are spec-v1's own examples (copied to ``tests/fixtures``): for each format the
 incomplete draft saves with no error, the content-ready fixture has no findings at all, and the
@@ -19,7 +19,17 @@ from qbank.modules.questions.public import DEFAULT_RULES, Rules, validate_conten
 FIXTURES: dict[str, Any] = json.loads(
     (Path(__file__).parent.parent / "fixtures" / "spec_v1_questions.json").read_text("utf-8")
 )
-FIRST_FIVE = ["SCQ", "MULTI_CORRECT", "INTEGER", "SINGLE_DIGIT", "NUMERICAL"]
+ALL_KINDS = [
+    "SCQ",
+    "MULTI_CORRECT",
+    "INTEGER",
+    "SINGLE_DIGIT",
+    "NUMERICAL",
+    "MATCHING",
+    "ASSERTION_REASON",
+    "MULTIPLE_STATEMENT",
+    "PASSAGE_CHILD",
+]
 
 
 def codes(content: object, rules: Rules = DEFAULT_RULES) -> list[str]:
@@ -33,14 +43,14 @@ def ready(kind: str) -> dict[str, Any]:
 # --- spec-v1 fixtures ----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", FIRST_FIVE)
+@pytest.mark.parametrize("kind", ALL_KINDS)
 def test_the_incomplete_draft_saves_with_no_error(kind: str) -> None:
     findings = validate_content(FIXTURES[kind]["draft"])
     assert findings, "an incomplete draft should say what is still missing"
     assert [f for f in findings if f.level == Level.ERROR] == []
 
 
-@pytest.mark.parametrize("kind", FIRST_FIVE)
+@pytest.mark.parametrize("kind", ALL_KINDS)
 def test_the_content_ready_fixture_has_no_findings(kind: str) -> None:
     assert validate_content(FIXTURES[kind]["ready"]) == []
 
@@ -53,6 +63,10 @@ def test_the_content_ready_fixture_has_no_findings(kind: str) -> None:
         ("INTEGER", ["ANSWER_OUT_OF_RANGE"]),
         ("SINGLE_DIGIT", ["ANSWER_OUT_OF_RANGE"]),
         ("NUMERICAL", ["NUMERIC_TOO_MANY_DECIMALS"]),
+        ("MATCHING", ["ANSWER_MAPPING_SHARES_RIGHT"]),
+        ("ASSERTION_REASON", ["ANSWER_OPTION_UNKNOWN"]),
+        ("MULTIPLE_STATEMENT", ["ANSWER_SHAPE"]),
+        ("PASSAGE_CHILD", ["ANSWER_OPTION_UNKNOWN"]),
     ],
 )
 def test_the_invalid_replacement_answer_gives_exactly_the_named_finding(
@@ -433,3 +447,138 @@ def test_a_range_needs_both_ends() -> None:
 def test_numerical_answer_shapes(answer: object, expected: list[str]) -> None:
     found = codes(numerical(answer))
     assert expected[0] in found
+
+
+# --- matching ------------------------------------------------------------------------------------
+
+
+def matching() -> dict[str, Any]:
+    return ready("MATCHING")
+
+
+def test_matching_counts_ids_and_mappings() -> None:
+    content = matching()
+    content["left"] = content["left"][:1]
+    [first, *_] = validate_content(content)
+    assert (first.code, first.level) == ("LEFT_COUNT", Level.INCOMPLETE)
+    content = matching()
+    content["left"] = [
+        {"id": f"L{i}", "content": [{"kind": "paragraph", "text": "x"}]} for i in range(11)
+    ]
+    assert "LEFT_COUNT" in codes(content)
+    content = matching()
+    content["right"][1]["id"] = "R1"
+    assert "ITEM_ID_DUPLICATE" in codes(content)
+    content = matching()
+    content["right"][0]["id"] = "A"  # also an option id
+    assert "ITEM_ID_DUPLICATE" in codes(content) or "OPTION_ID_DUPLICATE" in codes(content)
+
+
+def test_a_distractor_may_share_a_right_item_but_the_correct_mapping_may_not() -> None:
+    content = matching()  # option C shares R1; the answer is A
+    assert codes(content) == []
+    content["answer"] = {"option_id": "C"}
+    assert codes(content) == ["ANSWER_MAPPING_SHARES_RIGHT"]
+    content["answer"] = {"option_id": "D"}
+    assert codes(content) == []
+
+
+def test_mapping_problems_are_named() -> None:
+    cases = [
+        ({"L1": ["R9"], "L2": ["R2"]}, "MAPPING_RIGHT_UNKNOWN"),
+        ({"L9": ["R1"], "L1": ["R1"], "L2": ["R2"]}, "MAPPING_LEFT_UNKNOWN"),
+        ({"L1": ["R1", "R1"], "L2": ["R2"]}, "MAPPING_RIGHT_DUPLICATE"),
+        ({"L1": [], "L2": ["R2"]}, "MAPPING_EMPTY"),
+        ({"L1": "R1", "L2": ["R2"]}, "MAPPING_NOT_LIST"),
+        ({"L1": ["R1"]}, "MAPPING_LEFT_MISSING"),
+    ]
+    for mapping, expected in cases:
+        content = matching()
+        content["options"][1]["mapping"] = mapping
+        assert expected in codes(content), mapping
+    content = matching()
+    del content["options"][1]["mapping"]
+    assert "MAPPING_MISSING" in codes(content)
+
+
+def test_matching_unused_right_items_are_fine() -> None:
+    content = matching()
+    assert "R4" not in str(content["options"][0]["mapping"])  # option A leaves R4 unused
+    assert codes(content) == []
+
+
+# --- assertion-reason and multiple statement -----------------------------------------------------
+
+
+def test_assertion_and_reason_are_needed() -> None:
+    content = ready("ASSERTION_REASON")
+    del content["assertion"]
+    assert codes(content) == ["ASSERTION_MISSING"]
+    content = ready("ASSERTION_REASON")
+    content["reason"] = [{"kind": "paragraph", "text": " "}]
+    assert codes(content) == ["PARAGRAPH_EMPTY", "REASON_MISSING"]
+    content = ready("ASSERTION_REASON")
+    content["options"][1]["content"][0]["text"] = "Both are true but unrelated."
+    assert codes(content) == []  # the wording of the options is the author's
+
+
+def test_assertion_reason_answer_is_one_option() -> None:
+    content = ready("ASSERTION_REASON")
+    content["answer"] = {"option_ids": ["A"]}
+    assert codes(content) == ["ANSWER_SHAPE"]
+
+
+def test_multiple_statement_counts_and_ids() -> None:
+    content = ready("MULTIPLE_STATEMENT")
+    content["statements"] = content["statements"][:1]
+    assert codes(content) == ["STATEMENTS_COUNT"]
+    content = ready("MULTIPLE_STATEMENT")
+    content["statements"] = [
+        {"id": f"S{i}", "content": [{"kind": "paragraph", "text": "x"}]} for i in range(11)
+    ]
+    assert "STATEMENTS_COUNT" in codes(content)
+    content = ready("MULTIPLE_STATEMENT")
+    content["statements"][0]["id"] = "A"  # an option id
+    assert codes(content) == ["ITEM_ID_DUPLICATE"]
+    content = ready("MULTIPLE_STATEMENT")
+    del content["statements"]
+    assert codes(content) == ["STATEMENTS_MISSING"]
+
+
+def test_a_changed_count_rule_is_applied() -> None:
+    content = ready("MULTIPLE_STATEMENT")
+    content["statements"] = content["statements"][:2]
+    assert codes(content, replace(DEFAULT_RULES, statements_min=3)) == ["STATEMENTS_COUNT"]
+
+
+# --- the passage context -------------------------------------------------------------------------
+
+PASSAGE = "00000000-0000-4000-8000-00000000001e"
+
+
+def child(context: object) -> dict[str, Any]:
+    content = ready("PASSAGE_CHILD")
+    content["context"] = context
+    return content
+
+
+def test_a_passage_child_names_its_passage_revision_and_order() -> None:
+    assert codes(child({"passage_revision_id": PASSAGE, "ordinal": 2})) == []
+    assert codes(child({"ordinal": 1})) == ["CONTEXT_PASSAGE_MISSING"]
+    assert codes(child({"passage_revision_id": PASSAGE})) == ["CONTEXT_ORDINAL_MISSING"]
+    assert codes(child({"passage_revision_id": "x", "ordinal": 1})) == ["CONTEXT_PASSAGE_INVALID"]
+    for bad in (0, -1, 1001, 1.5, "1", True):
+        assert codes(child({"passage_revision_id": PASSAGE, "ordinal": bad})) == [
+            "CONTEXT_ORDINAL_INVALID"
+        ], bad
+    assert codes(child("p")) == ["CONTEXT_NOT_OBJECT"]
+    assert codes(child({"passage_revision_id": PASSAGE, "ordinal": 1, "nested": {}})) == [
+        "UNKNOWN_FIELD"
+    ]
+
+
+def test_every_concrete_format_can_be_a_passage_child() -> None:
+    for kind in ALL_KINDS[:-1]:
+        content = ready(kind)
+        content["context"] = {"passage_revision_id": PASSAGE, "ordinal": 1}
+        assert codes(content) == [], kind

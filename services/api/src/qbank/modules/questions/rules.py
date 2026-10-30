@@ -19,6 +19,10 @@ class Rules:
     list_items: int = 50
     # What an answer may be.
     option_count: int = 4
+    matching_min_items: int = 2
+    matching_max_items: int = 10
+    statements_min: int = 2
+    statements_max: int = 10
     integer_min: int = 0
     integer_max: int = 999
     digit_min: int = 0
