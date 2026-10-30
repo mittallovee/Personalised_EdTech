@@ -49,7 +49,17 @@ PROP = settings(
 FIXTURES: dict[str, Any] = json.loads(
     (Path(__file__).parent.parent / "fixtures" / "spec_v1_questions.json").read_text("utf-8")
 )
-FIRST_FIVE = ["SCQ", "MULTI_CORRECT", "INTEGER", "SINGLE_DIGIT", "NUMERICAL"]
+ALL_KINDS = [
+    "SCQ",
+    "MULTI_CORRECT",
+    "INTEGER",
+    "SINGLE_DIGIT",
+    "NUMERICAL",
+    "MATCHING",
+    "ASSERTION_REASON",
+    "MULTIPLE_STATEMENT",
+    "PASSAGE_CHILD",
+]
 
 JSON_VALUES = st.recursive(
     st.none()
@@ -100,9 +110,23 @@ def prop_arbitrary_values_never_raise(value: object) -> None:
 
 @PROP
 @given(
-    st.sampled_from(FIRST_FIVE),
+    st.sampled_from(ALL_KINDS),
     st.sampled_from(
-        ["stem", "options", "answer", "language", "question_type", "solution", "extra"]
+        [
+            "stem",
+            "options",
+            "answer",
+            "language",
+            "question_type",
+            "solution",
+            "left",
+            "right",
+            "statements",
+            "assertion",
+            "reason",
+            "context",
+            "extra",
+        ]
     ),
     JSON_VALUES,
 )
@@ -162,6 +186,20 @@ def prop_a_range_is_accepted_exactly_when_lower_is_not_above_upper(
 
 
 @PROP
+@given(
+    st.sets(st.sampled_from(["R1", "R2", "R3", "R4"]), min_size=1),
+    st.sets(st.sampled_from(["R1", "R2", "R3", "R4"]), min_size=1),
+)
+def prop_a_shared_right_item_in_the_correct_mapping_is_flagged_exactly(
+    first: set[str], second: set[str]
+) -> None:
+    content = copy.deepcopy(FIXTURES["MATCHING"]["ready"])  # the answer is option A
+    content["options"][0]["mapping"] = {"L1": sorted(first), "L2": sorted(second)}
+    shares = bool(first & second)
+    assert codes(content) == (["ANSWER_MAPPING_SHARES_RIGHT"] if shares else [])
+
+
+@PROP
 @given(st.permutations(range(4)))
 def prop_option_order_does_not_change_the_findings(order: list[int]) -> None:
     content = copy.deepcopy(FIXTURES["SCQ"]["ready"])
@@ -201,6 +239,10 @@ def test_extra_decimals_are_flagged_and_never_rounded() -> None:
 
 def test_ranges_follow_lower_not_above_upper() -> None:
     prop_a_range_is_accepted_exactly_when_lower_is_not_above_upper()
+
+
+def test_a_shared_right_item_in_the_correct_mapping_is_flagged() -> None:
+    prop_a_shared_right_item_in_the_correct_mapping_is_flagged_exactly()
 
 
 def test_option_order_does_not_change_the_findings() -> None:

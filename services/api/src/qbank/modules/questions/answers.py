@@ -30,6 +30,15 @@ def is_whole_number(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def check_option_count(options: list[object], rules: Rules, out: Findings) -> None:
+    """Exactly four options: fewer is still being written, more is a mistake."""
+    message = f"This needs exactly {rules.option_count} options; it has {len(options)}."
+    if len(options) < rules.option_count:
+        out.incomplete("options", "OPTIONS_COUNT", message)
+    elif len(options) > rules.option_count:
+        out.error("options", "OPTIONS_COUNT", message)
+
+
 def check_options(content: dict[str, object], rules: Rules, out: Findings) -> list[str] | None:
     """Check the four options of an SCQ or multiple-correct question.
 
@@ -45,18 +54,7 @@ def check_options(content: dict[str, object], rules: Rules, out: Findings) -> li
     if not isinstance(options, list):
         out.error("options", "OPTIONS_NOT_LIST", "The options must be a list.")
         return None
-    if len(options) < rules.option_count:
-        out.incomplete(
-            "options",
-            "OPTIONS_COUNT",
-            f"This needs exactly {rules.option_count} options; it has {len(options)}.",
-        )
-    elif len(options) > rules.option_count:
-        out.error(
-            "options",
-            "OPTIONS_COUNT",
-            f"This needs exactly {rules.option_count} options; it has {len(options)}.",
-        )
+    check_option_count(options, rules, out)
     ids: list[str] = []
     for index, option in enumerate(options[: rules.option_count + 1]):
         where = at_index("options", index)
@@ -103,6 +101,13 @@ def check_scq_answer(answer: object, option_ids: list[str] | None, out: Findings
     obj = as_dict(answer)
     if obj is None:
         out.error("answer", "ANSWER_SHAPE", 'The answer must look like {"option_id": "B"}.')
+        return
+    if "option_ids" in obj:
+        out.error(
+            "answer",
+            "ANSWER_SHAPE",
+            'This format has exactly one correct option: write {"option_id": "B"}, not a set.',
+        )
         return
     check_answer_fields(
         obj, frozenset({"option_id"}), out, "A single-choice answer has no '{key}'."
