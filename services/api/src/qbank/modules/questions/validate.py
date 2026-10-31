@@ -3,8 +3,8 @@
 ``validate_content`` never raises: whatever it is given, the answer is a list of findings, so an
 incomplete or mistaken draft can always be saved and the person sees what to fix.
 
-This checks the envelope, the blocks, all eight concrete formats and the passage context. The
-metadata is checked in the next pull request.
+This checks the envelope, the blocks, all eight concrete formats, the passage context and the
+metadata's shape. Whether the metadata's ids exist in the catalogue is checked with the database.
 """
 
 import json
@@ -26,6 +26,7 @@ from qbank.modules.questions.formats import (
     check_mapping_options,
     check_text_part,
 )
+from qbank.modules.questions.metadata import check_metadata
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 
 SCHEMA_VERSION = 1
@@ -156,6 +157,7 @@ def _check_envelope(obj: dict[str, object], rules: Rules, out: Findings) -> str 
     if video is not None:
         _check_video_url(video, out)
     check_context(obj.get("context"), out)
+    check_metadata(obj.get("metadata"), out)
     return known
 
 

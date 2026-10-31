@@ -78,8 +78,12 @@ def test_the_invalid_replacement_answer_gives_exactly_the_named_finding(
 
 
 def test_the_draft_names_what_is_missing() -> None:
-    assert codes(FIXTURES["SCQ"]["draft"]) == ["OPTIONS_MISSING", "ANSWER_MISSING"]
-    assert codes(FIXTURES["INTEGER"]["draft"]) == ["ANSWER_MISSING"]
+    assert codes(FIXTURES["SCQ"]["draft"]) == [
+        "METADATA_MISSING",
+        "OPTIONS_MISSING",
+        "ANSWER_MISSING",
+    ]
+    assert codes(FIXTURES["INTEGER"]["draft"]) == ["METADATA_MISSING", "ANSWER_MISSING"]
 
 
 # --- the envelope --------------------------------------------------------------------------------
