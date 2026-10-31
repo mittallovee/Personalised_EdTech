@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
     app_env: AppEnv = AppEnv.LOCAL
     log_level: str = "INFO"
+    # Traces go to this OTLP/HTTP address (the OpenTelemetry Collector) when set; off when empty.
+    otel_exporter_otlp_endpoint: str = ""
+    otel_traces_sample_ratio: float = Field(default=1.0, ge=0, le=1)
 
     # Runtime connection: the restricted `qbank_app` role (never the table owner). See ADR-0005.
     database_url: str = Field(min_length=1)

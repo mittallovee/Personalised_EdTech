@@ -32,6 +32,7 @@ from qbank.core.db import Database
 from qbank.core.errors import Conflict
 from qbank.core.ids import new_id
 from qbank.core.logging import begin_log_context, end_log_context
+from qbank.core.telemetry import current_traceparent, job_span, mark_error
 from qbank.core.tenancy import TenantContext
 
 log = structlog.get_logger("qbank.jobs")
@@ -50,6 +51,7 @@ class Job:
     attempts: int
     max_attempts: int
     request_id: str | None
+    traceparent: str | None = None
 
     @property
     def tenant_context(self) -> TenantContext:
@@ -88,9 +90,9 @@ class JobRegistry:
 
 _ENQUEUE = text(
     "INSERT INTO jobs (id, organization_id, created_by, type, payload, max_attempts,"
-    " idempotency_key, request_id)"
+    " idempotency_key, request_id, traceparent)"
     " VALUES (:id, :organization_id, :created_by, :type, CAST(:payload AS jsonb), :max_attempts,"
-    " :idempotency_key, :request_id)"
+    " :idempotency_key, :request_id, :traceparent)"
     " ON CONFLICT DO NOTHING"
 )
 _FIND_BY_KEY = text(
@@ -127,6 +129,7 @@ def enqueue(
             "max_attempts": max_attempts,
             "idempotency_key": idempotency_key,
             "request_id": request_id,
+            "traceparent": current_traceparent(),  # the worker continues the request's trace
         },
     )
     if idempotency_key is None:
@@ -217,7 +220,15 @@ class Worker:
             user_id=str(job.created_by) if job.created_by else None,
         )
         try:
-            self._run(job)
+            with job_span(
+                job_id=str(job.id),
+                job_type=job.type,
+                attempt=job.attempts,
+                organization_id=str(job.organization_id) if job.organization_id else None,
+                request_id=job.request_id,
+                traceparent=job.traceparent,
+            ):
+                self._run(job)
         finally:
             end_log_context()
         return True
@@ -239,6 +250,7 @@ class Worker:
             attempts=row.attempts,
             max_attempts=row.max_attempts,
             request_id=row.request_id,
+            traceparent=row.traceparent,
         )
 
     def _run(self, job: Job) -> None:
@@ -261,8 +273,10 @@ class Worker:
         except _LeaseLost:
             log.warning("job_lease_lost", job_type=job.type, attempt=job.attempts)
         except PermanentJobError as exc:
+            mark_error("PermanentJobError")
             self._fail(job, str(exc) or type(exc).__name__, retry=False)
         except Exception as exc:  # any other error: retry later if attempts remain
+            mark_error(type(exc).__name__)
             log.warning(
                 "job_attempt_failed", job_type=job.type, attempt=job.attempts, exc_info=True
             )
