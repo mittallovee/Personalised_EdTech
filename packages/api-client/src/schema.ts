@@ -1049,7 +1049,7 @@ export interface paths {
         };
         /**
          * Questions you may open, newest first
-         * @description Your own drafts; admins and people with the edit-others grant see every draft in the coaching (`mine=true` narrows it to their own). Each row carries the number of findings by level; open a question for the findings themselves.
+         * @description Your own drafts; admins and people with the edit-others grant see every draft in the coaching (`mine=true` narrows it to their own). Archived questions are left out unless you ask for `archived=true`, which lists only them. Each row carries the number of findings by level; open a question for the findings themselves.
          */
         get: operations["list_questions_api_v1_questions_get"];
         put?: never;
@@ -1178,6 +1178,46 @@ export interface paths {
         get: operations["get_revision_api_v1_questions__question_id__revisions__number__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a question
+         * @description Hides it from the default list and stops edits; the code stays reserved and the question can still be read. Its author or an admin only. Doing it twice is harmless.
+         */
+        post: operations["archive_question_api_v1_questions__question_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived question
+         * @description Its author or an admin only. Doing it twice is harmless.
+         */
+        post: operations["restore_question_api_v1_questions__question_id__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6939,6 +6979,7 @@ export interface operations {
         parameters: {
             query?: {
                 mine?: boolean;
+                archived?: boolean;
                 limit?: number;
                 cursor?: string | null;
             };
@@ -7485,6 +7526,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevisionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    archive_question_api_v1_questions__question_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_question_api_v1_questions__question_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */

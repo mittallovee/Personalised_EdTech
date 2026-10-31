@@ -14,6 +14,7 @@ from qbank.core.permissions import (
     is_allowed,
     may_access_all_drafts,
     may_access_draft,
+    may_archive_draft,
     may_manage_member,
     require,
     require_may_manage_member,
@@ -57,6 +58,7 @@ TABLE = {
     Action.VIEW_CATALOGUES: (True, True, True, False, True),
     Action.MANAGE_CATALOGUES: (False, True, True, False, True),
     Action.CREATE_QUESTIONS: (True, True, True, False, True),
+    Action.ARCHIVE_ANY_QUESTION: (False, True, True, False, True),
 }
 WHO = (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)
 
@@ -149,3 +151,14 @@ def test_who_may_open_every_draft_in_the_coaching() -> None:
     ]
     assert may_access_all_drafts(editor)
     assert not may_access_all_drafts(principal(None, grants=frozenset({"EDIT_OTHERS"})))
+
+
+def test_a_draft_is_archived_by_its_author_or_an_admin_not_by_an_editor() -> None:
+    editor = principal("FACULTY", grants=frozenset({"EDIT_OTHERS"}))
+    assert may_archive_draft(FACULTY, FACULTY.user_id)
+    assert not may_archive_draft(principal("FACULTY"), FACULTY.user_id)
+    assert not may_archive_draft(editor, FACULTY.user_id)
+    for admin in (ADMIN, OWNER, PLATFORM_ACTING):
+        assert may_archive_draft(admin, FACULTY.user_id)
+    nobody = principal(None)
+    assert not may_archive_draft(nobody, nobody.user_id)

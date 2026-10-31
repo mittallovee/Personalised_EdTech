@@ -136,7 +136,8 @@ def create_question(
     "",
     summary="Questions you may open, newest first",
     description="Your own drafts; admins and people with the edit-others grant see every draft"
-    " in the coaching (`mine=true` narrows it to their own). Each row carries the number of"
+    " in the coaching (`mine=true` narrows it to their own). Archived questions are left out"
+    " unless you ask for `archived=true`, which lists only them. Each row carries the number of"
     " findings by level; open a question for the findings themselves.",
     responses=_DENIED,
 )
@@ -144,13 +145,14 @@ def list_questions(
     principal: CurrentPrincipal,
     database: Annotated[Database, Depends(get_database)],
     mine: bool = False,
+    archived: bool = False,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     cursor: Annotated[str | None, Query(max_length=_MAX_CURSOR_LENGTH)] = None,
 ) -> QuestionPage:
     after = decode_cursor(cursor) if cursor is not None else None
     with database.transaction(principal.tenant_context) as session:
         views, has_more = service.list_questions(
-            session, principal, mine_only=mine, limit=limit, after=after
+            session, principal, mine_only=mine, archived=archived, limit=limit, after=after
         )
         data = [_summary(view) for view in views]
         next_cursor = (
@@ -290,3 +292,48 @@ def get_revision(
             content=view.revision.content,
             findings=_out(view).findings,
         )
+
+
+@router.post(
+    "/{question_id}/archive",
+    summary="Archive a question",
+    description="Hides it from the default list and stops edits; the code stays reserved and the"
+    " question can still be read. Its author or an admin only. Doing it twice is harmless.",
+    responses={**_DENIED, **_NOT_FOUND},
+)
+def archive_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.set_archived(
+            session, principal, question_id, True, request_id=request.state.request_id
+        )
+        result = _out(view)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/restore",
+    summary="Restore an archived question",
+    description="Its author or an admin only. Doing it twice is harmless.",
+    responses={**_DENIED, **_NOT_FOUND},
+)
+def restore_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.set_archived(
+            session, principal, question_id, False, request_id=request.state.request_id
+        )
+        result = _out(view)
+    response.headers["ETag"] = etag(result.revision)
+    return result
