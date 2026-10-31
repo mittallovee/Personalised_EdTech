@@ -167,6 +167,10 @@ Rules:
   or bind values). A job's `traceparent` is stored on the `jobs` row so the worker continues the request's trace.
 - **OpenTelemetry** traces for API, DB and outgoing AI calls; metrics for request rate/latency/errors,
   job queue depth/age, AI tokens/cost/errors.
+- **Metrics** ([ADR-0019](../architecture/adr/0019-monitoring-stack-and-logging-rules.md)): `core/metrics.py` serves Prometheus
+  numbers on `METRICS_PORT` (0 = off; never published to the host). Add a counter there when you add a critical path.
+  Labels must be bounded: route *templates*, outcomes, job types; `organization_id` only on import and job counters;
+  never a user ID, email or request ID.
 - Errors to Sentry when `SENTRY_DSN` is set.
 - `/health/live` (process up) and `/health/ready` (DB reachable, migrations current).
 

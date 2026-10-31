@@ -14,6 +14,7 @@ from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
 from qbank.core.errors import MalformedRequest, TooManyRequests
 from qbank.core.idempotency import IdempotencyKeyHeader
+from qbank.core.metrics import IMPORT_EVENTS, RATE_LIMITED, org_label
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
 from qbank.core.ratelimit import ConcurrencyGate, SlidingWindowLimiter
@@ -177,7 +178,10 @@ async def create_import(
     require(principal, Action.MANAGE_CATALOGUES)  # before the file is read
     limiter: SlidingWindowLimiter = request.app.state.import_upload_limiter
     wait = limiter.hit(str(principal.user_id))  # before the body is read: a refusal costs nothing
+    org = org_label(principal.tenant_context.organization_id)
     if wait > 0:
+        IMPORT_EVENTS.labels(org, "rejected_rate_limited").inc()
+        RATE_LIMITED.labels("import_upload").inc()
         raise TooManyRequests(
             "You have uploaded several files in a short time. Please wait and try again.",
             retry_after_seconds=math.ceil(wait),
@@ -188,6 +192,7 @@ async def create_import(
     def preview() -> ImportOut:
         with gate.try_enter() as entered:  # a place is held in this thread until the parse is done
             if not entered:
+                IMPORT_EVENTS.labels(org, "rejected_busy").inc()
                 raise TooManyRequests(
                     "The server is busy reading other files. Please try again in a few seconds.",
                     retry_after_seconds=_BUSY_RETRY_SECONDS,
@@ -202,6 +207,7 @@ async def create_import(
                     snapshot=snapshot,
                     idempotency_key=idempotency_key,
                 )
+                IMPORT_EVENTS.labels(org, "uploaded").inc()
                 return _out(created)
 
     result = await run_in_threadpool(preview)
@@ -280,4 +286,7 @@ def apply_import(
         applied = import_apply.apply_import(
             session, principal, import_id, request_id=request.state.request_id
         )
+        IMPORT_EVENTS.labels(
+            org_label(principal.tenant_context.organization_id), "apply_requested"
+        ).inc()
         return _out(applied)
