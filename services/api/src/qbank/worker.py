@@ -9,6 +9,7 @@ from qbank.core.db import Database
 from qbank.core.jobs import JobRegistry, Worker
 from qbank.core.logging import configure_logging
 from qbank.core.metrics import start_metrics_server, watch_pool
+from qbank.core.telemetry import instrument_database, setup_tracing
 from qbank.modules.health.jobs import register_jobs as register_health_jobs
 
 
@@ -22,7 +23,9 @@ def build_registry() -> JobRegistry:
 def main() -> int:
     settings = get_settings()
     configure_logging(settings.log_level, service="worker", environment=settings.app_env.value)
+    setup_tracing(settings, "worker")
     database = Database(settings.database_url)
+    instrument_database(database.engine)
     watch_pool(database)
     if settings.metrics_port:
         start_metrics_server(settings.metrics_port)

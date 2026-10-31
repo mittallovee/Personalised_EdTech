@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Port for the Prometheus /metrics page (ADR-0019); 0 = off. Never published to the host.
     metrics_port: int = Field(default=0, ge=0, le=65535)
+    # Traces go to this OTLP/HTTP address (the OpenTelemetry Collector) when set; off when empty.
+    otel_exporter_otlp_endpoint: str = ""
+    otel_traces_sample_ratio: float = Field(default=1.0, ge=0, le=1)
 
     # Runtime connection: the restricted `qbank_app` role (never the table owner). See ADR-0005.
     database_url: str = Field(min_length=1)

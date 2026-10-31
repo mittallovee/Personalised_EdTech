@@ -1040,6 +1040,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Questions you may open, newest first
+         * @description Your own drafts; admins and people with the edit-others grant see every draft in the coaching (`mine=true` narrows it to their own). Each row carries the number of findings by level; open a question for the findings themselves.
+         */
+        get: operations["list_questions_api_v1_questions_get"];
+        put?: never;
+        /**
+         * Start a question
+         * @description Anyone in the coaching. A draft with gaps is saved; the findings in the answer say what is missing. Send an `Idempotency-Key` so a retry after a lost response returns the same question instead of making a second one.
+         */
+        post: operations["create_question_api_v1_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/by-code/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One question, found by its code
+         * @description Typed codes are forgiven: lower case, spaces and dashes are fine.
+         */
+        get: operations["get_question_by_code_api_v1_questions_by_code__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One question
+         * @description The ETag is the working revision, for the changes that need `If-Match`.
+         */
+        get: operations["get_question_api_v1_questions__question_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1300,6 +1364,16 @@ export interface components {
             timezone: string;
             owner: components["schemas"]["NewOwner"];
         };
+        /** CreateQuestion */
+        CreateQuestion: {
+            /**
+             * Content
+             * @description The question's content (schema version 1). It may be incomplete: a draft with gaps is saved and the response lists what is missing.
+             */
+            content: {
+                [key: string]: unknown;
+            };
+        };
         /** CreateSource */
         CreateSource: {
             /**
@@ -1391,6 +1465,35 @@ export interface components {
             /** Data */
             data: components["schemas"]["ExamOut"][];
             page: components["schemas"]["PageInfo"];
+        };
+        /** FindingCounts */
+        FindingCounts: {
+            /** Error */
+            error: number;
+            /** Incomplete */
+            incomplete: number;
+            /** Warning */
+            warning: number;
+        };
+        /** FindingOut */
+        FindingOut: {
+            /**
+             * Path
+             * @description Which field, like `options[2].content[0].text`.
+             * @example answer
+             */
+            path: string;
+            /**
+             * Code
+             * @description Stable code to branch on, never the message.
+             */
+            code: string;
+            level: components["schemas"]["Level"];
+            /**
+             * Message
+             * @description Plain words for the author; the wording may change.
+             */
+            message: string;
         };
         /** GoogleActivationStartRequest */
         GoogleActivationStartRequest: {
@@ -1597,6 +1700,11 @@ export interface components {
             /** Native Name */
             native_name: string;
         };
+        /**
+         * Level
+         * @enum {string}
+         */
+        Level: "error" | "incomplete" | "warning";
         /** LiveStatus */
         LiveStatus: {
             /**
@@ -1830,6 +1938,91 @@ export interface components {
             next_cursor: string | null;
             /** Has More */
             has_more: boolean;
+        };
+        /** QuestionOut */
+        QuestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Code
+             * @description The permanent 8-character code, never reused.
+             */
+            code: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Revision
+             * @description Also the ETag of the working revision.
+             */
+            revision: number;
+            /** Archived */
+            archived: boolean;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /**
+             * Findings
+             * @description Computed from the content on every read, never stored.
+             */
+            findings: components["schemas"]["FindingOut"][];
+        };
+        /** QuestionPage */
+        QuestionPage: {
+            /** Data */
+            data: components["schemas"]["QuestionSummary"][];
+            page: components["schemas"]["PageInfo"];
+        };
+        /** QuestionSummary */
+        QuestionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Code */
+            code: string;
+            /**
+             * Question Type
+             * @description From the content; null while not chosen.
+             */
+            question_type: string | null;
+            /** Archived */
+            archived: boolean;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            finding_counts: components["schemas"]["FindingCounts"];
         };
         /** ReadyStatus */
         ReadyStatus: {
@@ -6544,6 +6737,272 @@ export interface operations {
             };
             /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_questions_api_v1_questions_get: {
+        parameters: {
+            query?: {
+                mine?: boolean;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionPage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_question_api_v1_questions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuestion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The Idempotency-Key was used for a different request */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too large (`CONTENT_TOO_LARGE`) or not plain data (`CONTENT_NOT_JSON`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_question_by_code_api_v1_questions_by_code__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a code (`INVALID_CODE`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_question_api_v1_questions__question_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -71,3 +71,27 @@ def test_the_metrics_page_is_served_on_its_own_port(test_client: TestClient) -> 
     assert "qbank_http_requests_total" in body
     assert "qbank_db_pool_connections" in body
     assert "@" not in body  # no emails; user IDs are never labels
+
+
+def test_unusual_http_methods_share_one_label(test_client: TestClient) -> None:
+    # Clients may send any method token; each new one must not create a new series for ever.
+    test_client.request("BREW", "/_test/item/1")
+    test_client.request("PURGE", "/_test/item/1")
+
+    methods = {
+        sample.labels["method"]
+        for family in REGISTRY.collect()
+        for sample in family.samples
+        if sample.name == "qbank_http_requests_total"
+    }
+    assert {"BREW", "PURGE"}.isdisjoint(methods)
+    assert sample_value("other") >= 2
+
+
+def sample_value(method: str) -> float:
+    return sum(
+        sample.value
+        for family in REGISTRY.collect()
+        for sample in family.samples
+        if sample.name == "qbank_http_requests_total" and sample.labels["method"] == method
+    )

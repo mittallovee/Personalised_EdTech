@@ -59,6 +59,15 @@ JOB_DURATION = Histogram(
 )
 
 
+# A client may send any method token; only these become label values, the rest share "other", so
+# the number of series stays fixed.
+_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+
+
+def method_label(method: str) -> str:
+    return method if method in _METHODS else "other"
+
+
 def org_label(organization_id: UUID | None) -> str:
     return str(organization_id) if organization_id else "platform"
 
@@ -74,8 +83,9 @@ def install_request_metrics(app: FastAPI) -> None:
         started = time.perf_counter()
         response = await call_next(request)
         route = str(getattr(request.scope.get("route"), "path", "unmatched"))
-        HTTP_REQUESTS.labels(request.method, route, f"{response.status_code // 100}xx").inc()
-        HTTP_LATENCY.labels(request.method, route).observe(time.perf_counter() - started)
+        method = method_label(request.method)
+        HTTP_REQUESTS.labels(method, route, f"{response.status_code // 100}xx").inc()
+        HTTP_LATENCY.labels(method, route).observe(time.perf_counter() - started)
         return response
 
 

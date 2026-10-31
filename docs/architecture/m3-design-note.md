@@ -285,8 +285,9 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | 0016 | **Built (PR 2b, part 2):** `concepts` (under a subject; retired, never deleted), `concept_labels`, `concept_aliases` |
 | 0017 | **Built (PR 2c-2):** `catalogue_imports` (the checked rows of a preview, the counts and a fingerprint of the syllabus; never deleted; marked applied afterwards, or **expired** by migration 0018 (K-10b): an unapplied preview keeps its rows only while it is among its coaching's newest 20 and under 30 days old, and an applied one keeps them always) |
 | 0018 | **Built (K-10b):** state `EXPIRED` (inside the database only: the API answers `410 IMPORT_EXPIRED`, so its `state` stays `PREVIEWED` or `APPLIED`) for previews and `catalogue_imports_expire(keep_days, keep_count)`, a SECURITY DEFINER function the runtime role calls to drop the rows of the caller's own unapplied previews that are older than 30 days or beyond the newest 20 (the role still cannot delete or rewrite a preview itself) |
-| 0019 | `question_masters` (id, code, creator, type, archived_at, revision), `question_versions`, `question_revisions` (content and metadata JSONB, hash, frozen_at, author), `passage_masters`/`passage_revisions`, `answer_rule_settings`; codes use the existing `public_codes` |
-| 0020 | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
+| 0019 | **Built (K-06c, tracing):** `jobs.traceparent`, so a background job continues the trace of the request that queued it |
+| 0020 | **Built (PR 3b-1):** `question_masters` (id, code, creator, archived_at, revision), `question_versions`, `question_revisions` (content JSON with the metadata inside, hash, frozen_at, author, revision for the ETag). One working revision per version; a trigger stops any change to a frozen revision; no DELETE right; codes use the existing `public_codes`. The passage tables (3h) and `answer_rule_settings` (3i) are added by their own migrations |
+| next | `assets` (checksum, size, type, width, height, key, uploader) and `revision_assets` (which saved revision uses which image, so deletion is refused) |
 
 ## 8. API (all under `/api/v1`)
 
@@ -306,8 +307,8 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `GET/PUT /settings/answer-rules` | Answer limits |
 
 New error codes go in `error-codes.md` in the PR that introduces them: `HIERARCHY_INVALID`,
-`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID`, `IMPORT_STALE` and `IMPORT_EXPIRED` (built), `ASSET_INVALID`
-and `CONTENT_TOO_LARGE` are planned. A save with
+`DUPLICATE_NAME` and `PARENT_DEPRECATED` exist now; `IMPORT_INVALID`, `IMPORT_STALE` and `IMPORT_EXPIRED` (built), `CONTENT_TOO_LARGE` and `CONTENT_NOT_JSON` (built in 3b-1);
+`ASSET_INVALID` is planned. A save with
 findings is **not** an error (it is 200 with the findings); only unreadable or oversize content is 422.
 
 ## 9. Web
@@ -366,13 +367,13 @@ New dependencies, each reviewed for licence and known vulnerabilities and pinned
 | 2b | **Exams and sources** (migration 0015), then concepts with labels and aliases (migration 0016), as two PRs |
 | 2c | Taxonomy: Excel/CSV import in two PRs. **2c-1 (built):** the safe file reader (`import_file.py`). **2c-2 (built):** the preview (migration 0017, plan engine `import_plan.py`, upload, rows and template endpoints). **2c-3 (built):** apply (`import_apply.py`: all-or-nothing through the same services as the screens, `IMPORT_STALE`, one summary audit event, at most 5,000 rows at once; a per-coaching syllabus lock, `locks.py`, taken shared by every syllabus/concept change and exclusively by apply, so the staleness check and the writes cannot be interleaved with other changes) |
 | 2d | Web: admin screens, in three PRs. **2d-1 (built):** Admin → Syllabus (browse level by level, add, rename, order, other-language names, retire/restore) with browser tests. **2d-2 (built):** Admin → Concepts (per subject: add, edit, aliases, other-language names, search, retire/restore) and Admin → Exams & sources, with browser tests and axe accessibility checks (K-09). **2d-3 (built):** Admin → Bulk import (template download, upload with a 5 MB check before sending, preview with totals and a row table filtered by result, confirm and apply), with browser tests including a 5 MB file through the web app and a slow upload |
-| 3a | Question content domain, in two PRs (no database yet; spec-v1 fixtures as tests; K-18 property tests). **3a-1 (built):** `questions` module: findings, limits, blocks, SCQ, multiple correct, integer, single digit, numerical ([findings](./question-findings.md)). **3a-2:** matching, assertion-reason, multiple-statement, passage context, metadata |
-| 3b | Questions persistence: migration 0019, masters, versions, revisions, codes; create, read, autosave, checkpoint, archive; permissions; audit |
+| 3a | Question content domain, in two PRs (no database yet; spec-v1 fixtures as tests; K-18 property tests). **3a-1 (built):** `questions` module: findings, limits, blocks, SCQ, multiple correct, integer, single digit, numerical ([findings](./question-findings.md)). **3a-2 (built):** matching, assertion-reason, multiple-statement, passage context. **3a-3 (built):** metadata shape checks (catalogue checks need the database: 3b) |
+| 3b | Questions persistence, in three or four PRs. **3b-1 (built):** migration 0020 (masters, versions, revisions, codes), permissions (`CREATE_QUESTIONS`, `may_access_draft`), service to create (idempotent) and read, audit, no routes yet. **3b-2 (built):** routes: create (`Idempotency-Key`), read by id and by code, list (newest first, cursor pages; `mine=true`; rows carry finding counts), findings on every read, OpenAPI and client. **3b-3:** autosave (`If-Match`), checkpoint (freeze + hash), history. **3b-4:** archive/restore, and the metadata checks that need the catalogue (this coaching's ids, one valid branch, retired items) |
 | 3c | `packages/content-renderer` (KaTeX) with Vitest safety tests; preview component |
 | 3d | Web: editor for SCQ, multiple-correct, integer, single digit, numerical; metadata pickers; findings panel; autosave |
 | 3e | Web: editor for matching, assertion–reason, multiple statement |
 | 3f | Web: visual equation editor (MathLive), inline equations |
-| 3g | Images: migration 0020, `core/storage.py`, upload, serving, crop, image blocks |
+| 3g | Images: its own migration, `core/storage.py`, upload, serving, crop, image blocks |
 | 3h | Passages: API and editor |
 | 3i | Answer limits settings (API and admin screen) |
 | 4 | M3 demo notes and exit checks |

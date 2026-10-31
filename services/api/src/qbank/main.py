@@ -14,6 +14,7 @@ from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
+from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
 from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
@@ -23,6 +24,7 @@ from qbank.modules.identity.google_api import router as google_router
 from qbank.modules.organizations.api import router as organizations_router
 from qbank.modules.organizations.members_api import router as members_router
 from qbank.modules.organizations.ownership_api import router as ownership_router
+from qbank.modules.questions.api import router as questions_router
 from qbank.modules.taxonomy.api import catalogues as catalogues_router
 from qbank.modules.taxonomy.api import router as taxonomy_router
 from qbank.modules.taxonomy.catalogue_api import exams_router, sources_router
@@ -33,10 +35,12 @@ from qbank.modules.taxonomy.import_api import router as import_router
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, service="api", environment=settings.app_env.value)
+    setup_tracing(settings, "api")
     database = Database(settings.database_url)
     watch_pool(database)
     if settings.metrics_port:
         start_metrics_server(settings.metrics_port)
+    instrument_database(database.engine)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -76,7 +80,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     install_origin_check(app, settings.allowed_origins)  # added first, so it runs inside logging
     install_request_logging(app)
-    install_request_metrics(app)  # after logging: outermost, so it also counts logged 500s
+    install_request_tracing(app)  # after logging, so log lines carry the trace ID
+    install_request_metrics(app)  # last added = outermost: it also counts the logged 500s
     install_error_handlers(app)
     app.include_router(health_router)
     app.include_router(identity_router)
@@ -91,5 +96,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(import_router)
     app.include_router(exams_router)
     app.include_router(sources_router)
+    app.include_router(questions_router)
     install_openapi(app)
     return app

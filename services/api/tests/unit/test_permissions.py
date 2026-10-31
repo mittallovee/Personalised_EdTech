@@ -12,6 +12,8 @@ from qbank.core.permissions import (
     Grant,
     has_grant,
     is_allowed,
+    may_access_all_drafts,
+    may_access_draft,
     may_manage_member,
     require,
     require_may_manage_member,
@@ -54,6 +56,7 @@ TABLE = {
     Action.MANAGE_COACHINGS: (False, False, False, True, True),
     Action.VIEW_CATALOGUES: (True, True, True, False, True),
     Action.MANAGE_CATALOGUES: (False, True, True, False, True),
+    Action.CREATE_QUESTIONS: (True, True, True, False, True),
 }
 WHO = (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)
 
@@ -113,3 +116,36 @@ def test_require_may_manage_member_raises_permission_denied() -> None:
     require_may_manage_member(OWNER, "ADMIN")  # allowed: no error
     with pytest.raises(PermissionDenied):
         require_may_manage_member(OWNER, "OWNER")
+
+
+# Who may read or edit a draft that someone else wrote (M3 design note section 6).
+def test_a_draft_is_open_to_its_author_admins_and_those_granted_edit_others() -> None:
+    author = FACULTY
+    other = principal("FACULTY")
+    other_with_grant = principal("FACULTY", grants=frozenset({"EDIT_OTHERS"}))
+    assert may_access_draft(author, author.user_id)
+    assert not may_access_draft(other, author.user_id)
+    assert may_access_draft(other_with_grant, author.user_id)
+    for admin in (ADMIN, OWNER, PLATFORM_ACTING):
+        assert may_access_draft(admin, author.user_id)
+
+
+def test_nobody_without_a_role_may_open_a_draft_even_their_own() -> None:
+    nobody = principal(None)
+    assert not may_access_draft(nobody, nobody.user_id)
+    assert not may_access_draft(PLATFORM, PLATFORM.user_id)
+
+
+def test_who_may_open_every_draft_in_the_coaching() -> None:
+    editor = principal("FACULTY", grants=frozenset({"EDIT_OTHERS"}))
+    assert [
+        may_access_all_drafts(who) for who in (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)
+    ] == [
+        False,
+        True,
+        True,
+        False,
+        True,
+    ]
+    assert may_access_all_drafts(editor)
+    assert not may_access_all_drafts(principal(None, grants=frozenset({"EDIT_OTHERS"})))

@@ -12,9 +12,10 @@ Findings are computed from the content each time and never stored. The code is i
 `services/api/src/qbank/modules/questions/`; the limits are the defaults in `rules.py`, which an admin
 will be able to change (PR 3i). A changed limit never rewrites old revisions; it only changes the findings.
 
-Codes are stable: once published, a code keeps its meaning. This table covers what M3 PR 3a-1 checks
-(the envelope, the five block kinds, and the formats SCQ, multiple correct, integer, single digit and
-numerical). PR 3a-2 adds matching, assertion-reason, multiple-statement, passage context and metadata.
+Codes are stable: once published, a code keeps its meaning. This table covers what M3 PRs 3a-1 to 3a-3
+check: the envelope, the five block kinds, all eight concrete formats (SCQ, multiple correct, integer,
+single digit, numerical, matching, assertion-reason, multiple statement), the passage context and the
+metadata's shape. A "passage-based" question is one of the eight formats with a `context`.
 
 ## The whole document
 
@@ -81,3 +82,61 @@ numerical). PR 3a-2 adds matching, assertion-reason, multiple-statement, passage
 | `NUMERIC_MODE_INVALID` | error | Mode must be `exact` or `range` |
 | `NUMERIC_VALUE_MISSING` | incomplete | An exact value, or an end of a range, is missing |
 | `NUMERIC_RANGE_REVERSED` | error | The lower end is above the upper end |
+
+## Matching, assertion-reason, multiple statement
+
+| Code | Level | Meaning |
+|---|---|---|
+| `LEFT_MISSING` / `RIGHT_MISSING` / `STATEMENTS_MISSING` | incomplete | The list is not there yet |
+| `LEFT_NOT_LIST` / `RIGHT_NOT_LIST` / `STATEMENTS_NOT_LIST` | error | It is not a list |
+| `LEFT_COUNT` / `RIGHT_COUNT` / `STATEMENTS_COUNT` | incomplete (too few) / error (too many) | Matching columns have 2 to 10 items each, statements 2 to 10 (defaults) |
+| `ITEM_NOT_OBJECT` | error | An entry needs an id and content |
+| `ITEM_ID_INVALID` / `ITEM_ID_DUPLICATE` | error | Ids are 1 to 20 letters, digits, `_` or `-`, and different across the whole question |
+| `ITEM_EMPTY` | incomplete | An entry with no content, or only blank paragraphs |
+| `MAPPING_MISSING` | incomplete | A matching option has no mapping yet |
+| `MAPPING_NOT_OBJECT` / `MAPPING_NOT_LIST` | error | A mapping lists, for each left item, its right items |
+| `MAPPING_LEFT_UNKNOWN` / `MAPPING_RIGHT_UNKNOWN` | error | Names an item that is not in the column |
+| `MAPPING_RIGHT_DUPLICATE` | error | A right item named twice for one left item |
+| `MAPPING_EMPTY` / `MAPPING_LEFT_MISSING` | incomplete | A left item has no right item yet, or is left out of the mapping |
+| `ANSWER_MAPPING_SHARES_RIGHT` | error | In the **correct** mapping a right item is used under two left items (a wrong option may do so; unused right items are fine) |
+| `ASSERTION_MISSING` / `REASON_MISSING` | incomplete | Nothing (or only blanks) written yet |
+
+For these formats the answer is one `option_id`; a set of ids gives `ANSWER_SHAPE`.
+
+## Passage context
+
+A child of a passage has `context: {passage_revision_id, ordinal}`. That the passage revision exists and
+can be reached is checked where the database is, not here.
+
+| Code | Level | Meaning |
+|---|---|---|
+| `CONTEXT_NOT_OBJECT` | error | The context must name a passage and an order |
+| `CONTEXT_PASSAGE_MISSING` / `CONTEXT_ORDINAL_MISSING` | incomplete | Not chosen yet |
+| `CONTEXT_PASSAGE_INVALID` | error | The passage revision id is not valid |
+| `CONTEXT_ORDINAL_INVALID` | error | The number within the passage is not a whole number from 1 to 1000 |
+
+## Metadata
+
+The labels in `metadata` (D-15). Only the **shape** is checked here; that an id exists in this coaching's
+catalogue, and that chapter, topic and concepts form one valid branch, is checked where the database is
+(PR 3b). A question with no `metadata` at all gets one `METADATA_MISSING`; with `metadata`, each missing
+label is named. A `null` value counts as not given.
+
+| Code | Level | Meaning |
+|---|---|---|
+| `METADATA_MISSING` | incomplete | No labels yet |
+| `METADATA_NOT_OBJECT` | error | The metadata must be an object of labels |
+| `CLASS_MISSING` / `SUBJECT_MISSING` / `CHAPTER_MISSING` / `TOPIC_MISSING` / `PRIMARY_CONCEPT_MISSING` | incomplete | Not chosen yet (subtopic, other concepts, source are optional) |
+| `METADATA_ID_INVALID` | error | A catalogue id is not a valid id (the path says which field) |
+| `SECONDARY_CONCEPTS_NOT_LIST` / `SECONDARY_CONCEPTS_COUNT` | error | The other concepts must be a list of at most 20 ids |
+| `SECONDARY_CONCEPT_DUPLICATE` / `SECONDARY_CONCEPT_IS_PRIMARY` | error | A concept listed twice, or the main concept repeated among the others |
+| `DIFFICULTY_MISSING` | incomplete | Not chosen yet |
+| `DIFFICULTY_INVALID` | error | Not a whole number from 1 to 10 |
+| `BLOOM_MISSING` | incomplete | Not chosen yet |
+| `BLOOM_INVALID` | error | Not one of REMEMBER, UNDERSTAND, APPLY, ANALYZE, EVALUATE, CREATE |
+| `PYQ_FLAG_INVALID` | error | `is_pyq` must be true or false (left out means false) |
+| `PYQ_EXAM_MISSING` / `PYQ_YEAR_MISSING` | incomplete | A past-year question needs an exam and a year |
+| `PYQ_YEAR_INVALID` | error | Not a whole number from 1950 to 2100 |
+| `EXAM_DATE_INVALID` / `EXAM_DATE_YEAR_MISMATCH` | error | The date is not written like 2024-01-27, or is not in the exam year |
+| `METADATA_TEXT_INVALID` | error | Shift, paper code (1 to 50 characters) or source note (1 to 500) is blank, too long or not text |
+| `PYQ_FIELDS_IGNORED` | warning | Exam details are filled in but `is_pyq` is not true; they are kept, not dropped |

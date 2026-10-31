@@ -10,7 +10,9 @@ failure to the smallest example). The rules here:
   (a float, a string, a boolean...) is refused as "not an integer";
 - a numerical key with exactly two decimals inside 0.00..999.00 is accepted, with more decimals
   it is flagged and never changed, and a range is accepted exactly when lower <= upper;
-- the order of the options does not change the findings.
+- the order of the options does not change the findings;
+- any metadata value is answered with findings, and a difficulty is accepted exactly when it is a
+  whole number from 1 to 10.
 
 The last test proves the tests can fail: it breaks the integer check on purpose and expects the
 property to catch it.
@@ -49,7 +51,17 @@ PROP = settings(
 FIXTURES: dict[str, Any] = json.loads(
     (Path(__file__).parent.parent / "fixtures" / "spec_v1_questions.json").read_text("utf-8")
 )
-FIRST_FIVE = ["SCQ", "MULTI_CORRECT", "INTEGER", "SINGLE_DIGIT", "NUMERICAL"]
+ALL_KINDS = [
+    "SCQ",
+    "MULTI_CORRECT",
+    "INTEGER",
+    "SINGLE_DIGIT",
+    "NUMERICAL",
+    "MATCHING",
+    "ASSERTION_REASON",
+    "MULTIPLE_STATEMENT",
+    "PASSAGE_CHILD",
+]
 
 JSON_VALUES = st.recursive(
     st.none()
@@ -100,9 +112,23 @@ def prop_arbitrary_values_never_raise(value: object) -> None:
 
 @PROP
 @given(
-    st.sampled_from(FIRST_FIVE),
+    st.sampled_from(ALL_KINDS),
     st.sampled_from(
-        ["stem", "options", "answer", "language", "question_type", "solution", "extra"]
+        [
+            "stem",
+            "options",
+            "answer",
+            "language",
+            "question_type",
+            "solution",
+            "left",
+            "right",
+            "statements",
+            "assertion",
+            "reason",
+            "context",
+            "extra",
+        ]
     ),
     JSON_VALUES,
 )
@@ -162,6 +188,20 @@ def prop_a_range_is_accepted_exactly_when_lower_is_not_above_upper(
 
 
 @PROP
+@given(
+    st.sets(st.sampled_from(["R1", "R2", "R3", "R4"]), min_size=1),
+    st.sets(st.sampled_from(["R1", "R2", "R3", "R4"]), min_size=1),
+)
+def prop_a_shared_right_item_in_the_correct_mapping_is_flagged_exactly(
+    first: set[str], second: set[str]
+) -> None:
+    content = copy.deepcopy(FIXTURES["MATCHING"]["ready"])  # the answer is option A
+    content["options"][0]["mapping"] = {"L1": sorted(first), "L2": sorted(second)}
+    shares = bool(first & second)
+    assert codes(content) == (["ANSWER_MAPPING_SHARES_RIGHT"] if shares else [])
+
+
+@PROP
 @given(st.permutations(range(4)))
 def prop_option_order_does_not_change_the_findings(order: list[int]) -> None:
     content = copy.deepcopy(FIXTURES["SCQ"]["ready"])
@@ -170,6 +210,24 @@ def prop_option_order_does_not_change_the_findings(order: list[int]) -> None:
     content["options"] = [content["options"][i] for i in order]
     after = sorted((f.code, f.level) for f in validate_content(content))
     assert [c for c, _ in before] == [c for c, _ in after]
+
+
+@PROP
+@given(JSON_VALUES)
+def prop_arbitrary_metadata_never_raises(value: object) -> None:
+    content = copy.deepcopy(FIXTURES["SCQ"]["ready"])
+    content["metadata"] = value
+    assert validate_content(content) == validate_content(content)
+
+
+@PROP
+@given(JSON_VALUES | st.integers(min_value=-5, max_value=15))
+def prop_difficulty_is_accepted_exactly_from_1_to_10(value: object) -> None:
+    content = copy.deepcopy(FIXTURES["SCQ"]["ready"])
+    content["metadata"]["difficulty"] = value
+    accepted = isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 10
+    refused = "DIFFICULTY_INVALID" in codes(content)
+    assert refused == (value is not None and not accepted)
 
 
 # --- pytest runs the properties ------------------------------------------------------------------
@@ -203,6 +261,10 @@ def test_ranges_follow_lower_not_above_upper() -> None:
     prop_a_range_is_accepted_exactly_when_lower_is_not_above_upper()
 
 
+def test_a_shared_right_item_in_the_correct_mapping_is_flagged() -> None:
+    prop_a_shared_right_item_in_the_correct_mapping_is_flagged_exactly()
+
+
 def test_option_order_does_not_change_the_findings() -> None:
     prop_option_order_does_not_change_the_findings()
 
@@ -212,3 +274,11 @@ def test_a_deliberately_broken_checker_is_caught(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(answers, "is_whole_number", lambda value: True)  # accepts True and 3.5
     with pytest.raises(AssertionError):
         prop_anything_but_a_whole_number_is_not_an_integer()
+
+
+def test_arbitrary_metadata_never_raises() -> None:
+    prop_arbitrary_metadata_never_raises()
+
+
+def test_difficulty_keys_from_1_to_10() -> None:
+    prop_difficulty_is_accepted_exactly_from_1_to_10()
