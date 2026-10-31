@@ -80,6 +80,10 @@ def _parent(traceparent: str | None) -> Context | None:
     return _propagator.extract({"traceparent": traceparent}) if traceparent else None
 
 
+# Spans are opened with record_exception=False and set_status_on_exception=False: by default an
+# exception that escapes a span is recorded with its message and traceback, and the message is
+# copied into the status. Database errors quote the statement and its values, which can hold job
+# payloads or coaching content. So we record the exception *type* only, with mark_error.
 def mark_error(kind: str) -> None:
     """Mark the current span failed. Only the exception *type*: messages can hold content."""
     span = trace.get_current_span()
@@ -102,6 +106,8 @@ def install_request_tracing(app: FastAPI) -> None:
             context=_parent(request.headers.get("traceparent")),
             kind=SpanKind.SERVER,
             attributes={"http.request.method": request.method},
+            record_exception=False,
+            set_status_on_exception=False,
         ) as span:
             response = await call_next(request)
             route = str(getattr(request.scope.get("route"), "path", "unmatched"))
@@ -145,8 +151,14 @@ def job_span(
         context=_parent(traceparent),
         kind=SpanKind.CONSUMER,
         attributes=attributes,
+        record_exception=False,
+        set_status_on_exception=False,
     ) as span:
-        yield span
+        try:
+            yield span
+        except BaseException as exc:
+            mark_error(type(exc).__name__)
+            raise
 
 
 def instrument_database(engine: Engine) -> None:

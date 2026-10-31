@@ -82,3 +82,39 @@ def test_a_job_runs_inside_the_trace_of_the_request_that_enqueued_it(
     assert job_span.attributes is not None and job_span.attributes["job.type"] == "trace.test"
     assert seen[0] is not None and seen[0].startswith("00-")
     assert trace.get_current_span().get_span_context().is_valid is False
+
+
+def test_an_error_that_escapes_a_job_records_its_type_but_never_its_text(
+    db: Database,
+    worker_db: Database,
+    owner_db: Database,
+    coaching_a: Coaching,
+    spans: InMemorySpanExporter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # SQLAlchemy errors quote the statement and its bound values, which can hold job payloads or
+    # coaching content: they must not reach a trace through the span's exception capture.
+    with owner_db.transaction(TenantContext(is_platform=True)) as session:
+        session.execute(
+            text("UPDATE jobs SET state = 'FAILED' WHERE state IN ('QUEUED', 'RUNNING')")
+        )
+    registry = JobRegistry()
+    registry.register("trace.leak", lambda _session, _job: None)
+
+    def exploding_complete(_self: Worker, _job: Job, _error: str, *, retry: bool) -> None:
+        raise RuntimeError("INSERT ... parameters: {'stem': 'bait-question-text'}")
+
+    worker = Worker(worker_db, registry)
+    with db.transaction(coaching_a.context) as session:
+        enqueue(session, "trace.leak", {}, context=coaching_a.context)
+    monkeypatch.setattr(worker, "_run", lambda job: exploding_complete(worker, job, "", retry=True))
+
+    with pytest.raises(RuntimeError):
+        worker.run_next()
+
+    job_span = next(s for s in spans.get_finished_spans() if s.name == "job trace.leak")
+    assert job_span.events == ()  # no recorded exception message or traceback
+    assert job_span.status.description is None
+    assert job_span.status.status_code.name == "ERROR"
+    assert job_span.attributes is not None and job_span.attributes["error.type"] == "RuntimeError"
+    assert "bait-question-text" not in str(job_span.to_json())
