@@ -18,11 +18,17 @@ from sqlalchemy.orm import Session, aliased
 
 from qbank.core.auth import Principal
 from qbank.core.codes import normalize_code, reserve_code
-from qbank.core.errors import Conflict, NotFound, ValidationFailed
+from qbank.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
 from qbank.core.etag import require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
-from qbank.core.permissions import Action, may_access_all_drafts, may_access_draft, require
+from qbank.core.permissions import (
+    Action,
+    may_access_all_drafts,
+    may_access_draft,
+    may_archive_draft,
+    require,
+)
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.findings import Finding
 from qbank.modules.questions.models import QuestionMaster, QuestionRevision, QuestionVersion
@@ -183,6 +189,7 @@ def list_questions(
     principal: Principal,
     *,
     mine_only: bool,
+    archived: bool = False,
     limit: int,
     after: tuple[datetime, UUID] | None,
     rules: Rules = DEFAULT_RULES,
@@ -190,7 +197,8 @@ def list_questions(
     """The questions the caller may open, newest first, after ``after`` (a cursor).
 
     Admins and holders of ``EDIT_OTHERS`` see every draft in the coaching unless ``mine_only``;
-    everyone else sees their own. Returns the page and whether more follow.
+    everyone else sees their own. Archived questions are listed only when ``archived`` is true,
+    and then only those. Returns the page and whether more follow.
     """
     require(principal, Action.CREATE_QUESTIONS)
     other = aliased(QuestionVersion)
@@ -203,6 +211,11 @@ def list_questions(
         .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
         .where(QuestionRevision.frozen_at.is_(None), QuestionVersion.number == latest)
         .order_by(QuestionMaster.created_at.desc(), QuestionMaster.id.desc())
+    )
+    query = query.where(
+        QuestionMaster.archived_at.is_not(None)
+        if archived
+        else QuestionMaster.archived_at.is_(None)
     )
     if mine_only or not may_access_all_drafts(principal):
         query = query.where(QuestionMaster.created_by == principal.user_id)
@@ -364,3 +377,42 @@ def get_revision(
         raise NotFound("No such revision.")
     version, revision = row
     return QuestionView(master, version, revision, validate_content(revision.content, rules))
+
+
+def set_archived(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    archived: bool,
+    *,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Archive or restore a question. Nothing is deleted and the code stays reserved. Doing it
+    twice changes and audits nothing. Someone who may open the draft but not archive it is
+    refused (403); someone who may not open it gets "not found"."""
+    require(principal, Action.CREATE_QUESTIONS)
+    master = _visible(
+        principal,
+        session.scalars(
+            select(QuestionMaster).where(QuestionMaster.id == question_id).with_for_update()
+        ).first(),
+    )
+    if not may_archive_draft(principal, master.created_by):
+        raise PermissionDenied("Only the author or an admin can archive or restore a question.")
+    if (master.archived_at is not None) != archived:
+        master.archived_at = datetime.now(UTC) if archived else None
+        master.revision += 1
+        session.flush()
+        record_event(
+            session,
+            action="QUESTION_ARCHIVED" if archived else "QUESTION_RESTORED",
+            entity_type=ENTITY_TYPE,
+            entity_id=master.id,
+            organization_id=master.organization_id,
+            actor_user_id=principal.user_id,
+            actor_is_platform=principal.acting_organization_id is not None,
+            request_id=request_id,
+            after={"code": master.code},
+        )
+    return _load(session, master, rules)

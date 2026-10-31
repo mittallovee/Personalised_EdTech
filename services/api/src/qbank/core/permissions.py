@@ -44,6 +44,8 @@ class Action(StrEnum):
     MANAGE_CATALOGUES = "MANAGE_CATALOGUES"
     # Start a question or passage (M3). Opening someone else's draft: see ``may_access_draft``.
     CREATE_QUESTIONS = "CREATE_QUESTIONS"
+    # Archive or restore a question someone else wrote (faculty may do it for their own).
+    ARCHIVE_ANY_QUESTION = "ARCHIVE_ANY_QUESTION"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -60,6 +62,7 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.VIEW_CATALOGUES: _EVERYONE,
     Action.MANAGE_CATALOGUES: _ADMINS,
     Action.CREATE_QUESTIONS: _EVERYONE,
+    Action.ARCHIVE_ANY_QUESTION: _ADMINS,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).
@@ -119,3 +122,11 @@ def may_access_draft(principal: Principal, author_id: UUID) -> bool:
     if not is_allowed(principal, Action.CREATE_QUESTIONS):
         return False
     return principal.user_id == author_id or may_access_all_drafts(principal)
+
+
+def may_archive_draft(principal: Principal, author_id: UUID) -> bool:
+    """Archive or restore a question: its author, or an admin. The edit-others grant is not enough
+    (M3 design note section 6)."""
+    if not is_allowed(principal, Action.CREATE_QUESTIONS):
+        return False
+    return principal.user_id == author_id or is_allowed(principal, Action.ARCHIVE_ANY_QUESTION)
