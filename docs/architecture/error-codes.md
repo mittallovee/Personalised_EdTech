@@ -41,6 +41,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `IMPORT_INVALID` | 422 | A syllabus import file cannot be read at all: too large, not a spreadsheet or UTF-8 CSV, formulas, unknown or missing columns, too many rows or cells, damaged. Also when applying: a row is an error, there is nothing to import, or more than 5,000 rows would be added or changed at once. (Problem *rows* are not an error when previewing: the preview lists them) | M3 |
 | `IMPORT_EXPIRED` | 410 | A syllabus import preview was kept too long (30 days, or beyond the newest 20 of its coaching) and its rows are gone, so it can no longer be read or applied; upload the file again. Applied previews never expire | M3 |
 | `IMPORT_STALE` | 409 | The syllabus changed after an import preview was made (or something it would add appeared meanwhile), so it was not applied; upload the file again | M3 |
+| `CONTENT_TOO_LARGE` | 422 | A question's content is larger than the limit (256 KB by default), so it was not saved. (Gaps and mistakes *inside* content are findings, never this error) | M3 |
+| `CONTENT_NOT_JSON` | 422 | A question holds a value that is not plain data (for example a number that is not a number), so it was not saved | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in), too many syllabus import uploads in a short time, or the server is busy reading other import files; wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 
