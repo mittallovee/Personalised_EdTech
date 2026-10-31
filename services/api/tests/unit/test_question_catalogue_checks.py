@@ -20,7 +20,7 @@ def uid(n: int) -> str:
 
 
 CLASS, SUBJECT, CHAPTER, TOPIC, SUBTOPIC = (uid(n) for n in (1, 2, 3, 4, 10))
-CONCEPT, OTHER_CONCEPT, EXAM, SOURCE = (uid(n) for n in (5, 6, 20, 30))
+CONCEPT, OTHER_CONCEPT, THIRD_CONCEPT, EXAM, SOURCE = (uid(n) for n in (5, 6, 7, 20, 30))
 
 
 def good_refs() -> dict[UUID, CatalogueRef]:
@@ -42,6 +42,7 @@ def good_refs() -> dict[UUID, CatalogueRef]:
         UUID(SUBTOPIC): ref("SUBTOPIC", TOPIC),
         UUID(CONCEPT): ref("CONCEPT", subject=SUBJECT),
         UUID(OTHER_CONCEPT): ref("CONCEPT", subject=uid(99)),  # another subject's concept
+        UUID(THIRD_CONCEPT): ref("CONCEPT", subject=SUBJECT),
         UUID(EXAM): ref("EXAM"),
         UUID(SOURCE): ref("SOURCE"),
     }
@@ -72,7 +73,7 @@ def found(
 def test_a_correct_branch_has_no_findings() -> None:
     full = {
         "subtopic_id": SUBTOPIC,
-        "secondary_concept_ids": [OTHER_CONCEPT],
+        "secondary_concept_ids": [THIRD_CONCEPT],
         "is_pyq": True,
         "exam_id": EXAM,
         "exam_year": 2024,
@@ -123,11 +124,15 @@ def test_a_missing_parent_is_not_reported_twice() -> None:
     assert found({}, refs) == [("metadata.subject_id", "CATALOGUE_ID_UNKNOWN", Level.ERROR)]
 
 
-def test_the_main_concept_belongs_to_the_chosen_subject_but_others_may_not() -> None:
+def test_every_concept_belongs_to_the_chosen_subject() -> None:
     assert found({"primary_concept_id": OTHER_CONCEPT}) == [
         ("metadata.primary_concept_id", "CONCEPT_SUBJECT_MISMATCH", Level.ERROR)
     ]
-    assert found({"secondary_concept_ids": [OTHER_CONCEPT]}) == []
+    assert found({"secondary_concept_ids": [CONCEPT, OTHER_CONCEPT]}) == [
+        ("metadata.secondary_concept_ids[1]", "CONCEPT_SUBJECT_MISMATCH", Level.ERROR)
+    ]
+    # They need not share the main concept's chapter or topic (C-02), only the subject.
+    assert found({"secondary_concept_ids": [CONCEPT]}) == []
 
 
 def test_a_retired_item_is_a_warning_not_an_error() -> None:
@@ -156,3 +161,13 @@ def test_every_valid_id_is_collected_once_for_the_lookup() -> None:
     assert catalogue_ids(meta) == {
         UUID(x) for x in (CLASS, SUBJECT, CHAPTER, TOPIC, CONCEPT, OTHER_CONCEPT, SOURCE)
     }
+
+
+def test_a_huge_list_of_secondary_concepts_is_only_looked_at_as_far_as_the_shape_check_does() -> (
+    None
+):
+    many = [uid(1000 + n) for n in range(6000)]  # fits in a revision; the count is a finding
+    meta = content(secondary_concept_ids=many)
+    ids = catalogue_ids(meta)
+    assert len(ids) <= 5 + 21  # the five required labels and the first 21 concepts
+    assert len(check_catalogue(meta, good_refs())) <= 21

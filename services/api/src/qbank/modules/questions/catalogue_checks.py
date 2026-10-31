@@ -2,7 +2,7 @@
 
 ``metadata.py`` checks the shape of the labels. Here each id is checked against what the lookup
 found for it: it is this coaching's, it is the right kind of item, the syllabus levels form one
-branch (the subject is under the class, the chapter under the subject...), and the main concept
+branch (the subject is under the class, the chapter under the subject...), and every concept
 belongs to the chosen subject. A retired item is only a warning, so an old draft keeps working.
 Choosing a retired item for the first time is stopped by the pickers, which list active items only.
 
@@ -15,6 +15,7 @@ from uuid import UUID
 
 from qbank.modules.questions.blocks import as_dict
 from qbank.modules.questions.findings import Finding, Findings, at_index, at_key
+from qbank.modules.questions.metadata import MAX_SECONDARY_CONCEPTS
 from qbank.modules.taxonomy.public import CatalogueRef
 
 _PATH = "metadata"
@@ -54,8 +55,10 @@ def _metadata(content: object) -> dict[str, object]:
 
 
 def _secondary(meta: dict[str, object]) -> list[object]:
+    """The other concepts, only as many as the shape check looks at: a draft with thousands of
+    them is saved with a count finding, and must not make the lookup (or a list page) huge."""
     value = meta.get("secondary_concept_ids")
-    return value if isinstance(value, list) else []
+    return value[: MAX_SECONDARY_CONCEPTS + 1] if isinstance(value, list) else []
 
 
 def catalogue_ids(content: object) -> set[UUID]:
@@ -74,11 +77,12 @@ def check_catalogue(content: object, refs: Mapping[UUID, CatalogueRef]) -> list[
         wanted = _uuid(meta.get(field))
         if wanted is not None and _known(wanted, kind, noun, at_key(_PATH, field), refs, out):
             good[field] = wanted
+    secondary: list[tuple[int, UUID]] = []
     for index, value in enumerate(_secondary(meta)):
         wanted = _uuid(value)
-        if wanted is not None:
-            where = at_index(at_key(_PATH, "secondary_concept_ids"), index)
-            _known(wanted, "CONCEPT", "concept", where, refs, out)
+        where = at_index(at_key(_PATH, "secondary_concept_ids"), index)
+        if wanted is not None and _known(wanted, "CONCEPT", "concept", where, refs, out):
+            secondary.append((index, wanted))
 
     for child, parent in _PARENT.items():
         if child in good and parent in good and refs[good[child]].parent_id != good[parent]:
@@ -88,17 +92,20 @@ def check_catalogue(content: object, refs: Mapping[UUID, CatalogueRef]) -> list[
                 "HIERARCHY_MISMATCH",
                 f"This {noun} is not under the chosen {above}.",
             )
-    concept = good.get("primary_concept_id")
-    if (
-        concept is not None
-        and "subject_id" in good
-        and refs[concept].subject_id != good["subject_id"]
-    ):
-        out.error(
-            at_key(_PATH, "primary_concept_id"),
-            "CONCEPT_SUBJECT_MISMATCH",
-            "The main concept belongs to another subject than the one chosen.",
-        )
+    if "subject_id" in good:  # every concept of a question is one of its subject (C-02)
+        subject = good["subject_id"]
+        concepts = [(at_key(_PATH, "primary_concept_id"), good.get("primary_concept_id"))]
+        concepts += [
+            (at_index(at_key(_PATH, "secondary_concept_ids"), index), concept)
+            for index, concept in secondary
+        ]
+        for where, concept in concepts:
+            if concept is not None and refs[concept].subject_id != subject:
+                out.error(
+                    where,
+                    "CONCEPT_SUBJECT_MISMATCH",
+                    "This concept belongs to another subject than the one chosen.",
+                )
     return out.items
 
 

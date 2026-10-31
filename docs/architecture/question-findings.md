@@ -153,5 +153,5 @@ active items only.
 | `CATALOGUE_ID_UNKNOWN` | error | The id is not in this coaching's lists |
 | `CATALOGUE_KIND_WRONG` | error | The id is of another kind (a chapter given as the topic) |
 | `HIERARCHY_MISMATCH` | error | The subject is not under the class, the chapter not under the subject, the topic not under the chapter, or the subtopic not under the topic |
-| `CONCEPT_SUBJECT_MISMATCH` | error | The main concept belongs to another subject than the one chosen (other concepts may be from any subject) |
+| `CONCEPT_SUBJECT_MISMATCH` | error | A concept (the main one or another) belongs to another subject than the one chosen (C-02: concepts of a question are all of its subject; they need not share the main concept's chapter or topic) |
 | `DEPRECATED_REFERENCE` | warning | The item has been retired; the question keeps working |
