@@ -99,6 +99,19 @@ def test_secondary_concepts() -> None:
     assert "SECONDARY_CONCEPTS_COUNT" in codes(with_metadata(secondary_concept_ids=many))
 
 
+def test_the_same_concept_written_two_ways_is_still_the_same_concept() -> None:
+    primary = FIXTURES["SCQ"]["ready"]["metadata"]["primary_concept_id"]
+    assert codes(with_metadata(secondary_concept_ids=[primary.upper()])) == [
+        "SECONDARY_CONCEPT_IS_PRIMARY"
+    ]
+    assert codes(with_metadata(secondary_concept_ids=[primary.replace("-", "")])) == [
+        "SECONDARY_CONCEPT_IS_PRIMARY"
+    ]
+    assert codes(with_metadata(secondary_concept_ids=[OTHER, OTHER.upper()])) == [
+        "SECONDARY_CONCEPT_DUPLICATE"
+    ]
+
+
 def test_difficulty_is_a_whole_number_from_1_to_10() -> None:
     for good in (1, 5, 10):
         assert codes(with_metadata(difficulty=good)) == []

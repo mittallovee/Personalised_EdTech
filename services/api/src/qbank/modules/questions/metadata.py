@@ -94,14 +94,18 @@ def _id(
         out.error(where, "METADATA_ID_INVALID", "This id is not valid; choose it from the list.")
 
 
-def _is_uuid(value: object) -> bool:
+def _uuid(value: object) -> UUID | None:
+    """The id as a UUID, or ``None``: so spellings of one id (case, dashes) compare as equal."""
     if not isinstance(value, str):
-        return False
+        return None
     try:
-        UUID(value)
+        return UUID(value)
     except ValueError:
-        return False
-    return True
+        return None
+
+
+def _is_uuid(value: object) -> bool:
+    return _uuid(value) is not None
 
 
 def _secondary_concepts(meta: dict[str, object], out: Findings) -> None:
@@ -118,22 +122,23 @@ def _secondary_concepts(meta: dict[str, object], out: Findings) -> None:
             "SECONDARY_CONCEPTS_COUNT",
             f"At most {MAX_SECONDARY_CONCEPTS} other concepts are allowed.",
         )
-    primary = meta.get("primary_concept_id")
-    seen: set[str] = set()
+    primary = _uuid(meta.get("primary_concept_id"))
+    seen: set[UUID] = set()
     for index, concept in enumerate(value[: MAX_SECONDARY_CONCEPTS + 1]):
         here = at_index(where, index)
-        if not _is_uuid(concept) or not isinstance(concept, str):
+        parsed = _uuid(concept)
+        if parsed is None:
             out.error(here, "METADATA_ID_INVALID", "This id is not valid; choose it from the list.")
-        elif concept == primary:
+        elif parsed == primary:
             out.error(
                 here,
                 "SECONDARY_CONCEPT_IS_PRIMARY",
                 "The main concept is already chosen; leave it out of the other concepts.",
             )
-        elif concept in seen:
+        elif parsed in seen:
             out.error(here, "SECONDARY_CONCEPT_DUPLICATE", "This concept is listed twice.")
         else:
-            seen.add(concept)
+            seen.add(parsed)
 
 
 def _difficulty(value: object, out: Findings) -> None:
