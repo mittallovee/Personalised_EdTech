@@ -25,6 +25,7 @@ from qbank.core.errors import (
     ValidationFailed,
 )
 from qbank.core.ids import new_id
+from qbank.core.metrics import LOGIN_ATTEMPTS
 from qbank.core.security import hash_token, new_token, verify_password
 from qbank.core.tenancy import NO_CONTEXT, TenantContext, apply_tenant_context
 from qbank.modules.audit.public import record_event
@@ -39,6 +40,12 @@ from qbank.modules.identity.google import (
 from qbank.modules.identity.schemas import GoogleStatus, LoginMethods
 
 log = structlog.get_logger("qbank.identity")
+
+
+def _flow_failed(reason: str, **fields: object) -> None:
+    LOGIN_ATTEMPTS.labels("google", "failure", reason).inc()
+    log.info("google_flow_failed", reason=reason, **fields)
+
 
 CALLBACK_PATH = "/api/v1/auth/google/callback"
 # Where the browser lands after Google calls back. Relative, so it stays on the web address the
@@ -211,7 +218,7 @@ def finish(
     # says which page the person started on.
     unknown = failure_for_state(state)
     if not cookie or not state:
-        log.info("google_flow_failed", reason="missing_cookie_or_state")
+        _flow_failed("missing_cookie_or_state")
         return unknown
     with database.transaction(NO_CONTEXT) as session:
         flow = session.execute(
@@ -219,16 +226,16 @@ def finish(
             {"cookie": hash_token(cookie), "state": hash_token(state)},
         ).first()
     if flow is None:
-        log.info("google_flow_failed", reason="no_usable_flow")
+        _flow_failed("no_usable_flow")
         return unknown
     failed = Finished(_failure_path(flow.purpose))
     if throttled:
         # Too many callbacks from this address. The flow is used up (it cannot be retried), but the
         # person is still sent to the page the flow began on, and Google is not asked.
-        log.info("google_flow_failed", reason="throttled", purpose=flow.purpose)
+        _flow_failed("throttled", purpose=flow.purpose)
         return failed
     if not code:
-        log.info("google_flow_failed", reason="no_code", purpose=flow.purpose)  # e.g. "Cancel"
+        _flow_failed("no_code", purpose=flow.purpose)  # e.g. "Cancel"
         return failed
     try:
         identity = google.identify(
@@ -238,7 +245,7 @@ def finish(
             nonce=flow.nonce,
         )
     except GoogleError as exc:
-        log.info("google_flow_failed", reason="google_refused", detail=str(exc))
+        _flow_failed("google_refused", detail=str(exc))
         return failed
 
     with database.transaction(NO_CONTEXT) as session:
@@ -256,8 +263,9 @@ def finish(
             return Finished(LINK_SIGNED_OUT_PATH)
         return Finished(LINKED_PATH) if linked == "linked" else failed
     if result is None:
-        log.info("google_flow_failed", reason="not_allowed", purpose=flow.purpose)
+        _flow_failed("not_allowed", purpose=flow.purpose)
         return failed
+    LOGIN_ATTEMPTS.labels("google", "success", "").inc()
     log.info("google_login_succeeded", user_id=str(result.principal.user_id), purpose=flow.purpose)
     return Finished(SIGNED_IN_PATH, result)
 
