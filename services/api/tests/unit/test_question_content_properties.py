@@ -10,7 +10,9 @@ failure to the smallest example). The rules here:
   (a float, a string, a boolean...) is refused as "not an integer";
 - a numerical key with exactly two decimals inside 0.00..999.00 is accepted, with more decimals
   it is flagged and never changed, and a range is accepted exactly when lower <= upper;
-- the order of the options does not change the findings.
+- the order of the options does not change the findings;
+- any metadata value is answered with findings, and a difficulty is accepted exactly when it is a
+  whole number from 1 to 10.
 
 The last test proves the tests can fail: it breaks the integer check on purpose and expects the
 property to catch it.
@@ -210,6 +212,24 @@ def prop_option_order_does_not_change_the_findings(order: list[int]) -> None:
     assert [c for c, _ in before] == [c for c, _ in after]
 
 
+@PROP
+@given(JSON_VALUES)
+def prop_arbitrary_metadata_never_raises(value: object) -> None:
+    content = copy.deepcopy(FIXTURES["SCQ"]["ready"])
+    content["metadata"] = value
+    assert validate_content(content) == validate_content(content)
+
+
+@PROP
+@given(JSON_VALUES | st.integers(min_value=-5, max_value=15))
+def prop_difficulty_is_accepted_exactly_from_1_to_10(value: object) -> None:
+    content = copy.deepcopy(FIXTURES["SCQ"]["ready"])
+    content["metadata"]["difficulty"] = value
+    accepted = isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 10
+    refused = "DIFFICULTY_INVALID" in codes(content)
+    assert refused == (value is not None and not accepted)
+
+
 # --- pytest runs the properties ------------------------------------------------------------------
 
 
@@ -254,3 +274,11 @@ def test_a_deliberately_broken_checker_is_caught(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(answers, "is_whole_number", lambda value: True)  # accepts True and 3.5
     with pytest.raises(AssertionError):
         prop_anything_but_a_whole_number_is_not_an_integer()
+
+
+def test_arbitrary_metadata_never_raises() -> None:
+    prop_arbitrary_metadata_never_raises()
+
+
+def test_difficulty_keys_from_1_to_10() -> None:
+    prop_difficulty_is_accepted_exactly_from_1_to_10()
