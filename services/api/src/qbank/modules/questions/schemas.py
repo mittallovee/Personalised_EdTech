@@ -19,6 +19,14 @@ class CreateQuestion(BaseModel):
     )
 
 
+class SaveQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: dict[str, Any] = Field(
+        description="The whole content, replacing the working revision's. Gaps are fine."
+    )
+
+
 class FindingOut(BaseModel):
     path: str = Field(
         description="Which field, like `options[2].content[0].text`.", examples=["answer"]
@@ -63,3 +71,23 @@ class QuestionSummary(BaseModel):
 class QuestionPage(BaseModel):
     data: list[QuestionSummary]
     page: PageInfo
+
+
+class RevisionSummary(BaseModel):
+    number: int = Field(description="Counts up within the version.")
+    working: bool = Field(description="The one being edited; the others are frozen checkpoints.")
+    version_number: int
+    author_id: UUID = Field(description="Who saved it last.")
+    content_hash: str | None = Field(description="SHA-256 of the content; set when frozen.")
+    frozen_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RevisionList(BaseModel):
+    data: list[RevisionSummary]
+
+
+class RevisionOut(RevisionSummary):
+    content: dict[str, Any]
+    findings: list[FindingOut] = Field(description="Computed as of now, with today's rules.")
