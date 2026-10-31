@@ -90,7 +90,7 @@ def create_question(
         )
         existing = session.get(QuestionMaster, master_id)
         if existing is not None:
-            return _load(session, existing)
+            return _load(session, existing, rules)
 
     master = QuestionMaster(
         id=master_id,
@@ -127,7 +127,7 @@ def create_question(
             "question_type": question_type if isinstance(question_type, str) else None,
         },
     )
-    return _load(session, master)
+    return _load(session, master, rules)
 
 
 def get_question(

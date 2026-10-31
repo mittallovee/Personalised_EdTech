@@ -5,6 +5,7 @@ a frozen revision never changes, nothing is deleted) are tested against the real
 """
 
 import copy
+from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
@@ -293,3 +294,21 @@ def test_nothing_is_ever_deleted(db: Database, team: dict[str, Principal], table
             text(f"DELETE FROM {table} WHERE organization_id = :org"),  # noqa: S608
             {"org": team["author"].organization_id},
         )
+
+
+def test_creating_uses_the_same_rules_as_reading(db: Database, team: dict[str, Principal]) -> None:
+    content = copy.deepcopy(FIXTURES["INTEGER"]["ready"])
+    content["answer"] = {"value": 1000}
+    wide = replace(DEFAULT_RULES, integer_max=2000)
+    author = team["author"]
+    for key in ("wide-1", "wide-1"):  # the second is a retry of the first
+        with db.transaction(author.tenant_context) as session:
+            view = service.create_question(
+                session, author, content, idempotency_key=key, request_id=None, rules=wide
+            )
+            assert view.findings == []
+    with db.transaction(author.tenant_context) as session:
+        read = service.get_question(session, author, view.master.id, wide)
+        assert read.findings == []
+        default = service.get_question(session, author, view.master.id)
+        assert [f.code for f in default.findings] == ["ANSWER_OUT_OF_RANGE"]
