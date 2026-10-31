@@ -26,6 +26,7 @@ from tests.integration.conftest import (
     make_member,
     sign_in,
 )
+from tests.integration.question_support import Catalogue, ready_for, seed_catalogue
 from tests.unit.test_question_content import FIXTURES
 
 DRAFT = FIXTURES["SCQ"]["draft"]
@@ -66,6 +67,11 @@ def started(client: TestClient, team: dict[str, Member]) -> tuple[dict[str, Any]
     return response.json(), headers
 
 
+@pytest.fixture
+def catalogue(owner_db: Database, team: dict[str, Member]) -> Catalogue:
+    return seed_catalogue(owner_db, team["owner"].org_id)
+
+
 def tag(question: dict[str, Any]) -> dict[str, str]:
     return {"If-Match": f'"rev-{question["revision"]}"'}
 
@@ -96,13 +102,14 @@ def checkpoint(
 
 
 def test_autosave_replaces_the_working_content_and_moves_the_etag(
-    client: TestClient, started: tuple[dict[str, Any], dict[str, str]]
+    client: TestClient, started: tuple[dict[str, Any], dict[str, str]], catalogue: Catalogue
 ) -> None:
     question, headers = started
-    response = save(client, headers, question, copy.deepcopy(READY))
+    ready = ready_for(catalogue)
+    response = save(client, headers, question, copy.deepcopy(ready))
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["content"] == READY
+    assert body["content"] == ready
     assert body["findings"] == []  # the new content has no gaps
     assert body["revision"] == question["revision"] + 1
     assert response.headers["ETag"] == f'"rev-{body["revision"]}"'
@@ -261,15 +268,16 @@ def test_a_checkpoint_freezes_the_content_and_starts_a_new_working_revision(
 
 
 def test_a_frozen_revision_keeps_its_content_while_work_goes_on(
-    client: TestClient, started: tuple[dict[str, Any], dict[str, str]]
+    client: TestClient, started: tuple[dict[str, Any], dict[str, str]], catalogue: Catalogue
 ) -> None:
     question, headers = started
-    saved = save(client, headers, question, copy.deepcopy(READY)).json()
+    ready = ready_for(catalogue)
+    saved = save(client, headers, question, copy.deepcopy(ready)).json()
     working = checkpoint(client, headers, saved).json()
     save(client, headers, working, copy.deepcopy(DRAFT))
     old = client.get(f"{PATH}/{question['id']}/revisions/1")
     assert old.status_code == 200
-    assert old.json()["content"] == READY
+    assert old.json()["content"] == ready
     assert old.json()["findings"] == []
     assert old.json()["working"] is False
     now = client.get(f"{PATH}/{question['id']}/revisions/2").json()

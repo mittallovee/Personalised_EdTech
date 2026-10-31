@@ -30,10 +30,12 @@ from qbank.core.permissions import (
     require,
 )
 from qbank.modules.audit.public import record_event
+from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalogue
 from qbank.modules.questions.findings import Finding
 from qbank.modules.questions.models import QuestionMaster, QuestionRevision, QuestionVersion
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.validate import validate_content
+from qbank.modules.taxonomy.public import look_up
 
 ENTITY_TYPE = "question"
 
@@ -156,6 +158,20 @@ def get_question_by_code(
     return _open(session, principal, master, rules)
 
 
+def _findings_for(
+    session: Session, contents: list[dict[str, Any]], rules: Rules
+) -> list[list[Finding]]:
+    """The findings of each content: its shape and parts, then its labels against this coaching's
+    lists. One lookup serves all of them, so a page of questions costs four queries, not many."""
+    ids = set[UUID]().union(*(catalogue_ids(content) for content in contents))
+    refs = look_up(session, ids)
+    return [validate_content(c, rules) + check_catalogue(c, refs) for c in contents]
+
+
+def _findings(session: Session, content: dict[str, Any], rules: Rules) -> list[Finding]:
+    return _findings_for(session, [content], rules)[0]
+
+
 def _visible(principal: Principal, master: QuestionMaster | None) -> QuestionMaster:
     # Row-level security already hides other coachings' questions. Someone else's draft is also
     # "not found", so its existence is not given away.
@@ -181,7 +197,7 @@ def _load(session: Session, master: QuestionMaster, rules: Rules = DEFAULT_RULES
         .order_by(QuestionVersion.number.desc())
         .limit(1)
     ).one()
-    return QuestionView(master, version, revision, validate_content(revision.content, rules))
+    return QuestionView(master, version, revision, _findings(session, revision.content, rules))
 
 
 def list_questions(
@@ -222,9 +238,11 @@ def list_questions(
     if after is not None:
         query = query.where(tuple_(QuestionMaster.created_at, QuestionMaster.id) < after)
     rows = session.execute(query.limit(limit + 1)).all()
+    page = rows[:limit]
+    findings = _findings_for(session, [revision.content for _, _, revision in page], rules)
     views = [
-        QuestionView(master, version, revision, validate_content(revision.content, rules))
-        for master, version, revision in rows[:limit]
+        QuestionView(master, version, revision, found)
+        for (master, version, revision), found in zip(page, findings, strict=True)
     ]
     return views, len(rows) > limit
 
@@ -280,7 +298,7 @@ def save_working_revision(
     revision.revision += 1
     revision.updated_at = datetime.now(UTC)
     session.flush()
-    return QuestionView(master, version, revision, validate_content(content, rules))
+    return QuestionView(master, version, revision, _findings(session, content, rules))
 
 
 def content_hash(content: dict[str, Any]) -> str:
@@ -331,9 +349,8 @@ def checkpoint(
         request_id=request_id,
         after={"code": master.code, "revision_number": revision.number},
     )
-    return QuestionView(
-        master, version, fresh, validate_content(fresh.content, rules)
-    ), revision.number
+    view = QuestionView(master, version, fresh, _findings(session, fresh.content, rules))
+    return view, revision.number
 
 
 # --- History ---------------------------------------------------------------------------------
@@ -376,7 +393,7 @@ def get_revision(
     if row is None:
         raise NotFound("No such revision.")
     version, revision = row
-    return QuestionView(master, version, revision, validate_content(revision.content, rules))
+    return QuestionView(master, version, revision, _findings(session, revision.content, rules))
 
 
 def set_archived(
