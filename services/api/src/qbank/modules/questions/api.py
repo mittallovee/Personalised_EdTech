@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
-from qbank.core.etag import etag
+from qbank.core.etag import IfMatchHeader, etag
 from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo, decode_cursor, encode_cursor
 from qbank.modules.questions import service
@@ -19,6 +19,10 @@ from qbank.modules.questions.schemas import (
     QuestionOut,
     QuestionPage,
     QuestionSummary,
+    RevisionList,
+    RevisionOut,
+    RevisionSummary,
+    SaveQuestion,
 )
 
 router = APIRouter(prefix="/api/v1/questions", tags=["questions"])
@@ -31,6 +35,13 @@ _NOT_FOUND: dict[int | str, dict[str, Any]] = {
         "description": "No such question that you may open. Someone else's draft is also 404,"
         " so its existence is not given away (`NOT_FOUND`)"
     }
+}
+_STALE: dict[int | str, dict[str, Any]] = {
+    412: {"description": "Changed since you read it; reload (`REVISION_STALE`)"},
+    428: {"description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)"},
+}
+_ARCHIVED: dict[int | str, dict[str, Any]] = {
+    409: {"description": "The question is archived (`QUESTION_ARCHIVED`)"}
 }
 _MAX_CURSOR_LENGTH = 200
 
@@ -50,6 +61,19 @@ def _out(view: service.QuestionView) -> QuestionOut:
             FindingOut(path=f.path, code=f.code, level=f.level, message=f.message)
             for f in view.findings
         ],
+    )
+
+
+def _revision_summary(version_number: int, revision: Any) -> RevisionSummary:
+    return RevisionSummary(
+        number=revision.number,
+        working=revision.frozen_at is None,
+        version_number=version_number,
+        author_id=revision.author_id,
+        content_hash=revision.content_hash,
+        frozen_at=revision.frozen_at,
+        created_at=revision.created_at,
+        updated_at=revision.updated_at,
     )
 
 
@@ -171,3 +195,98 @@ def get_question(
         result = _out(service.get_question(session, principal, question_id))
     response.headers["ETag"] = etag(result.revision)
     return result
+
+
+@router.put(
+    "/{question_id}/working-revision",
+    summary="Autosave: replace the working content",
+    description="Send the whole content and the ETag you last read in `If-Match`. A save from a"
+    " stale screen is refused (412) instead of overwriting newer work. Gaps and mistakes are"
+    " saved and come back as findings. Not written to the audit log (it would bury it).",
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_ARCHIVED},
+)
+def save_working_revision(
+    question_id: UUID,
+    body: SaveQuestion,
+    principal: CurrentPrincipal,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.save_working_revision(
+            session, principal, question_id, body.content, if_match=if_match
+        )
+        result = _out(view)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/checkpoints",
+    status_code=status.HTTP_201_CREATED,
+    summary="Save a checkpoint",
+    description="Freezes the working revision for good (with a hash of its content) and starts a"
+    " new working revision as a copy. The answer is that new working revision; its ETag is for"
+    " the next save. `Location` is the frozen revision.",
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_ARCHIVED},
+)
+def save_checkpoint(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view, frozen_number = service.checkpoint(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view)
+    response.headers["Location"] = f"{router.prefix}/{question_id}/revisions/{frozen_number}"
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.get(
+    "/{question_id}/revisions",
+    summary="The saved revisions, newest first",
+    description="The working revision on top, then the checkpoints. Contents are not included;"
+    " open one revision for its content.",
+    responses={**_DENIED, **_NOT_FOUND},
+)
+def list_revisions(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> RevisionList:
+    with database.transaction(principal.tenant_context) as session:
+        _, rows = service.list_revisions(session, principal, question_id)
+        data = [_revision_summary(version.number, revision) for version, revision in rows]
+    return RevisionList(data=data)
+
+
+@router.get(
+    "/{question_id}/revisions/{number}",
+    summary="One revision of the current version",
+    description="Read-only. Findings are computed as of now, with today's rules.",
+    responses={**_DENIED, **_NOT_FOUND},
+)
+def get_revision(
+    question_id: UUID,
+    number: Annotated[int, Path(ge=1, le=1_000_000)],
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> RevisionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.get_revision(session, principal, question_id, number)
+        return RevisionOut(
+            **_revision_summary(view.version.number, view.revision).model_dump(),
+            content=view.revision.content,
+            findings=_out(view).findings,
+        )

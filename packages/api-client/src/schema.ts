@@ -1104,6 +1104,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question_id}/working-revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Autosave: replace the working content
+         * @description Send the whole content and the ETag you last read in `If-Match`. A save from a stale screen is refused (412) instead of overwriting newer work. Gaps and mistakes are saved and come back as findings. Not written to the audit log (it would bury it).
+         */
+        put: operations["save_working_revision_api_v1_questions__question_id__working_revision_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a checkpoint
+         * @description Freezes the working revision for good (with a hash of its content) and starts a new working revision as a copy. The answer is that new working revision; its ETag is for the next save. `Location` is the frozen revision.
+         */
+        post: operations["save_checkpoint_api_v1_questions__question_id__checkpoints_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The saved revisions, newest first
+         * @description The working revision on top, then the checkpoints. Contents are not included; open one revision for its content.
+         */
+        get: operations["list_revisions_api_v1_questions__question_id__revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/revisions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One revision of the current version
+         * @description Read-only. Findings are computed as of now, with today's rules.
+         */
+        get: operations["get_revision_api_v1_questions__question_id__revisions__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2063,6 +2143,106 @@ export interface components {
              * @enum {string}
              */
             expected_role: "OWNER" | "ADMIN" | "FACULTY";
+        };
+        /** RevisionList */
+        RevisionList: {
+            /** Data */
+            data: components["schemas"]["RevisionSummary"][];
+        };
+        /** RevisionOut */
+        RevisionOut: {
+            /**
+             * Number
+             * @description Counts up within the version.
+             */
+            number: number;
+            /**
+             * Working
+             * @description The one being edited; the others are frozen checkpoints.
+             */
+            working: boolean;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Author Id
+             * Format: uuid
+             * @description Who saved it last.
+             */
+            author_id: string;
+            /**
+             * Content Hash
+             * @description SHA-256 of the content; set when frozen.
+             */
+            content_hash: string | null;
+            /** Frozen At */
+            frozen_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /**
+             * Findings
+             * @description Computed as of now, with today's rules.
+             */
+            findings: components["schemas"]["FindingOut"][];
+        };
+        /** RevisionSummary */
+        RevisionSummary: {
+            /**
+             * Number
+             * @description Counts up within the version.
+             */
+            number: number;
+            /**
+             * Working
+             * @description The one being edited; the others are frozen checkpoints.
+             */
+            working: boolean;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Author Id
+             * Format: uuid
+             * @description Who saved it last.
+             */
+            author_id: string;
+            /**
+             * Content Hash
+             * @description SHA-256 of the content; set when frozen.
+             */
+            content_hash: string | null;
+            /** Frozen At */
+            frozen_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SaveQuestion */
+        SaveQuestion: {
+            /**
+             * Content
+             * @description The whole content, replacing the working revision's. Gaps are fine.
+             */
+            content: {
+                [key: string]: unknown;
+            };
         };
         /** SetGrants */
         SetGrants: {
@@ -6972,6 +7152,339 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_working_revision_api_v1_questions__question_id__working_revision_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveQuestion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question is archived (`QUESTION_ARCHIVED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_checkpoint_api_v1_questions__question_id__checkpoints_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question is archived (`QUESTION_ARCHIVED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_revisions_api_v1_questions__question_id__revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionList"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_revision_api_v1_questions__question_id__revisions__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
