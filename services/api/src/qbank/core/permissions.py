@@ -104,11 +104,18 @@ def has_grant(principal: Principal, grant: Grant) -> bool:
     return grant in principal.grants
 
 
+def may_access_all_drafts(principal: Principal) -> bool:
+    """Open drafts written by others: admins, and faculty with ``EDIT_OTHERS`` (M3 §6)."""
+    return is_allowed(principal, Action.CREATE_QUESTIONS) and has_grant(
+        principal, Grant.EDIT_OTHERS
+    )
+
+
 def may_access_draft(principal: Principal, author_id: UUID) -> bool:
-    """Read or edit a draft: its author, admins, and faculty with ``EDIT_OTHERS`` (M3 §6).
+    """Read or edit one draft: its author, or whoever may open all drafts.
 
     Someone with no role in the coaching (removed, suspended) may open nothing, not even their own.
     """
     if not is_allowed(principal, Action.CREATE_QUESTIONS):
         return False
-    return principal.user_id == author_id or has_grant(principal, Grant.EDIT_OTHERS)
+    return principal.user_id == author_id or may_access_all_drafts(principal)

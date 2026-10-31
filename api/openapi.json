@@ -6718,6 +6718,400 @@
           }
         }
       }
+    },
+    "/api/v1/questions": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Start a question",
+        "description": "Anyone in the coaching. A draft with gaps is saved; the findings in the answer say what is missing. Send an `Idempotency-Key` so a retry after a lost response returns the same question instead of making a second one.",
+        "operationId": "create_question_api_v1_questions_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any unique string (e.g. a UUID). Retrying with the same key never creates twice.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Any unique string (e.g. a UUID). Retrying with the same key never creates twice."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Idempotency-Key was used for a different request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Too large (`CONTENT_TOO_LARGE`) or not plain data (`CONTENT_NOT_JSON`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Questions you may open, newest first",
+        "description": "Your own drafts; admins and people with the edit-others grant see every draft in the coaching (`mine=true` narrows it to their own). Each row carries the number of findings by level; open a question for the findings themselves.",
+        "operationId": "list_questions_api_v1_questions_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Mine"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/by-code/{code}": {
+      "get": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "One question, found by its code",
+        "description": "Typed codes are forgiven: lower case, spaces and dashes are fine.",
+        "operationId": "get_question_by_code_api_v1_questions_by_code__code__get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Not a code (`INVALID_CODE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}": {
+      "get": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "One question",
+        "description": "The ETag is the working revision, for the changes that need `If-Match`.",
+        "operationId": "get_question_api_v1_questions__question_id__get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7258,6 +7652,22 @@
         ],
         "title": "CreateOrganization"
       },
+      "CreateQuestion": {
+        "properties": {
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content",
+            "description": "The question's content (schema version 1). It may be incomplete: a draft with gaps is saved and the response lists what is missing."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "CreateQuestion"
+      },
       "CreateSource": {
         "properties": {
           "kind": {
@@ -7488,6 +7898,62 @@
           "page"
         ],
         "title": "ExamPage"
+      },
+      "FindingCounts": {
+        "properties": {
+          "error": {
+            "type": "integer",
+            "title": "Error"
+          },
+          "incomplete": {
+            "type": "integer",
+            "title": "Incomplete"
+          },
+          "warning": {
+            "type": "integer",
+            "title": "Warning"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "incomplete",
+          "warning"
+        ],
+        "title": "FindingCounts"
+      },
+      "FindingOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Which field, like `options[2].content[0].text`.",
+            "examples": [
+              "answer"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Stable code to branch on, never the message."
+          },
+          "level": {
+            "$ref": "#/components/schemas/Level"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Plain words for the author; the wording may change."
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "code",
+          "level",
+          "message"
+        ],
+        "title": "FindingOut"
       },
       "GoogleActivationStartRequest": {
         "properties": {
@@ -7913,6 +8379,15 @@
           "native_name"
         ],
         "title": "LanguageOut"
+      },
+      "Level": {
+        "type": "string",
+        "enum": [
+          "error",
+          "incomplete",
+          "warning"
+        ],
+        "title": "Level"
       },
       "LiveStatus": {
         "properties": {
@@ -8411,6 +8886,154 @@
           "has_more"
         ],
         "title": "PageInfo"
+      },
+      "QuestionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "The permanent 8-character code, never reused."
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "description": "Also the ETag of the working revision."
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingOut"
+            },
+            "type": "array",
+            "title": "Findings",
+            "description": "Computed from the content on every read, never stored."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "version_number",
+          "revision",
+          "archived",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "content",
+          "findings"
+        ],
+        "title": "QuestionOut"
+      },
+      "QuestionPage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionSummary"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "page"
+        ],
+        "title": "QuestionPage"
+      },
+      "QuestionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "question_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Type",
+            "description": "From the content; null while not chosen."
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "finding_counts": {
+            "$ref": "#/components/schemas/FindingCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "question_type",
+          "archived",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "finding_counts"
+        ],
+        "title": "QuestionSummary"
       },
       "ReadyStatus": {
         "properties": {

@@ -12,6 +12,7 @@ from qbank.core.permissions import (
     Grant,
     has_grant,
     is_allowed,
+    may_access_all_drafts,
     may_access_draft,
     may_manage_member,
     require,
@@ -133,3 +134,18 @@ def test_nobody_without_a_role_may_open_a_draft_even_their_own() -> None:
     nobody = principal(None)
     assert not may_access_draft(nobody, nobody.user_id)
     assert not may_access_draft(PLATFORM, PLATFORM.user_id)
+
+
+def test_who_may_open_every_draft_in_the_coaching() -> None:
+    editor = principal("FACULTY", grants=frozenset({"EDIT_OTHERS"}))
+    assert [
+        may_access_all_drafts(who) for who in (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)
+    ] == [
+        False,
+        True,
+        True,
+        False,
+        True,
+    ]
+    assert may_access_all_drafts(editor)
+    assert not may_access_all_drafts(principal(None, grants=frozenset({"EDIT_OTHERS"})))

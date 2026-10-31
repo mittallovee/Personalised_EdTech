@@ -7,18 +7,19 @@ refused. Findings are computed from the content on every read and never stored.
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select, tuple_
+from sqlalchemy.orm import Session, aliased
 
 from qbank.core.auth import Principal
 from qbank.core.codes import normalize_code, reserve_code
 from qbank.core.errors import NotFound, ValidationFailed
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
-from qbank.core.permissions import Action, may_access_draft, require
+from qbank.core.permissions import Action, may_access_all_drafts, may_access_draft, require
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.findings import Finding
 from qbank.modules.questions.models import QuestionMaster, QuestionRevision, QuestionVersion
@@ -168,3 +169,41 @@ def _load(session: Session, master: QuestionMaster, rules: Rules = DEFAULT_RULES
         .limit(1)
     ).one()
     return QuestionView(master, version, revision, validate_content(revision.content, rules))
+
+
+def list_questions(
+    session: Session,
+    principal: Principal,
+    *,
+    mine_only: bool,
+    limit: int,
+    after: tuple[datetime, UUID] | None,
+    rules: Rules = DEFAULT_RULES,
+) -> tuple[list[QuestionView], bool]:
+    """The questions the caller may open, newest first, after ``after`` (a cursor).
+
+    Admins and holders of ``EDIT_OTHERS`` see every draft in the coaching unless ``mine_only``;
+    everyone else sees their own. Returns the page and whether more follow.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    other = aliased(QuestionVersion)
+    latest = (
+        select(func.max(other.number)).where(other.master_id == QuestionMaster.id).scalar_subquery()
+    )
+    query = (
+        select(QuestionMaster, QuestionVersion, QuestionRevision)
+        .join(QuestionVersion, QuestionVersion.master_id == QuestionMaster.id)
+        .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
+        .where(QuestionRevision.frozen_at.is_(None), QuestionVersion.number == latest)
+        .order_by(QuestionMaster.created_at.desc(), QuestionMaster.id.desc())
+    )
+    if mine_only or not may_access_all_drafts(principal):
+        query = query.where(QuestionMaster.created_by == principal.user_id)
+    if after is not None:
+        query = query.where(tuple_(QuestionMaster.created_at, QuestionMaster.id) < after)
+    rows = session.execute(query.limit(limit + 1)).all()
+    views = [
+        QuestionView(master, version, revision, validate_content(revision.content, rules))
+        for master, version, revision in rows[:limit]
+    ]
+    return views, len(rows) > limit
