@@ -6,6 +6,7 @@ client sends (role, grant, coaching ID) is ever consulted.
 """
 
 from enum import StrEnum
+from uuid import UUID
 
 from qbank.core.auth import Principal
 from qbank.core.errors import PermissionDenied
@@ -41,6 +42,8 @@ class Action(StrEnum):
     VIEW_CATALOGUES = "VIEW_CATALOGUES"
     # Add, rename and retire syllabus items, exams and sources; import them (M3).
     MANAGE_CATALOGUES = "MANAGE_CATALOGUES"
+    # Start a question or passage (M3). Opening someone else's draft: see ``may_access_draft``.
+    CREATE_QUESTIONS = "CREATE_QUESTIONS"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -56,6 +59,7 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.MANAGE_COACHINGS: frozenset(),
     Action.VIEW_CATALOGUES: _EVERYONE,
     Action.MANAGE_CATALOGUES: _ADMINS,
+    Action.CREATE_QUESTIONS: _EVERYONE,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).
@@ -98,3 +102,13 @@ def has_grant(principal: Principal, grant: Grant) -> bool:
     if principal.role is not None and Role(principal.role) in _ADMINS:
         return True
     return grant in principal.grants
+
+
+def may_access_draft(principal: Principal, author_id: UUID) -> bool:
+    """Read or edit a draft: its author, admins, and faculty with ``EDIT_OTHERS`` (M3 §6).
+
+    Someone with no role in the coaching (removed, suspended) may open nothing, not even their own.
+    """
+    if not is_allowed(principal, Action.CREATE_QUESTIONS):
+        return False
+    return principal.user_id == author_id or has_grant(principal, Grant.EDIT_OTHERS)
