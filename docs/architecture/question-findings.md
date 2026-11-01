@@ -140,3 +140,18 @@ label is named. A `null` value counts as not given.
 | `EXAM_DATE_INVALID` / `EXAM_DATE_YEAR_MISMATCH` | error | The date is not written like 2024-01-27, or is not in the exam year |
 | `METADATA_TEXT_INVALID` | error | Shift, paper code (1 to 50 characters) or source note (1 to 500) is blank, too long or not text |
 | `PYQ_FIELDS_IGNORED` | warning | Exam details are filled in but `is_pyq` is not true; they are kept, not dropped |
+
+### Against the coaching's lists
+
+Every read also checks the labels against this coaching's own lists (the syllabus, concepts, exams and
+sources), so a changed or retired item shows up on the next look. An id from another coaching is
+simply not found. Choosing a retired item for the first time is stopped by the pickers, which list
+active items only.
+
+| Code | Level | Meaning |
+|---|---|---|
+| `CATALOGUE_ID_UNKNOWN` | error | The id is not in this coaching's lists |
+| `CATALOGUE_KIND_WRONG` | error | The id is of another kind (a chapter given as the topic) |
+| `HIERARCHY_MISMATCH` | error | The subject is not under the class, the chapter not under the subject, the topic not under the chapter, or the subtopic not under the topic |
+| `CONCEPT_SUBJECT_MISMATCH` | error | A concept (the main one or another) belongs to another subject than the one chosen (C-02: concepts of a question are all of its subject; they need not share the main concept's chapter or topic) |
+| `DEPRECATED_REFERENCE` | warning | The item has been retired; the question keeps working |

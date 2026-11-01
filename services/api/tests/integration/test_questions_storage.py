@@ -23,6 +23,7 @@ from qbank.modules.questions import service
 from qbank.modules.questions.models import QuestionMaster, QuestionRevision
 from qbank.modules.questions.public import DEFAULT_RULES
 from tests.integration.conftest import Member, make_member
+from tests.integration.question_support import Catalogue, ready_for, seed_catalogue
 from tests.unit.test_question_content import FIXTURES
 
 DRAFT = FIXTURES["SCQ"]["draft"]
@@ -56,6 +57,12 @@ def team(owner_db: Database) -> dict[str, Principal]:
     }
 
 
+@pytest.fixture
+def catalogue(owner_db: Database, team: dict[str, Principal]) -> Catalogue:
+    assert team["owner"].organization_id is not None
+    return seed_catalogue(owner_db, team["owner"].organization_id)
+
+
 def create(
     db: Database, who: Principal, content: dict[str, Any], key: str | None = None
 ) -> service.QuestionView:
@@ -78,9 +85,10 @@ def fetch(db: Database, who: Principal, question_id: UUID) -> service.QuestionVi
 
 
 def test_a_new_question_gets_a_code_a_first_version_and_a_working_revision(
-    db: Database, team: dict[str, Principal]
+    db: Database, team: dict[str, Principal], catalogue: Catalogue
 ) -> None:
-    view = create(db, team["author"], copy.deepcopy(READY))
+    ready = ready_for(catalogue)
+    view = create(db, team["author"], copy.deepcopy(ready))
     assert len(view.master.code) == CODE_LENGTH
     assert set(view.master.code) <= set(ALPHABET)
     assert view.master.created_by == team["author"].user_id
@@ -88,7 +96,7 @@ def test_a_new_question_gets_a_code_a_first_version_and_a_working_revision(
     assert view.version.number == 1
     assert view.revision.number == 1
     assert view.revision.frozen_at is None
-    assert view.revision.content == READY
+    assert view.revision.content == ready
     assert view.findings == []
 
 
@@ -296,8 +304,10 @@ def test_nothing_is_ever_deleted(db: Database, team: dict[str, Principal], table
         )
 
 
-def test_creating_uses_the_same_rules_as_reading(db: Database, team: dict[str, Principal]) -> None:
-    content = copy.deepcopy(FIXTURES["INTEGER"]["ready"])
+def test_creating_uses_the_same_rules_as_reading(
+    db: Database, team: dict[str, Principal], catalogue: Catalogue
+) -> None:
+    content = ready_for(catalogue, "INTEGER")
     content["answer"] = {"value": 1000}
     wide = replace(DEFAULT_RULES, integer_max=2000)
     author = team["author"]

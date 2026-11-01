@@ -20,6 +20,7 @@ from tests.integration.conftest import (
     platform_admin,
     sign_in,
 )
+from tests.integration.question_support import Catalogue, ready_for, seed_catalogue
 from tests.unit.test_question_content import FIXTURES
 
 DRAFT = FIXTURES["SCQ"]["draft"]
@@ -50,6 +51,11 @@ def team(owner_db: Database) -> dict[str, Member]:
         "other": make_member(owner_db, "FACULTY", org_id=owner.org_id),
         "editor": make_member(owner_db, "FACULTY", org_id=owner.org_id, grants=["EDIT_OTHERS"]),
     }
+
+
+@pytest.fixture
+def catalogue(owner_db: Database, team: dict[str, Member]) -> Catalogue:
+    return seed_catalogue(owner_db, team["owner"].org_id)
 
 
 def as_member(client: TestClient, member: Member) -> dict[str, str]:
@@ -96,8 +102,10 @@ def test_creating_returns_the_question_its_code_and_the_findings(
     assert response.headers["ETag"] == '"rev-1"'
 
 
-def test_a_ready_question_has_no_findings(client: TestClient, team: dict[str, Member]) -> None:
-    body = create(client, as_member(client, team["author"]), copy.deepcopy(READY))
+def test_a_ready_question_has_no_findings(
+    client: TestClient, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    body = create(client, as_member(client, team["author"]), ready_for(catalogue))
     assert body["findings"] == []
 
 
