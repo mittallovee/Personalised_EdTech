@@ -10,6 +10,22 @@
 
 export type InlineSegment = { type: "text"; text: string } | { type: "math"; source: string };
 
+/**
+ * Where the closing mark of an equation starts, or -1. A doubled backslash is skipped as a pair
+ * (it is a LaTeX line break), so the second backslash of `\\)` is not read as the start of `\)`;
+ * this is the same rule as the server's check.
+ */
+function findClosingMark(text: string, from: number): number {
+  let j = from;
+  while (j < text.length) {
+    if (text[j] !== "\\") j += 1;
+    else if (text[j + 1] === "\\") j += 2;
+    else if (text[j + 1] === ")") return j;
+    else j += 1;
+  }
+  return -1;
+}
+
 export function splitInline(text: string): InlineSegment[] {
   const segments: InlineSegment[] = [];
   let plain = "";
@@ -26,7 +42,7 @@ export function splitInline(text: string): InlineSegment[] {
       plain += "\\";
       i += 2;
     } else if (here === "\\" && next === "(") {
-      const end = text.indexOf("\\)", i + 2);
+      const end = findClosingMark(text, i + 2);
       if (end === -1) {
         plain += text.slice(i); // never closed: it is just text
         break;

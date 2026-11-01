@@ -25,6 +25,14 @@ describe("splitInline", () => {
     expect(splitInline("\\(a\\\\b\\)")).toEqual([{ type: "math", source: "a\\\\b" }]);
   });
 
+  it("does not mistake the second backslash of a line break for the start of the closing mark", () => {
+    // `\\)` inside an equation is a line break followed by ")", as the server's check reads it.
+    expect(splitInline("\\(\\begin{matrix}a\\\\)b\\end{matrix}\\)")).toEqual([
+      { type: "math", source: "\\begin{matrix}a\\\\)b\\end{matrix}" },
+    ]);
+    expect(splitInline("\\(a\\\\\\)")).toEqual([{ type: "math", source: "a\\\\" }]);
+  });
+
   it("shows an unclosed equation as plain text instead of swallowing the rest", () => {
     expect(splitInline("x \\(y + z")).toEqual([{ type: "text", text: "x \\(y + z" }]);
   });
