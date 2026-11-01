@@ -1,5 +1,11 @@
 # GitHub settings checklist (K-05)
 
+> **Status: applied by the owner on 1 Nov 2026.** Checked from the repository API the same day: ruleset
+> `protect-main` is active (no deletion, no force-push, pull request required with conversation resolution,
+> the eight status checks below required and branches kept up to date), auto-merge is allowed, and secret
+> scanning with push protection is on. Re-check after any change to a CI job name: a renamed check that the
+> ruleset still waits for blocks every merge.
+
 The repository's rules are only as strong as the settings that enforce them. Everything in this document is a
 **setting on github.com that only you (the repository owner) can change**: the AI session that writes the code can
 read and push to branches, but it cannot see or change these settings, so nothing here has been applied for you. Work

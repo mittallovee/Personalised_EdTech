@@ -32,7 +32,6 @@ memory. Read `CLAUDE.md`, `AGENTS.md` and `docs/product/02-phase-plan.md` first;
    worker (before M6), K-19 staging rehearsal (M7).
 
 ## Owner items still open
-- Apply the GitHub settings in `docs/operations/github-settings.md` (K-05) and tell Claude "settings done".
 - A queued idea: control characters in M2 display names (not yet a PR).
 - The owner's real syllabus Excel is not in the repo (never commit real coaching content). The 5,000-row apply cap
   can be changed if the real file is larger.
