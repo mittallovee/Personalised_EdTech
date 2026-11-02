@@ -165,7 +165,7 @@ services:
 
   grafana:
     profiles: ["observability"]
-    image: grafana/grafana:11.4.0
+    image: grafana/grafana:13.2.4
     environment:
       # Local-only default like the database passwords above; set your own in .env.
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-local}
