@@ -1,0 +1,88 @@
+/* What a page needs to show question content: KaTeX's own styles and fonts, and a few rules for
+   the class names the renderer uses. Import once, near the top of the app. */
+@import "katex/dist/katex.min.css";
+
+.qb-question {
+  display: grid;
+  gap: 1rem;
+}
+.qb-question p {
+  margin: 0 0 0.5rem;
+}
+.qb-question h4 {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+.qb-options,
+.qb-columns ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.qb-options li,
+.qb-columns li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+.qb-label {
+  font-weight: 600;
+  min-width: 1.5rem;
+}
+.qb-columns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr 1fr;
+}
+.qb-options li[data-correct="true"] {
+  background: rgb(16 185 129 / 0.12);
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
+}
+.qb-correct-note {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #047857;
+}
+.qb-answer-box {
+  max-width: 12rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #a1a1aa;
+  border-radius: 0.375rem;
+}
+.qb-missing,
+.qb-unsupported {
+  color: #52525b;
+  font-style: italic;
+}
+.qb-math-error {
+  color: #b91c1c;
+}
+.qb-question table {
+  border-collapse: collapse;
+}
+.qb-question td {
+  border: 1px solid #d4d4d8;
+  padding: 0.25rem 0.5rem;
+}
+.qb-question img {
+  max-width: 100%;
+  height: auto;
+}
+@media (prefers-color-scheme: dark) {
+  .qb-correct-note {
+    color: #6ee7b7;
+  }
+  .qb-missing,
+  .qb-unsupported {
+    color: #a1a1aa;
+  }
+  .qb-math-error {
+    color: #fca5a5;
+  }
+  .qb-question td {
+    border-color: #3f3f46;
+  }
+}
