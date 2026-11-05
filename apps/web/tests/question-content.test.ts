@@ -6,12 +6,16 @@ import {
   correctIds,
   emptyContent,
   formatLabel,
+  numericalAnswer,
   optionsOf,
   paragraph,
   removeBlock,
   replaceBlock,
   setCorrect,
+  setNumericalAnswer,
   setOptionContent,
+  setWholeNumberAnswer,
+  wholeNumberText,
   withField,
 } from "../src/lib/question-content";
 
@@ -189,6 +193,133 @@ describe("options and the answer", () => {
     expect(correctIds({ answer: { option_ids: ["A", 3, "C"] } })).toEqual(["A", "C"]);
     for (const junk of [undefined, null, 5, "x", [], {}, { option_ids: "A" }]) {
       expect(correctIds({ answer: junk })).toEqual([]);
+    }
+  });
+});
+
+describe("whole-number answers (integer and single digit)", () => {
+  const content = () => emptyContent("INTEGER");
+
+  it("stores digits as a JSON integer, never a float or a string", () => {
+    expect(setWholeNumberAnswer(content(), "42").answer).toEqual({ value: 42 });
+    expect(setWholeNumberAnswer(content(), "0").answer).toEqual({ value: 0 });
+    expect(setWholeNumberAnswer(content(), " 7 ").answer).toEqual({ value: 7 });
+  });
+
+  it("keeps what could not be read as typed, so the server can say what is wrong with it", () => {
+    for (const typed of ["9.5", "abc", "1e3", "-", "٣"]) {
+      expect(setWholeNumberAnswer(content(), typed).answer).toEqual({ value: typed });
+    }
+  });
+
+  it("keeps a whole number too big for the browser as text, not a rounded number", () => {
+    const big = "99999999999999999999";
+    expect(setWholeNumberAnswer(content(), big).answer).toEqual({ value: big });
+  });
+
+  it("removes the answer when the box is emptied", () => {
+    const withAnswer = setWholeNumberAnswer(content(), "5");
+    expect(setWholeNumberAnswer(withAnswer, "")).not.toHaveProperty("answer");
+    expect(setWholeNumberAnswer(withAnswer, "  ")).not.toHaveProperty("answer");
+  });
+
+  it("shows the answer as the text in the box", () => {
+    expect(wholeNumberText(setWholeNumberAnswer(content(), "42"))).toBe("42");
+    expect(wholeNumberText(setWholeNumberAnswer(content(), "9.5"))).toBe("9.5");
+    expect(wholeNumberText(content())).toBe("");
+    for (const junk of [{ answer: null }, { answer: 5 }, { answer: { value: [] } }]) {
+      expect(wholeNumberText(junk)).toBe("");
+    }
+  });
+
+  it("does not change the content it was given", () => {
+    const original = content();
+    setWholeNumberAnswer(original, "3");
+    expect(original).not.toHaveProperty("answer");
+  });
+});
+
+describe("numerical answers", () => {
+  const content = () => emptyContent("NUMERICAL");
+
+  it("reads an empty question as an exact answer with nothing written", () => {
+    expect(numericalAnswer(content())).toEqual({ mode: "exact", value: "", lower: "", upper: "" });
+  });
+
+  it("stores an exact value as a decimal string", () => {
+    const next = setNumericalAnswer(content(), {
+      mode: "exact",
+      value: "9.81",
+      lower: "",
+      upper: "",
+    });
+    expect(next.answer).toEqual({ mode: "exact", value: "9.81" });
+    expect(numericalAnswer(next)).toEqual({ mode: "exact", value: "9.81", lower: "", upper: "" });
+  });
+
+  it("stores a range as two decimal strings", () => {
+    const next = setNumericalAnswer(content(), {
+      mode: "range",
+      value: "",
+      lower: "9.79",
+      upper: "9.81",
+    });
+    expect(next.answer).toEqual({ mode: "range", lower: "9.79", upper: "9.81" });
+  });
+
+  it("keeps what is typed as typed, never rounded or turned into a number", () => {
+    const next = setNumericalAnswer(content(), {
+      mode: "exact",
+      value: "9.805",
+      lower: "",
+      upper: "",
+    });
+    expect(next.answer).toEqual({ mode: "exact", value: "9.805" });
+  });
+
+  it("keeps a half-filled range, so the findings can say what is missing", () => {
+    const next = setNumericalAnswer(content(), {
+      mode: "range",
+      value: "",
+      lower: "1.00",
+      upper: "",
+    });
+    expect(next.answer).toEqual({ mode: "range", lower: "1.00", upper: "" });
+  });
+
+  it("removes the answer when everything is blank", () => {
+    const filled = setNumericalAnswer(content(), {
+      mode: "exact",
+      value: "1.00",
+      lower: "",
+      upper: "",
+    });
+    const cleared = setNumericalAnswer(filled, { mode: "exact", value: " ", lower: "", upper: "" });
+    expect(cleared).not.toHaveProperty("answer");
+  });
+
+  it("remembers both kinds of answer's numbers while switching between exact and range", () => {
+    const read = numericalAnswer({ answer: { mode: "range", lower: "1.00", upper: "2.00" } });
+    expect(read).toEqual({ mode: "range", value: "", lower: "1.00", upper: "2.00" });
+  });
+
+  it("reads junk as an empty exact answer", () => {
+    for (const junk of [
+      undefined,
+      null,
+      5,
+      "x",
+      [],
+      {},
+      { mode: "other", value: 3 },
+      { mode: "exact", value: 4 },
+    ]) {
+      expect(numericalAnswer({ answer: junk })).toEqual({
+        mode: "exact",
+        value: "",
+        lower: "",
+        upper: "",
+      });
     }
   });
 });

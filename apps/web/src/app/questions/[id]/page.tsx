@@ -10,6 +10,7 @@ import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
 import { FindingsPanel } from "@/components/findings-panel";
 import { OptionsField } from "@/components/options-field";
+import { TypedAnswerField } from "@/components/typed-answer-field";
 import { api, errorMessage, ifMatch } from "@/lib/api";
 import { blocksOf, formatLabel, savedLabel, withField } from "@/lib/question-content";
 import { useAutosave, type SaveState } from "@/lib/use-autosave";
@@ -152,6 +153,9 @@ function Editor({ initial }: { initial: Question }) {
   const archived = save.state === "archived";
   const hasOptions =
     save.content.question_type === "SCQ" || save.content.question_type === "MULTI_CORRECT";
+  const typed = ["INTEGER", "SINGLE_DIGIT", "NUMERICAL"].includes(
+    String(save.content.question_type),
+  );
   const locked = archived || save.state === "conflict";
 
   /**
@@ -350,6 +354,13 @@ function Editor({ initial }: { initial: Question }) {
                   onChange={save.setContent}
                 />
               )}
+              {typed && (
+                <TypedAnswerField
+                  content={save.content}
+                  disabled={locked || busy}
+                  onChange={save.setContent}
+                />
+              )}
               <BlocksField
                 label="Solution (optional)"
                 blocks={blocksOf(save.content.solution)}
@@ -357,7 +368,7 @@ function Editor({ initial }: { initial: Question }) {
                 onChange={(next) => save.setContent(withField(save.content, "solution", next))}
               />
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {hasOptions
+                {hasOptions || typed
                   ? "The labels (class, subject, chapter, topic, difficulty...) are edited in the next update."
                   : "The rest of this format and the labels (class, subject, chapter, topic, difficulty...) are edited in the next updates."}{" "}
                 The preview shows what is saved so far.
