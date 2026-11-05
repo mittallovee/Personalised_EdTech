@@ -155,3 +155,66 @@ export function setCorrect(content: Content, optionId: string, on: boolean): Con
   if (on) return { ...rest, answer: { option_id: optionId } };
   return correctIds(content).includes(optionId) ? rest : content;
 }
+
+// --- Answers typed in: integer, single digit and numerical -------------------------------------
+
+/** The answer of an integer or single-digit question, as the text in its box. */
+export function wholeNumberText(content: Content): string {
+  const answer = content.answer;
+  if (typeof answer !== "object" || answer === null) return "";
+  const value = (answer as { value?: unknown }).value;
+  return typeof value === "number" || typeof value === "string" ? String(value) : "";
+}
+
+/**
+ * Set the answer of an integer or single-digit question from what was typed. Digits are stored as a
+ * JSON integer (never a float or a string); anything else, and a number too big to be exact, is
+ * kept as typed so the server's findings can say what is wrong with it. An empty box means no
+ * answer.
+ */
+export function setWholeNumberAnswer(content: Content, typed: string): Content {
+  const { answer: _answer, ...rest } = content;
+  void _answer;
+  const text = typed.trim();
+  if (text === "") return rest;
+  const whole = /^-?[0-9]+$/.test(text) ? Number(text) : Number.NaN;
+  return { ...rest, answer: { value: Number.isSafeInteger(whole) ? whole : text } };
+}
+
+export type NumericalAnswer = {
+  mode: "exact" | "range";
+  value: string;
+  lower: string;
+  upper: string;
+};
+
+const text = (value: unknown): string => (typeof value === "string" ? value : "");
+
+/** The answer of a numerical question as text for its boxes (an empty exact answer if none). */
+export function numericalAnswer(content: Content): NumericalAnswer {
+  const answer = content.answer;
+  const empty: NumericalAnswer = { mode: "exact", value: "", lower: "", upper: "" };
+  if (typeof answer !== "object" || answer === null) return empty;
+  const a = answer as Record<string, unknown>;
+  if (a.mode === "exact") return { ...empty, value: text(a.value) };
+  if (a.mode === "range")
+    return { ...empty, mode: "range", lower: text(a.lower), upper: text(a.upper) };
+  return empty;
+}
+
+/**
+ * Set the answer of a numerical question: an exact value or one range, each number a decimal
+ * string kept exactly as typed (never rounded, never a float). Everything blank means no answer.
+ */
+export function setNumericalAnswer(content: Content, next: NumericalAnswer): Content {
+  const { answer: _answer, ...rest } = content;
+  void _answer;
+  if (next.mode === "exact") {
+    return next.value.trim() === ""
+      ? rest
+      : { ...rest, answer: { mode: "exact", value: next.value.trim() } };
+  }
+  const lower = next.lower.trim();
+  const upper = next.upper.trim();
+  return lower === "" && upper === "" ? rest : { ...rest, answer: { mode: "range", lower, upper } };
+}

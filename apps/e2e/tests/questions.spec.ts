@@ -292,3 +292,131 @@ test("a multiple-correct question can have several correct options, and none aga
   await page.getByRole("checkbox", { name: "Option C is correct" }).uncheck();
   await expect(findings).toContainText("Choose the correct answer", { timeout: 15_000 });
 });
+
+// M3 PR 3d-3: the answers typed in (integer, single digit, numerical).
+
+test("an integer answer is stored as a number, and a wrong one is flagged by the server", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /^Integer/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(findings).toContainText("Choose the correct answer");
+  const answer = page.getByRole("textbox", { name: "Correct answer" });
+
+  await answer.fill("1000"); // above the default limit of 999
+  await expect(findings).toContainText("Mistakes", { timeout: 15_000 });
+  await answer.fill("999");
+  await expect(findings).not.toContainText("Mistakes", { timeout: 15_000 });
+  await expect(findings).not.toContainText("Choose the correct answer");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expectNoSeriousA11yViolations(page);
+
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Correct answer" })).toHaveValue("999");
+  await page.getByRole("tab", { name: "Preview" }).click();
+  await expect(page.locator(".qb-question")).not.toContainText("Answer: 999");
+  await page.getByLabel("Show the answer and solution").check();
+  await expect(page.locator(".qb-question")).toContainText("Answer: 999");
+});
+
+test("a single-digit answer takes 0 to 9 only", async ({ browser, baseURL }) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /^Single digit/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+  const answer = page.getByRole("textbox", { name: "Correct answer" });
+  await answer.fill("12");
+  await expect(findings).toContainText("Mistakes", { timeout: 15_000 });
+  await answer.fill("5");
+  await expect(findings).not.toContainText("Mistakes", { timeout: 15_000 });
+  await expect(findings).not.toContainText("Choose the correct answer");
+});
+
+test("a numerical answer is an exact value or a range, kept exactly as typed", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /^Numerical/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(findings).toContainText("Choose the correct answer");
+
+  // More than two decimal places is kept and flagged, never rounded.
+  await page.getByRole("textbox", { name: "Value" }).fill("9.805");
+  await expect(findings).toContainText("Mistakes", { timeout: 15_000 });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Value" })).toHaveValue("9.805");
+  await page.getByRole("textbox", { name: "Value" }).fill("9.81");
+  await expect(findings).not.toContainText("Mistakes", { timeout: 15_000 });
+
+  // Switch to a range.
+  await page.getByRole("radio", { name: "A range" }).check();
+  await page.getByRole("textbox", { name: "From" }).fill("9.79");
+  await page.getByRole("textbox", { name: "To" }).fill("9.81");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(findings).not.toContainText("Mistakes");
+  await expect(findings).not.toContainText("Choose the correct answer");
+  await expectNoSeriousA11yViolations(page);
+
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "A range" })).toBeChecked();
+  await expect(page.getByRole("textbox", { name: "From" })).toHaveValue("9.79");
+  await expect(page.getByRole("textbox", { name: "To" })).toHaveValue("9.81");
+  await page.getByRole("tab", { name: "Preview" }).click();
+  await page.getByLabel("Show the answer and solution").check();
+  await expect(page.locator(".qb-question")).toContainText("Answer: 9.79 to 9.81");
+});
+
+test("after a conflict, Reload shows the other tab's kind of numerical answer, not the old one", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /^Numerical/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  await page.getByRole("textbox", { name: "Value" }).fill("9.81");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Another tab (here: the API) turns the answer into a range.
+  const id = page.url().split("/").pop()!;
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const current = (await (await context.request.get(`/api/v1/questions/${id}`)).json()) as {
+    revision: number;
+    content: Record<string, unknown>;
+  };
+  const changed = await context.request.put(`/api/v1/questions/${id}/working-revision`, {
+    headers: { ...headers, "If-Match": `"rev-${current.revision}"` },
+    data: {
+      content: { ...current.content, answer: { mode: "range", lower: "1.00", upper: "2.00" } },
+    },
+  });
+  expect(changed.status()).toBe(200);
+
+  // This tab saves next, finds out, and offers to reload.
+  await page.getByLabel("Question, block 1: paragraph").fill("Typed after the change elsewhere");
+  await expect(page.getByText("Someone else changed this question.")).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByRole("radio", { name: "A range" })).toBeChecked();
+  await expect(page.getByRole("textbox", { name: "From" })).toHaveValue("1.00");
+  await expect(page.getByRole("textbox", { name: "To" })).toHaveValue("2.00");
+});
