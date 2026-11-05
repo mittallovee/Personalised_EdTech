@@ -85,6 +85,9 @@ test("an author starts, writes, previews, checkpoints and archives a question", 
   await page.getByRole("button", { name: "Restore" }).click();
   await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
   await page.getByRole("link", { name: "Back to questions" }).click();
+  // The list keeps the filter you left it with (the app keeps a page's state while you are away),
+  // so go back to the normal list before looking for the restored question.
+  await page.getByLabel("Archived").uncheck();
   await expect(page.getByRole("link", { name: new RegExp(code) })).toBeVisible();
 });
 
