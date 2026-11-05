@@ -9,6 +9,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
 import { FindingsPanel } from "@/components/findings-panel";
+import { OptionsField } from "@/components/options-field";
 import { api, errorMessage, ifMatch } from "@/lib/api";
 import { blocksOf, formatLabel, savedLabel, withField } from "@/lib/question-content";
 import { useAutosave, type SaveState } from "@/lib/use-autosave";
@@ -149,6 +150,8 @@ function Editor({ initial }: { initial: Question }) {
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState({ number: initial.version_number, id: initial.id });
   const archived = save.state === "archived";
+  const hasOptions =
+    save.content.question_type === "SCQ" || save.content.question_type === "MULTI_CORRECT";
   const locked = archived || save.state === "conflict";
 
   /**
@@ -340,10 +343,24 @@ function Editor({ initial }: { initial: Question }) {
                 disabled={locked || busy}
                 onChange={(next) => save.setContent(withField(save.content, "stem", next))}
               />
+              {hasOptions && (
+                <OptionsField
+                  content={save.content}
+                  disabled={locked || busy}
+                  onChange={save.setContent}
+                />
+              )}
+              <BlocksField
+                label="Solution (optional)"
+                blocks={blocksOf(save.content.solution)}
+                disabled={locked || busy}
+                onChange={(next) => save.setContent(withField(save.content, "solution", next))}
+              />
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                The options, the answer, the solution and the labels (class, subject, chapter,
-                topic, difficulty...) are edited in the next updates. The preview shows what is
-                saved so far.
+                {hasOptions
+                  ? "The labels (class, subject, chapter, topic, difficulty...) are edited in the next update."
+                  : "The rest of this format and the labels (class, subject, chapter, topic, difficulty...) are edited in the next updates."}{" "}
+                The preview shows what is saved so far.
               </p>
             </div>
           ) : (

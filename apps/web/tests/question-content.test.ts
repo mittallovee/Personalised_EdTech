@@ -3,11 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   FORMATS,
   blocksOf,
+  correctIds,
   emptyContent,
   formatLabel,
+  optionsOf,
   paragraph,
   removeBlock,
   replaceBlock,
+  setCorrect,
+  setOptionContent,
   withField,
 } from "../src/lib/question-content";
 
@@ -101,5 +105,73 @@ describe("block helpers", () => {
     expect(formatLabel("SCQ")).toBe("Single correct");
     expect(formatLabel("NOPE")).toBe("Unknown format");
     expect(formatLabel(undefined)).toBe("Unknown format");
+  });
+});
+
+describe("options and the answer", () => {
+  const scq = () => emptyContent("SCQ");
+  const multi = () => emptyContent("MULTI_CORRECT");
+
+  it("reads the options of a content, leaving out anything that is not one", () => {
+    expect(optionsOf(scq()).map((o) => o.id)).toEqual(["A", "B", "C", "D"]);
+    expect(optionsOf({ options: [null, 3, {}, { id: 5 }, { id: "X", content: "no" }] })).toEqual([
+      { id: "X", content: [] },
+    ]);
+    expect(optionsOf({})).toEqual([]);
+  });
+
+  it("changes one option's blocks and nothing else", () => {
+    const content = scq();
+    const changed = setOptionContent(content, 1, [paragraph("two")]);
+    expect(optionsOf(changed).map((o) => o.content.length)).toEqual([1, 1, 1, 1]);
+    expect(optionsOf(changed)[1]?.content[0]?.text).toBe("two");
+    expect(optionsOf(content)[1]?.content[0]?.text).toBe("");
+    expect(setOptionContent(content, 9, [])).toBe(content);
+  });
+
+  it("marks one option correct in a single-correct question, replacing the earlier one", () => {
+    const first = setCorrect(scq(), "B", true);
+    expect(first.answer).toEqual({ option_id: "B" });
+    const second = setCorrect(first, "C", true);
+    expect(second.answer).toEqual({ option_id: "C" });
+    expect(correctIds(second)).toEqual(["C"]);
+  });
+
+  it("removes the answer when the marked option is unmarked, and ignores unmarking another", () => {
+    const marked = setCorrect(scq(), "B", true);
+    expect(marked).not.toBe(setCorrect(marked, "B", false));
+    expect(setCorrect(marked, "B", false)).not.toHaveProperty("answer");
+    expect(setCorrect(marked, "D", false)).toBe(marked);
+  });
+
+  it("marks several in a multiple-correct question, in the order of the options", () => {
+    let content = setCorrect(multi(), "C", true);
+    content = setCorrect(content, "A", true);
+    expect(content.answer).toEqual({ option_ids: ["A", "C"] });
+    content = setCorrect(content, "A", false);
+    expect(content.answer).toEqual({ option_ids: ["C"] });
+    content = setCorrect(content, "C", false);
+    expect(content).not.toHaveProperty("answer");
+  });
+
+  it("never changes the content it was given", () => {
+    const content = multi();
+    const copy = JSON.stringify(content);
+    setCorrect(content, "A", true);
+    setCorrect(content, "Z", true);
+    expect(JSON.stringify(content)).toBe(copy);
+  });
+
+  it("ignores an id that is not an option", () => {
+    const content = scq();
+    expect(setCorrect(content, "Z", true)).toBe(content);
+  });
+
+  it("reads the correct ids of either shape and of junk", () => {
+    expect(correctIds({ answer: { option_id: "B" } })).toEqual(["B"]);
+    expect(correctIds({ answer: { option_ids: ["A", 3, "C"] } })).toEqual(["A", "C"]);
+    for (const junk of [undefined, null, 5, "x", [], {}, { option_ids: "A" }]) {
+      expect(correctIds({ answer: junk })).toEqual([]);
+    }
   });
 });
