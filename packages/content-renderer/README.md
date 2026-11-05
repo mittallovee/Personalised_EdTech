@@ -20,6 +20,14 @@ import { Blocks } from "@qbank/content-renderer";
 - **Never throws.** Whatever it is given, an unknown or oversize block becomes a short notice. The
   limits match the server's (`questions/rules.py`).
 
+`QuestionPreview` shows a whole question as a student will see it (D-10): the stem, then the options or the
+answer box for its format. Pass `reveal` to mark the correct answer and show the solution; without it the
+output holds nothing about either, so a preview can sit beside the editor.
+
+```tsx
+<QuestionPreview content={revision.content} reveal={showAnswer} />
+```
+
 Needs KaTeX's stylesheet (`katex/dist/katex.min.css`) on the page that shows it.
 
 ```bash

@@ -3,3 +3,4 @@ export type { AssetUrl } from "./blocks";
 export { splitInline } from "./inline";
 export type { InlineSegment } from "./inline";
 export { Math, typeset } from "./math";
+export { QuestionPreview } from "./question";
