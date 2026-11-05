@@ -106,23 +106,25 @@ export type Option = { id: string; content: Block[] };
  *  multiple statement), read defensively: anything that is not an option is left out. */
 export function optionsOf(content: Content): Option[] {
   const raw = Array.isArray(content.options) ? content.options : [];
-  return raw
-    .filter(
-      (o): o is { id: string; content?: unknown } =>
-        typeof o === "object" && o !== null && typeof (o as { id?: unknown }).id === "string",
-    )
-    .map((o) => ({ id: o.id, content: blocksOf(o.content) }));
+  return raw.filter(isOption).map((o) => ({ id: o.id, content: blocksOf(o.content) }));
 }
 
-/** A copy of ``content`` with the blocks of option ``index`` replaced. */
-export function setOptionContent(content: Content, index: number, blocks: Block[]): Content {
+/**
+ * A copy of ``content`` with the blocks of the option with id ``optionId`` replaced. The option is
+ * found by its id, not by its place in the list shown on screen: a saved draft may hold an entry
+ * that is not an option (it is not shown), and that must not take the edit.
+ */
+export function setOptionContent(content: Content, optionId: string, blocks: Block[]): Content {
   const raw = Array.isArray(content.options) ? content.options : [];
-  if (index < 0 || index >= raw.length) return content;
-  const options = raw.map((o, i) =>
-    i === index && typeof o === "object" && o !== null ? { ...o, content: blocks } : o,
+  if (!raw.some((o) => isOption(o) && o.id === optionId)) return content;
+  const options = raw.map((o) =>
+    isOption(o) && o.id === optionId ? { ...o, content: blocks } : o,
   );
   return withField(content, "options", options);
 }
+
+const isOption = (o: unknown): o is { id: string; content?: unknown } =>
+  typeof o === "object" && o !== null && typeof (o as { id?: unknown }).id === "string";
 
 /** The ids of the options marked correct, from an answer of either shape. */
 export function correctIds(content: Content): string[] {

@@ -122,11 +122,28 @@ describe("options and the answer", () => {
 
   it("changes one option's blocks and nothing else", () => {
     const content = scq();
-    const changed = setOptionContent(content, 1, [paragraph("two")]);
+    const changed = setOptionContent(content, "B", [paragraph("two")]);
     expect(optionsOf(changed).map((o) => o.content.length)).toEqual([1, 1, 1, 1]);
     expect(optionsOf(changed)[1]?.content[0]?.text).toBe("two");
     expect(optionsOf(content)[1]?.content[0]?.text).toBe("");
-    expect(setOptionContent(content, 9, [])).toBe(content);
+    expect(setOptionContent(content, "Z", [])).toBe(content);
+  });
+
+  it("finds the option by its id, so an entry that is not an option cannot shift the edit", () => {
+    // A saved draft may hold an entry without an id; it is not shown, and must not take the edit.
+    const content = {
+      options: [
+        { id: "A", content: [paragraph("a")] },
+        { content: [paragraph("hidden")] },
+        { id: "C", content: [paragraph("c")] },
+      ],
+    };
+    const changed = setOptionContent(content, "C", [paragraph("C changed")]);
+    expect(changed.options).toEqual([
+      { id: "A", content: [paragraph("a")] },
+      { content: [paragraph("hidden")] },
+      { id: "C", content: [paragraph("C changed")] },
+    ]);
   });
 
   it("marks one option correct in a single-correct question, replacing the earlier one", () => {

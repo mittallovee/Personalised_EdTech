@@ -58,7 +58,7 @@ export function OptionsField({
             <BlocksField
               label={`Option ${letter}`}
               blocks={option.content}
-              onChange={(next) => onChange(setOptionContent(content, index, next))}
+              onChange={(next) => onChange(setOptionContent(content, option.id, next))}
             />
           </div>
         );
