@@ -380,3 +380,43 @@ test("a numerical answer is an exact value or a range, kept exactly as typed", a
   await page.getByLabel("Show the answer and solution").check();
   await expect(page.locator(".qb-question")).toContainText("Answer: 9.79 to 9.81");
 });
+
+test("after a conflict, Reload shows the other tab's kind of numerical answer, not the old one", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /^Numerical/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  await page.getByRole("textbox", { name: "Value" }).fill("9.81");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Another tab (here: the API) turns the answer into a range.
+  const id = page.url().split("/").pop()!;
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const current = (await (await context.request.get(`/api/v1/questions/${id}`)).json()) as {
+    revision: number;
+    content: Record<string, unknown>;
+  };
+  const changed = await context.request.put(`/api/v1/questions/${id}/working-revision`, {
+    headers: { ...headers, "If-Match": `"rev-${current.revision}"` },
+    data: {
+      content: { ...current.content, answer: { mode: "range", lower: "1.00", upper: "2.00" } },
+    },
+  });
+  expect(changed.status()).toBe(200);
+
+  // This tab saves next, finds out, and offers to reload.
+  await page.getByLabel("Question, block 1: paragraph").fill("Typed after the change elsewhere");
+  await expect(page.getByText("Someone else changed this question.")).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByRole("radio", { name: "A range" })).toBeChecked();
+  await expect(page.getByRole("textbox", { name: "From" })).toHaveValue("1.00");
+  await expect(page.getByRole("textbox", { name: "To" })).toHaveValue("2.00");
+});

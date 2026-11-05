@@ -56,8 +56,11 @@ export function TypedAnswerField({
 
 function Numerical({ content, onChange }: { content: Content; onChange: (next: Content) => void }) {
   const answer = numericalAnswer(content);
-  // The kind is remembered here too: with nothing written there is no answer to read it from.
-  const [mode, setMode] = useState(answer.mode);
+  // The kind comes from the answer when there is one, so a question read again from the server
+  // (after a conflict) shows what it now holds. Only while nothing is written is it remembered
+  // here, because then there is no answer to read it from.
+  const [chosen, setMode] = useState(answer.mode);
+  const mode = content.answer ? answer.mode : chosen;
   const change = (patch: Partial<NumericalAnswer>) =>
     onChange(setNumericalAnswer(content, { ...answer, ...patch, mode }));
 
