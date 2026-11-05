@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { Me } from "@qbank/api-client";
 
 // Modules arrive in later milestones (M3 authoring, M4 review, M5 AI, more admin screens).
-const UPCOMING = ["Questions", "Review", "AI & prompts"];
+const UPCOMING = ["Review", "AI & prompts"];
 
 /**
  * Whether to show the Users & grants link. Only a hint for the menu: the API refuses everyone
@@ -41,6 +41,7 @@ export type Page =
   | "users"
   | "coachings"
   | "audit"
+  | "questions"
   | "syllabus"
   | "concepts"
   | "exams-sources"
@@ -120,6 +121,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "coachings" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Coachings
+                </Link>
+              </li>
+            )}
+            {showsSyllabus(me) && (
+              <li>
+                <Link
+                  href="/questions"
+                  aria-current={current === "questions" ? "page" : undefined}
+                  className={`${ITEM} ${current === "questions" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Questions
                 </Link>
               </li>
             )}

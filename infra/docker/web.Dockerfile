@@ -8,8 +8,10 @@ WORKDIR /repo
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json apps/web/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/content-renderer/package.json packages/content-renderer/
 RUN pnpm install --frozen-lockfile --filter "@qbank/web..."
 COPY packages/api-client/ packages/api-client/
+COPY packages/content-renderer/ packages/content-renderer/
 COPY apps/web/ apps/web/
 RUN pnpm --filter @qbank/web build
 

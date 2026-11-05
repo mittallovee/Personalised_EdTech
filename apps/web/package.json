@@ -9,10 +9,12 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@qbank/api-client": "workspace:*",
+    "@qbank/content-renderer": "workspace:*",
     "next": "16.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -24,8 +26,9 @@
     "@types/react-dom": "^19",
     "eslint": "^10",
     "eslint-config-next": "16.4.2",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "prettier": "^3.9.10"
+    "vitest": "5.0.5"
   }
 }

@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, "../../"),
   cacheComponents: true,
   partialPrefetching: true,
-  // The generated API client is TypeScript source from the workspace.
-  transpilePackages: ["@qbank/api-client"],
+  // The generated API client and the content renderer are TypeScript source from the workspace.
+  transpilePackages: ["@qbank/api-client", "@qbank/content-renderer"],
   // The browser only ever talks to this origin: API calls are forwarded, so the session cookie is
   // first-party, no CORS is needed and the API's Origin check sees the web app's address.
   async rewrites() {

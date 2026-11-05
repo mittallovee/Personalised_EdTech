@@ -5,7 +5,8 @@
   "description": "The only code that turns question content (typed blocks, LaTeX) into screen output (ADR-0016)",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
