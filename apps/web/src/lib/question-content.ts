@@ -11,12 +11,20 @@ export type Format = { value: string; label: string; hint: string };
 /** The eight formats an author can start (the ninth, passage-based, is shared context: 3h). */
 export const FORMATS: Format[] = [
   { value: "SCQ", label: "Single correct", hint: "Four options, one is right" },
-  { value: "MULTI_CORRECT", label: "Multiple correct", hint: "Four options, one or more are right" },
+  {
+    value: "MULTI_CORRECT",
+    label: "Multiple correct",
+    hint: "Four options, one or more are right",
+  },
   { value: "INTEGER", label: "Integer", hint: "A whole number from 0 to 999" },
   { value: "SINGLE_DIGIT", label: "Single digit", hint: "A whole number from 0 to 9" },
   { value: "NUMERICAL", label: "Numerical", hint: "A value or a range, two decimal places" },
   { value: "MATCHING", label: "Matching", hint: "Match List I to List II, four options" },
-  { value: "ASSERTION_REASON", label: "Assertion–reason", hint: "An assertion, a reason, four options" },
+  {
+    value: "ASSERTION_REASON",
+    label: "Assertion–reason",
+    hint: "An assertion, a reason, four options",
+  },
   { value: "MULTIPLE_STATEMENT", label: "Multiple statement", hint: "Statements, four options" },
 ];
 

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { expectNoSeriousA11yViolations, signedInOwner, unique } from "./helpers";
+import { csrfOf, expectNoSeriousA11yViolations, signedInOwner, unique } from "./helpers";
 
 // M3 PR 3d-1 (D-11, E-04): an author starts a question, writes it, sees it saved by itself, looks
 // at it as a student will, saves a checkpoint and archives it.
@@ -111,4 +111,86 @@ test("a question that is not yours or does not exist says so", async ({ browser,
   const page = await context.newPage();
   await page.goto("/questions/00000000-0000-4000-8000-000000000000");
   await expect(page.getByText("This question does not exist")).toBeVisible();
+});
+
+// Review of the first version of this screen: typing must never be lost.
+
+test("leaving the editor right after typing still saves what was typed", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("button", { name: "Start question" }).click();
+  await expect(page).toHaveURL(/\/questions\/[0-9a-f-]{36}$/);
+  const url = page.url();
+  // Typed, and gone before the pause that normally triggers the save.
+  await page.getByLabel("Question, block 1: paragraph").fill("Typed and left at once");
+  await page.getByRole("link", { name: "Back to questions" }).click();
+  await expect(page.getByRole("heading", { name: "Questions", level: 1 })).toBeVisible();
+  await page.goto(url);
+  await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue(
+    "Typed and left at once",
+  );
+});
+
+test("while a checkpoint is being saved the question cannot be edited, so nothing typed is lost", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("button", { name: "Start question" }).click();
+  await page.getByLabel("Question, block 1: paragraph").fill("Before the checkpoint");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  // Slow the checkpoint down so the moment in between can be seen.
+  await page.route("**/checkpoints", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Save checkpoint" }).click();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeDisabled();
+  await expect(page.getByText("Checkpoint saved. You can keep editing.")).toBeVisible();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue(
+    "Before the checkpoint",
+  );
+});
+
+test("a question archived elsewhere while you type can still be restored, and your typing is kept", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("button", { name: "Start question" }).click();
+  await expect(page).toHaveURL(/\/questions\/[0-9a-f-]{36}$/);
+  const id = page.url().split("/").pop()!;
+  // Another tab (here: the API) archives it.
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const archived = await context.request.post(`/api/v1/questions/${id}/archive`, { headers });
+  expect(archived.status()).toBe(200);
+  // The next autosave finds out; the typing stays on screen.
+  await page.getByLabel("Question, block 1: paragraph").fill("Typed while archived elsewhere");
+  await expect(page.getByText("This question is archived. Restore it to change it.")).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue(
+    "Typed while archived elsewhere",
+  );
+  // And it is saved afterwards.
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.reload();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue(
+    "Typed while archived elsewhere",
+  );
 });

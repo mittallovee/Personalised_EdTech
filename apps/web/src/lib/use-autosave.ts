@@ -121,31 +121,64 @@ export function useAutosave(initial: Question) {
     [flush],
   );
 
-  /** Take a question read from the server, dropping whatever was waiting to be saved. */
-  const adopt = useCallback((question: Question) => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    latest.current = question.content;
-    revision.current = question.revision;
-    dirty.current = false;
-    blocked.current = question.archived;
-    setContentState(question.content);
-    setFindings(question.findings);
-    setMessage(null);
-    setState(question.archived ? "archived" : "saved");
-  }, []);
+  /**
+   * Take a question read from the server, dropping whatever was waiting to be saved. With
+   * `keepEdits` the typing that could not be saved (the question was archived elsewhere, and has
+   * just been restored) stays on screen and is saved again under the new revision.
+   */
+  const adopt = useCallback(
+    (question: Question, keepEdits = false) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      revision.current = question.revision;
+      blocked.current = question.archived;
+      setFindings(question.findings);
+      setMessage(null);
+      if (keepEdits && dirty.current && !question.archived) {
+        setState("dirty");
+        timer.current = setTimeout(() => void flush(), 0);
+        return;
+      }
+      latest.current = question.content;
+      dirty.current = false;
+      setContentState(question.content);
+      setState(question.archived ? "archived" : "saved");
+    },
+    [flush],
+  );
 
-  // Leaving with unsaved typing: the browser asks first. Timers stop with the page.
+  /** Whether typing is waiting to be saved (or could not be). */
+  const unsaved = useCallback(() => dirty.current, []);
+
+  // Closing the tab with unsaved typing: the browser asks first.
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (dirty.current) event.preventDefault();
     };
     window.addEventListener("beforeunload", warn);
-    return () => {
-      window.removeEventListener("beforeunload", warn);
-      if (timer.current) clearTimeout(timer.current);
-    };
+    return () => window.removeEventListener("beforeunload", warn);
   }, []);
 
-  return { content, setContent, findings, state, savedAt, message, flush, adopt, revision };
+  // Leaving the editor inside the app (a link, Back) does not fire the browser's warning, so the
+  // typing that is still waiting for its pause is sent now instead of being dropped.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      if (dirty.current && !blocked.current) void flush();
+    },
+    [flush],
+  );
+
+  return {
+    content,
+    setContent,
+    findings,
+    state,
+    savedAt,
+    message,
+    flush,
+    adopt,
+    unsaved,
+    revision,
+  };
 }

@@ -151,21 +151,29 @@ function Editor({ initial }: { initial: Question }) {
   const archived = save.state === "archived";
   const locked = archived || save.state === "conflict";
 
-  /** Run one of the buttons: only one at a time, saving what is typed first. */
+  /**
+   * Run one of the buttons: only one at a time, and the text cannot be edited meanwhile, so
+   * nothing typed can be replaced by the answer. What is typed is saved first, except when
+   * restoring: the question is archived, so saving has to wait for the restore, and the typing is
+   * kept (`keepEdits`) and saved afterwards.
+   */
   const act = useCallback(
-    async (work: () => Promise<{ data?: Question; error?: unknown; response: Response }>) => {
+    async (
+      work: () => Promise<{ data?: Question; error?: unknown; response: Response }>,
+      keepEdits = false,
+    ) => {
       if (busy) return;
       setBusy(true);
       setProblem(null);
       setNotice(null);
       try {
-        if (!(await save.flush())) {
+        if (!keepEdits && !(await save.flush())) {
           setProblem("Your changes could not be saved yet, so nothing else was done.");
           return;
         }
         const { data, error, response } = await work();
         if (data) {
-          save.adopt(data);
+          save.adopt(data, keepEdits);
           setVersion((v) => ({ ...v, number: data.version_number }));
         } else {
           setProblem(errorMessage(error as never, response.status));
@@ -193,11 +201,15 @@ function Editor({ initial }: { initial: Question }) {
   }
 
   async function setArchived(archive: boolean) {
-    const done = await act(() =>
-      api().POST(
-        archive ? "/api/v1/questions/{question_id}/archive" : "/api/v1/questions/{question_id}/restore",
-        { params: { path: { question_id: initial.id } } },
-      ),
+    const done = await act(
+      () =>
+        api().POST(
+          archive
+            ? "/api/v1/questions/{question_id}/archive"
+            : "/api/v1/questions/{question_id}/restore",
+          { params: { path: { question_id: initial.id } } },
+        ),
+      !archive,
     );
     if (done) setNotice(archive ? "Archived. It is hidden from the list." : "Restored.");
   }
@@ -220,7 +232,22 @@ function Editor({ initial }: { initial: Question }) {
   return (
     <div className="grid max-w-5xl gap-6">
       <div>
-        <Link href="/questions" className="text-sm underline">
+        <Link
+          href="/questions"
+          className="text-sm underline"
+          onClick={(event) => {
+            // Typing still waiting for its pause is saved as the editor closes; only typing that
+            // could not be saved is at risk, so that is what asks first.
+            const failed = save.state === "failed" || save.state === "conflict";
+            if (
+              failed &&
+              save.unsaved() &&
+              !window.confirm("Your latest changes were not saved. Leave without them?")
+            ) {
+              event.preventDefault();
+            }
+          }}
+        >
           Back to questions
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -249,7 +276,11 @@ function Editor({ initial }: { initial: Question }) {
             </button>
           </div>
         </div>
-        <p role="status" aria-live="polite" className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-1 text-sm text-zinc-600 dark:text-zinc-400"
+        >
           {status} · version {version.number}
         </p>
       </div>
@@ -291,7 +322,9 @@ function Editor({ initial }: { initial: Question }) {
                 id={`tab-${name}`}
                 onClick={() => setTab(name)}
                 className={`rounded-md px-3 py-1 text-sm ${
-                  tab === name ? "bg-zinc-100 font-medium dark:bg-zinc-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                  tab === name
+                    ? "bg-zinc-100 font-medium dark:bg-zinc-800"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-900"
                 }`}
               >
                 {name === "edit" ? "Edit" : "Preview"}
@@ -304,7 +337,7 @@ function Editor({ initial }: { initial: Question }) {
               <BlocksField
                 label="Question"
                 blocks={blocksOf(save.content.stem)}
-                disabled={locked}
+                disabled={locked || busy}
                 onChange={(next) => save.setContent(withField(save.content, "stem", next))}
               />
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -314,7 +347,12 @@ function Editor({ initial }: { initial: Question }) {
               </p>
             </div>
           ) : (
-            <div role="tabpanel" id="panel-preview" aria-labelledby="tab-preview" className="grid gap-4">
+            <div
+              role="tabpanel"
+              id="panel-preview"
+              aria-labelledby="tab-preview"
+              className="grid gap-4"
+            >
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"

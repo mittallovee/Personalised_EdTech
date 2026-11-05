@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  paragraph,
-  removeBlock,
-  replaceBlock,
-  type Block,
-} from "@/lib/question-content";
+import { paragraph, removeBlock, replaceBlock, type Block } from "@/lib/question-content";
 
 const FIELD =
   "w-full rounded-md border border-zinc-300 px-3 py-2 font-normal dark:border-zinc-700 dark:bg-zinc-950";
@@ -88,11 +83,7 @@ export function BlocksField({
         );
       })}
       <div className="flex gap-2">
-        <button
-          type="button"
-          className={BUTTON}
-          onClick={() => onChange([...blocks, paragraph()])}
-        >
+        <button type="button" className={BUTTON} onClick={() => onChange([...blocks, paragraph()])}>
           Add paragraph
         </button>
         <button

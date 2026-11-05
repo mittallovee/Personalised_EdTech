@@ -30,12 +30,13 @@ const LEVELS: { level: Finding["level"]; title: string; hint: string; style: str
  */
 export function FindingsPanel({ findings }: { findings: Finding[] }) {
   return (
-    <section aria-label="Findings" className="rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
+    <section
+      aria-label="Findings"
+      className="rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
+    >
       <h2 className="text-base font-semibold">Findings</h2>
       {findings.length === 0 ? (
-        <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-300">
-          Nothing left to fix.
-        </p>
+        <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-300">Nothing left to fix.</p>
       ) : (
         LEVELS.map(({ level, title, hint, style }) => {
           const group = findings.filter((finding) => finding.level === level);

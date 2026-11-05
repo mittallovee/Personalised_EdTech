@@ -34,9 +34,7 @@ describe("emptyContent", () => {
     const content = emptyContent("MATCHING");
     expect((content.left as unknown[]).length).toBe(2);
     expect((content.right as unknown[]).length).toBe(2);
-    expect(content.options).toEqual(
-      ["A", "B", "C", "D"].map((id) => ({ id, mapping: {} })),
-    );
+    expect(content.options).toEqual(["A", "B", "C", "D"].map((id) => ({ id, mapping: {} })));
   });
 
   it("keeps ids different across the parts of one question", () => {
@@ -49,9 +47,12 @@ describe("emptyContent", () => {
 
   it("gives typed-answer formats nothing besides the stem", () => {
     for (const type of ["INTEGER", "SINGLE_DIGIT", "NUMERICAL"]) {
-      expect(Object.keys(emptyContent(type)).sort()).toEqual(
-        ["language", "question_type", "schema_version", "stem"],
-      );
+      expect(Object.keys(emptyContent(type)).sort()).toEqual([
+        "language",
+        "question_type",
+        "schema_version",
+        "stem",
+      ]);
     }
   });
 
