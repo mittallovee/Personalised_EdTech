@@ -99,3 +99,59 @@ export function withField(content: Content, field: string, value: unknown): Cont
 export function savedLabel(at: Date): string {
   return `Saved ${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
+
+export type Option = { id: string; content: Block[] };
+
+/** The options of a content that has them (single and multiple correct, assertion-reason,
+ *  multiple statement), read defensively: anything that is not an option is left out. */
+export function optionsOf(content: Content): Option[] {
+  const raw = Array.isArray(content.options) ? content.options : [];
+  return raw.filter(isOption).map((o) => ({ id: o.id, content: blocksOf(o.content) }));
+}
+
+/**
+ * A copy of ``content`` with the blocks of the option with id ``optionId`` replaced. The option is
+ * found by its id, not by its place in the list shown on screen: a saved draft may hold an entry
+ * that is not an option (it is not shown), and that must not take the edit.
+ */
+export function setOptionContent(content: Content, optionId: string, blocks: Block[]): Content {
+  const raw = Array.isArray(content.options) ? content.options : [];
+  if (!raw.some((o) => isOption(o) && o.id === optionId)) return content;
+  const options = raw.map((o) =>
+    isOption(o) && o.id === optionId ? { ...o, content: blocks } : o,
+  );
+  return withField(content, "options", options);
+}
+
+const isOption = (o: unknown): o is { id: string; content?: unknown } =>
+  typeof o === "object" && o !== null && typeof (o as { id?: unknown }).id === "string";
+
+/** The ids of the options marked correct, from an answer of either shape. */
+export function correctIds(content: Content): string[] {
+  const answer = content.answer;
+  if (typeof answer !== "object" || answer === null) return [];
+  const { option_id: one, option_ids: many } = answer as Record<string, unknown>;
+  if (typeof one === "string") return [one];
+  return Array.isArray(many) ? many.filter((id): id is string => typeof id === "string") : [];
+}
+
+/**
+ * Mark an option correct (or not). A single-correct question has one correct option, so marking
+ * another replaces it; a multiple-correct one keeps the marked options in their order. With
+ * nothing marked there is no answer at all, so the findings say "choose the correct answer".
+ * An id that is not an option of the question changes nothing.
+ */
+export function setCorrect(content: Content, optionId: string, on: boolean): Content {
+  const options = optionsOf(content);
+  if (!options.some((o) => o.id === optionId)) return content;
+  const { answer: _answer, ...rest } = content;
+  void _answer;
+  if (content.question_type === "MULTI_CORRECT") {
+    const marked = new Set(correctIds(content).filter((id) => id !== optionId));
+    if (on) marked.add(optionId);
+    const ids = options.map((o) => o.id).filter((id) => marked.has(id));
+    return ids.length > 0 ? { ...rest, answer: { option_ids: ids } } : rest;
+  }
+  if (on) return { ...rest, answer: { option_id: optionId } };
+  return correctIds(content).includes(optionId) ? rest : content;
+}

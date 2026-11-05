@@ -62,7 +62,10 @@ test("an author starts, writes, previews, checkpoints and archives a question", 
   await page.getByRole("tab", { name: "Edit" }).click();
 
   // A displayed equation can be added.
-  await page.getByRole("button", { name: "Add equation" }).click();
+  await page
+    .getByRole("group", { name: "Question", exact: true })
+    .getByRole("button", { name: "Add equation" })
+    .click();
   await page.getByLabel("Question, block 2: equation").fill("p = m v");
   await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
     timeout: 15_000,
@@ -196,4 +199,96 @@ test("a question archived elsewhere while you type can still be restored, and yo
   await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue(
     "Typed while archived elsewhere",
   );
+});
+
+// M3 PR 3d-2: options, the answer and the solution of single and multiple correct questions.
+
+test("an author writes the options, marks the correct one and adds a solution", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(findings).toContainText("Choose the correct answer");
+
+  await page.getByLabel("Question, block 1: paragraph").fill("Which number is even?");
+  const choices = ["1", "2", "3", "5"];
+  for (const [index, letter] of ["A", "B", "C", "D"].entries()) {
+    await page.getByLabel(`Option ${letter}, block 1: paragraph`).fill(choices[index]!);
+  }
+  await page.getByRole("radio", { name: "Option B is correct" }).check();
+  await page
+    .getByRole("group", { name: "Solution (optional)" })
+    .getByRole("button", { name: "Add paragraph" })
+    .click();
+  await page.getByLabel("Solution (optional), block 1: paragraph").fill("Two is divisible by two.");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(findings).not.toContainText("Choose the correct answer");
+  await expectNoSeriousA11yViolations(page);
+
+  // It is really stored.
+  await page.reload();
+  await expect(page.getByLabel("Option B, block 1: paragraph")).toHaveValue("2");
+  await expect(page.getByRole("radio", { name: "Option B is correct" })).toBeChecked();
+  await expect(page.getByLabel("Solution (optional), block 1: paragraph")).toHaveValue(
+    "Two is divisible by two.",
+  );
+
+  // Marking another option moves the answer (one correct option in this format).
+  await page.getByRole("radio", { name: "Option C is correct" }).check();
+  await expect(page.getByRole("radio", { name: "Option B is correct" })).not.toBeChecked();
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // The preview: options A to D, nothing about the answer until asked, then the right one and the solution.
+  await page.getByRole("tab", { name: "Preview" }).click();
+  const preview = page.locator(".qb-question");
+  await expect(preview).toContainText("Which number is even?");
+  await expect(preview.getByText("Correct answer")).toHaveCount(0);
+  await expect(preview).not.toContainText("Two is divisible");
+  await page.getByLabel("Show the answer and solution").check();
+  await expect(preview.getByText("Correct answer")).toHaveCount(1);
+  await expect(preview.locator('[data-correct="true"]')).toContainText("3");
+  await expect(preview).toContainText("Two is divisible by two.");
+  await expectNoSeriousA11yViolations(page);
+});
+
+test("a multiple-correct question can have several correct options, and none again", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Multiple correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  await page.getByRole("checkbox", { name: "Option A is correct" }).check();
+  await page.getByRole("checkbox", { name: "Option C is correct" }).check();
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(findings).not.toContainText("Choose the correct answer");
+
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: "Option A is correct" })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Option B is correct" })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Option C is correct" })).toBeChecked();
+
+  await page.getByRole("tab", { name: "Preview" }).click();
+  await page.getByLabel("Show the answer and solution").check();
+  await expect(page.locator(".qb-question").getByText("Correct answer")).toHaveCount(2);
+
+  // Unmarking both leaves no answer, and the findings say so again.
+  await page.getByRole("tab", { name: "Edit" }).click();
+  await page.getByRole("checkbox", { name: "Option A is correct" }).uncheck();
+  await page.getByRole("checkbox", { name: "Option C is correct" }).uncheck();
+  await expect(findings).toContainText("Choose the correct answer", { timeout: 15_000 });
 });
