@@ -177,6 +177,9 @@ test("a question archived elsewhere while you type can still be restored, and yo
   await page.getByRole("button", { name: "Start question" }).click();
   await expect(page).toHaveURL(/\/questions\/[0-9a-f-]{36}$/);
   const id = page.url().split("/").pop()!;
+  // The editor must be open and editable first: if the archive landed before the question was
+  // read, the editor would open already archived and this would not test "archived while open".
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
   // Another tab (here: the API) archives it.
   const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
   const archived = await context.request.post(`/api/v1/questions/${id}/archive`, { headers });
@@ -701,4 +704,129 @@ test("a matching question: two lists, what each option matches, and the correct 
   await expect(preview).toContainText("Speed");
   await expect(preview).toContainText("P → 2");
   await expect(preview.locator('[data-correct="true"]')).toContainText("Q → 1");
+});
+
+// M3 PR 3f: a live typeset preview under each block, and the visual equation editor (MathLive).
+
+test("an equation shows as it will look, and can be written in the visual editor", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+
+  // Plain text has no preview; an inline equation in a paragraph does.
+  await page.getByLabel("Question, block 1: paragraph").fill("A body of mass m moves.");
+  await expect(stem.locator(".katex")).toHaveCount(0);
+  await page
+    .getByLabel("Question, block 1: paragraph")
+    .fill(String.raw`A body of mass \(m\) moves.`);
+  await expect(stem.locator(".katex")).toHaveCount(1);
+
+  // A displayed equation shows beneath its source box as it is typed.
+  await stem.getByRole("button", { name: "Add equation" }).click();
+  await page.getByLabel("Question, block 2: equation").fill("x^2");
+  await expect(stem.locator(".qb-live-preview .katex-display")).toHaveCount(1);
+
+  // The visual editor starts from what is written and writes LaTeX back.
+  await page.getByRole("button", { name: "Visual editor for Question, block 2" }).click();
+  const editor = page.getByRole("group", { name: "Visual equation editor" });
+  await expect(editor).toBeVisible();
+  const field = editor.locator("math-field");
+  await expect(field).toBeVisible({ timeout: 15_000 });
+  // The left edge: the middle of the small box is its keyboard button.
+  await field.click({ position: { x: 5, y: 10 } });
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("a/b");
+  await expectNoSeriousA11yViolations(page);
+  await editor.getByRole("button", { name: "Use this equation" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue(/\\frac\{a\}\{b\}/);
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Cancel leaves the source as it was.
+  await page.getByRole("button", { name: "Visual editor for Question, block 2" }).click();
+  await editor.locator("math-field").click({ position: { x: 5, y: 10 } });
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("z");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue(/\\frac\{a\}\{b\}/);
+
+  // It is stored, and the preview shows it again after a reload.
+  await page.reload();
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue(/\\frac\{a\}\{b\}/);
+  await expect(
+    page
+      .getByRole("group", { name: "Question", exact: true })
+      .locator(".qb-live-preview .katex-display"),
+  ).toHaveCount(1);
+});
+
+test("a broken equation is flagged beside its source, and the editor is not open for it", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Integer/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await stem.getByRole("button", { name: "Add equation" }).click();
+  await page.getByLabel("Question, block 2: equation").fill(String.raw`\frac{1`);
+  await expect(stem.locator(".qb-live-preview")).toContainText("could not be shown");
+  await expect(page.getByRole("group", { name: "Visual equation editor" })).toHaveCount(0);
+});
+
+test("after a conflict, Reload closes an open visual editor so the other author's equation is not overwritten", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Integer/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await stem.getByRole("button", { name: "Add equation" }).click();
+  await page.getByLabel("Question, block 2: equation").fill("x^2");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Visual editor for Question, block 2" }).click();
+  const editor = page.getByRole("group", { name: "Visual equation editor" });
+  await expect(editor.locator("math-field")).toBeVisible({ timeout: 15_000 });
+
+  // Another tab (here: the API) changes the equation.
+  const id = page.url().split("/").pop()!;
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const current = (await (await context.request.get(`/api/v1/questions/${id}`)).json()) as {
+    revision: number;
+    content: { stem: Record<string, unknown>[] } & Record<string, unknown>;
+  };
+  const stemNow = current.content.stem.map((block, index) =>
+    index === 1 ? { ...block, source: "y^3" } : block,
+  );
+  const changed = await context.request.put(`/api/v1/questions/${id}/working-revision`, {
+    headers: { ...headers, "If-Match": `"rev-${current.revision}"` },
+    data: { content: { ...current.content, stem: stemNow } },
+  });
+  expect(changed.status()).toBe(200);
+
+  // This tab saves next, finds out, and reloads: the other author's equation is shown, and the
+  // visual editor, which still held the old one, is gone.
+  await page.getByLabel("Question, block 1: paragraph").fill("Typed after the change elsewhere");
+  await expect(page.getByText("Someone else changed this question.")).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue("y^3");
+  await expect(page.getByRole("group", { name: "Visual equation editor" })).toHaveCount(0);
 });
