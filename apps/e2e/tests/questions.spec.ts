@@ -177,6 +177,9 @@ test("a question archived elsewhere while you type can still be restored, and yo
   await page.getByRole("button", { name: "Start question" }).click();
   await expect(page).toHaveURL(/\/questions\/[0-9a-f-]{36}$/);
   const id = page.url().split("/").pop()!;
+  // The editor must be open and editable first: if the archive landed before the question was
+  // read, the editor would open already archived and this would not test "archived while open".
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
   // Another tab (here: the API) archives it.
   const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
   const archived = await context.request.post(`/api/v1/questions/${id}/archive`, { headers });
