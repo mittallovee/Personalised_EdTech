@@ -813,6 +813,36 @@ test("an equation can be inserted into a paragraph at the cursor with the visual
   await expect(paragraph).toHaveValue(String.raw`Find \(\frac{a}{b}\) now!`);
 });
 
+test("inserting a second equation without clicking back goes after the first, not into it", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  const paragraph = page.getByLabel("Question, block 1: paragraph");
+  await expect(paragraph).toBeEnabled();
+  await paragraph.fill("Find X now");
+  // Select the "X" and replace it with a first equation.
+  await paragraph.press("Home");
+  for (let i = 0; i < 5; i++) await paragraph.press("ArrowRight");
+  await paragraph.press("Shift+ArrowRight");
+  const editor = page.getByRole("group", { name: "Visual equation editor" });
+  for (const letter of ["a", "b"]) {
+    await stem.getByRole("button", { name: "Insert equation in Question, block 1" }).click();
+    const field = editor.locator("math-field");
+    await expect(field).toBeVisible({ timeout: 15_000 });
+    await field.click({ position: { x: 5, y: 10 } });
+    await page.keyboard.type(letter);
+    await editor.getByRole("button", { name: "Use this equation" }).click();
+    await expect(editor).toHaveCount(0);
+  }
+  await expect(paragraph).toHaveValue(String.raw`Find \(a\)\(b\) now`);
+});
+
 test("a broken equation is flagged beside its source, and the editor is not open for it", async ({
   browser,
   baseURL,

@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 
 import { EquationVisualEditor } from "@/components/equation-visual-editor";
 import { LivePreview } from "@/components/live-preview";
-import { insertInlineEquation } from "@/lib/inline-equation";
+import { insertInlineEquationAt } from "@/lib/inline-equation";
 import { paragraph, removeBlock, replaceBlock, type Block } from "@/lib/question-content";
 
 const FIELD =
@@ -95,18 +95,21 @@ export function BlocksField({
                   initial={equation ? value : ""}
                   onCancel={() => setEditing(null)}
                   onUse={(latex) => {
-                    onChange(
-                      replaceBlock(
-                        blocks,
-                        index,
-                        equation
-                          ? { kind: "equation", format: "latex", source: latex }
-                          : {
-                              kind: "paragraph",
-                              text: insertInlineEquation(value, latex, session.start, session.end),
-                            },
-                      ),
-                    );
+                    if (equation) {
+                      onChange(
+                        replaceBlock(blocks, index, {
+                          kind: "equation",
+                          format: "latex",
+                          source: latex,
+                        }),
+                      );
+                    } else {
+                      const done = insertInlineEquationAt(value, latex, session.start, session.end);
+                      // The remembered cursor now sits after the new equation, so a second insert
+                      // (without clicking back into the box) goes after it, not into it.
+                      cursor.current = { index, start: done.cursor, end: done.cursor };
+                      onChange(replaceBlock(blocks, index, { kind: "paragraph", text: done.text }));
+                    }
                     setEditing(null);
                   }}
                 />

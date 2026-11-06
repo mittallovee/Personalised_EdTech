@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { insertInlineEquation } from "../src/lib/inline-equation";
+import { insertInlineEquation, insertInlineEquationAt } from "../src/lib/inline-equation";
 
 // String.raw keeps the backslashes: `\(` in an ordinary string is just `(`.
 const eq = (before: string, latex: string, after: string) =>
@@ -37,5 +37,20 @@ describe("insertInlineEquation", () => {
 
   it("refuses LaTeX that would close the inline equation early", () => {
     expect(insertInlineEquation("abc", String.raw`a\)b`, 1, 1)).toBe("abc");
+  });
+});
+
+describe("insertInlineEquationAt", () => {
+  it("also says where the cursor is afterwards: just after the inserted equation", () => {
+    const first = insertInlineEquationAt("Find X now", "a", 5, 6);
+    expect(first.text).toBe(eq("Find ", "a", " now"));
+    expect(first.cursor).toBe(eq("Find ", "a", "").length);
+    // A second insertion from that cursor goes after the first equation, not into it.
+    const second = insertInlineEquationAt(first.text, "b", first.cursor, first.cursor);
+    expect(second.text).toBe(eq("Find ", "a", "") + eq("", "b", " now"));
+  });
+
+  it("leaves the text and the cursor alone when nothing is inserted", () => {
+    expect(insertInlineEquationAt("abc", " ", 1, 2)).toEqual({ text: "abc", cursor: 2 });
   });
 });
