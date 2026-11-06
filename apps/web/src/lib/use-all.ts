@@ -4,10 +4,35 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Answer, Page } from "@/lib/use-catalogue";
 
-/** Pages read at most (100 items each): a pick-list longer than this is searched, not scrolled. */
-const MAX_PAGES = 10;
-
 type Loaded<T> = { key: string; items: T[]; failed: boolean };
+
+/**
+ * Read every page of a list. A page that cannot be read, or a cursor that comes back a second
+ * time (the server would never finish), makes the whole read a failure: a partly read list is
+ * never passed off as complete, because an entry beyond the cut could not then be chosen.
+ */
+export async function readAllPages<T>(
+  fetchPage: (cursor: string | null) => Promise<Answer<Page<T>>>,
+): Promise<{ items: T[]; failed: boolean }> {
+  const items: T[] = [];
+  const seen = new Set<string>();
+  let cursor: string | null = null;
+  try {
+    do {
+      const result = await fetchPage(cursor);
+      if (!result.data) return { items: [], failed: true };
+      items.push(...result.data.data);
+      cursor = result.data.page.next_cursor ?? null;
+      if (cursor !== null) {
+        if (seen.has(cursor)) return { items: [], failed: true };
+        seen.add(cursor);
+      }
+    } while (cursor !== null);
+  } catch {
+    return { items: [], failed: true };
+  }
+  return { items, failed: false };
+}
 
 /**
  * Every item of a list, read page by page, for a pick-list. The list is read again when `key`
@@ -28,26 +53,9 @@ export function useAll<T>(
   useEffect(() => {
     if (key === null) return;
     let stale = false;
-    void (async () => {
-      const items: T[] = [];
-      let failed = false;
-      let cursor: string | null = null;
-      try {
-        for (let page = 0; page < MAX_PAGES; page++) {
-          const result = await latest.current(cursor);
-          if (!result.data) {
-            failed = true;
-            break;
-          }
-          items.push(...result.data.data);
-          cursor = result.data.page.next_cursor ?? null;
-          if (!cursor) break;
-        }
-      } catch {
-        failed = true;
-      }
+    void readAllPages((cursor) => latest.current(cursor)).then(({ items, failed }) => {
       if (!stale) setLoaded({ key, items, failed });
-    })();
+    });
     return () => {
       stale = true;
     };
