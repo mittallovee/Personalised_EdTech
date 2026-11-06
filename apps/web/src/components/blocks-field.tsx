@@ -33,8 +33,11 @@ export function BlocksField({
   onChange: (next: Block[]) => void;
   disabled?: boolean;
 }) {
-  // The equation whose visual editor is open (at most one), by its place in the list.
-  const [editing, setEditing] = useState<number | null>(null);
+  // The equation whose visual editor is open (at most one): its place in the list and the source it
+  // was opened with. The editor is shown only while the equation still holds that source, so
+  // when the content is replaced from outside (a Reload after a conflict) or the source is
+  // typed in its own box, the editor closes instead of keeping, and later saving, an old copy.
+  const [editing, setEditing] = useState<{ index: number; source: string } | null>(null);
   return (
     <fieldset disabled={disabled} className="grid gap-3">
       <legend className="mb-1 text-sm font-medium">{label}</legend>
@@ -69,7 +72,7 @@ export function BlocksField({
                 />
               </label>
               <LivePreview block={block} />
-              {equation && editing === index && (
+              {equation && editing?.index === index && editing.source === value && (
                 <EquationVisualEditor
                   initial={value}
                   onCancel={() => setEditing(null)}
@@ -86,12 +89,12 @@ export function BlocksField({
                 />
               )}
               <div className="flex gap-4">
-                {equation && editing !== index && (
+                {equation && !(editing?.index === index && editing.source === value) && (
                   <button
                     type="button"
                     className="text-sm underline"
                     aria-label={`Visual editor for ${where}`}
-                    onClick={() => setEditing(index)}
+                    onClick={() => setEditing({ index, source: value })}
                   >
                     Visual editor
                   </button>

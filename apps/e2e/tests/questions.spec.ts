@@ -781,3 +781,49 @@ test("a broken equation is flagged beside its source, and the editor is not open
   await expect(stem.locator(".qb-live-preview")).toContainText("could not be shown");
   await expect(page.getByRole("group", { name: "Visual equation editor" })).toHaveCount(0);
 });
+
+test("after a conflict, Reload closes an open visual editor so the other author's equation is not overwritten", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Integer/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await stem.getByRole("button", { name: "Add equation" }).click();
+  await page.getByLabel("Question, block 2: equation").fill("x^2");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Visual editor for Question, block 2" }).click();
+  const editor = page.getByRole("group", { name: "Visual equation editor" });
+  await expect(editor.locator("math-field")).toBeVisible({ timeout: 15_000 });
+
+  // Another tab (here: the API) changes the equation.
+  const id = page.url().split("/").pop()!;
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const current = (await (await context.request.get(`/api/v1/questions/${id}`)).json()) as {
+    revision: number;
+    content: { stem: Record<string, unknown>[] } & Record<string, unknown>;
+  };
+  const stemNow = current.content.stem.map((block, index) =>
+    index === 1 ? { ...block, source: "y^3" } : block,
+  );
+  const changed = await context.request.put(`/api/v1/questions/${id}/working-revision`, {
+    headers: { ...headers, "If-Match": `"rev-${current.revision}"` },
+    data: { content: { ...current.content, stem: stemNow } },
+  });
+  expect(changed.status()).toBe(200);
+
+  // This tab saves next, finds out, and reloads: the other author's equation is shown, and the
+  // visual editor, which still held the old one, is gone.
+  await page.getByLabel("Question, block 1: paragraph").fill("Typed after the change elsewhere");
+  await expect(page.getByText("Someone else changed this question.")).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue("y^3");
+  await expect(page.getByRole("group", { name: "Visual equation editor" })).toHaveCount(0);
+});
