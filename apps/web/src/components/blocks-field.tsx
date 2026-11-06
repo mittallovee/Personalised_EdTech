@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { EquationVisualEditor } from "@/components/equation-visual-editor";
 import { LivePreview } from "@/components/live-preview";
+import { insertInlineEquationAt } from "@/lib/inline-equation";
 import { paragraph, removeBlock, replaceBlock, type Block } from "@/lib/question-content";
 
 const FIELD =
@@ -37,7 +38,16 @@ export function BlocksField({
   // was opened with. The editor is shown only while the equation still holds that source, so
   // when the content is replaced from outside (a Reload after a conflict) or the source is
   // typed in its own box, the editor closes instead of keeping, and later saving, an old copy.
-  const [editing, setEditing] = useState<{ index: number; source: string } | null>(null);
+  // For a paragraph it also holds where in the text the new equation goes.
+  const [editing, setEditing] = useState<{
+    index: number;
+    source: string;
+    start: number;
+    end: number;
+  } | null>(null);
+  // The cursor (or selection) last seen in each paragraph box, kept so that a click on a button,
+  // which moves focus away, still knows where to put an inline equation.
+  const cursor = useRef<{ index: number; start: number; end: number } | null>(null);
   return (
     <fieldset disabled={disabled} className="grid gap-3">
       <legend className="mb-1 text-sm font-medium">{label}</legend>
@@ -46,6 +56,7 @@ export function BlocksField({
         if (block.kind === "paragraph" || block.kind === "equation") {
           const equation = block.kind === "equation";
           const value = String(equation ? (block.source ?? "") : (block.text ?? ""));
+          const session = editing?.index === index && editing.source === value ? editing : null;
           return (
             <div key={index} className="grid gap-1">
               <label className="grid gap-1 text-sm">
@@ -58,6 +69,13 @@ export function BlocksField({
                   rows={Math.min(12, Math.max(equation ? 2 : 3, value.split("\n").length))}
                   spellCheck={!equation}
                   className={`${FIELD} ${equation ? "font-mono text-sm" : ""}`}
+                  onSelect={(event) => {
+                    cursor.current = {
+                      index,
+                      start: event.currentTarget.selectionStart,
+                      end: event.currentTarget.selectionEnd,
+                    };
+                  }}
                   onChange={(event) =>
                     onChange(
                       replaceBlock(
@@ -72,31 +90,47 @@ export function BlocksField({
                 />
               </label>
               <LivePreview block={block} />
-              {equation && editing?.index === index && editing.source === value && (
+              {session && (
                 <EquationVisualEditor
-                  initial={value}
+                  initial={equation ? value : ""}
                   onCancel={() => setEditing(null)}
                   onUse={(latex) => {
-                    onChange(
-                      replaceBlock(blocks, index, {
-                        kind: "equation",
-                        format: "latex",
-                        source: latex,
-                      }),
-                    );
+                    if (equation) {
+                      onChange(
+                        replaceBlock(blocks, index, {
+                          kind: "equation",
+                          format: "latex",
+                          source: latex,
+                        }),
+                      );
+                    } else {
+                      const done = insertInlineEquationAt(value, latex, session.start, session.end);
+                      // The remembered cursor now sits after the new equation, so a second insert
+                      // (without clicking back into the box) goes after it, not into it.
+                      cursor.current = { index, start: done.cursor, end: done.cursor };
+                      onChange(replaceBlock(blocks, index, { kind: "paragraph", text: done.text }));
+                    }
                     setEditing(null);
                   }}
                 />
               )}
               <div className="flex gap-4">
-                {equation && !(editing?.index === index && editing.source === value) && (
+                {!session && (
                   <button
                     type="button"
                     className="text-sm underline"
-                    aria-label={`Visual editor for ${where}`}
-                    onClick={() => setEditing({ index, source: value })}
+                    aria-label={`${equation ? "Visual editor for" : "Insert equation in"} ${where}`}
+                    onClick={() => {
+                      const seen = cursor.current?.index === index ? cursor.current : null;
+                      setEditing({
+                        index,
+                        source: value,
+                        start: seen?.start ?? value.length,
+                        end: seen?.end ?? value.length,
+                      });
+                    }}
                   >
-                    Visual editor
+                    {equation ? "Visual editor" : "Insert equation"}
                   </button>
                 )}
                 <button
