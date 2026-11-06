@@ -790,8 +790,12 @@ test("an equation can be inserted into a paragraph at the cursor with the visual
   const editor = page.getByRole("group", { name: "Visual equation editor" });
   const field = editor.locator("math-field");
   await expect(field).toBeVisible({ timeout: 15_000 });
-  await field.click({ position: { x: 5, y: 10 } });
-  await page.keyboard.type("a/b");
+  await expect(async () => {
+    await field.click({ position: { x: 5, y: 10 } });
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("a/b");
+    expect(await field.evaluate((math) => (math as HTMLInputElement).value)).toContain("frac");
+  }).toPass({ timeout: 15_000 });
   await editor.getByRole("button", { name: "Use this equation" }).click();
   await expect(editor).toHaveCount(0);
   await expect(paragraph).toHaveValue(String.raw`Find \(\frac{a}{b}\) now`);
@@ -835,8 +839,14 @@ test("inserting a second equation without clicking back goes after the first, no
     await stem.getByRole("button", { name: "Insert equation in Question, block 1" }).click();
     const field = editor.locator("math-field");
     await expect(field).toBeVisible({ timeout: 15_000 });
-    await field.click({ position: { x: 5, y: 10 } });
-    await page.keyboard.type(letter);
+    // MathLive can still be starting up on a slow machine, so retry until the letter is really in
+    // the field before pressing Use (an empty equation is ignored, by design).
+    await expect(async () => {
+      await field.click({ position: { x: 5, y: 10 } });
+      await page.keyboard.press("Control+a");
+      await page.keyboard.type(letter);
+      expect(await field.evaluate((math) => (math as HTMLInputElement).value)).toBe(letter);
+    }).toPass({ timeout: 15_000 });
     await editor.getByRole("button", { name: "Use this equation" }).click();
     await expect(editor).toHaveCount(0);
   }
