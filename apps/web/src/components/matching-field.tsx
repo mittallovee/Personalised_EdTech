@@ -2,7 +2,7 @@
 
 import { ItemsField } from "@/components/items-field";
 import { correctIds, optionsOf, setCorrect, type Content } from "@/lib/question-content";
-import { itemsOf, mappingOf, setMapping } from "@/lib/question-parts";
+import { itemsOf, mappingOf, rightsOf, setMapping } from "@/lib/question-parts";
 
 const LETTERS = "ABCDEFGHIJ";
 // As the student preview shows them: List I items are P, Q, R...; List II items are 1, 2, 3...
@@ -90,7 +90,7 @@ export function MatchingField({
                       <input
                         type="checkbox"
                         aria-label={`Option ${letter}: ${leftName(row)} matches ${rightName(column)}`}
-                        checked={(mapping[from.id] ?? []).includes(to.id)}
+                        checked={rightsOf(mapping, from.id).includes(to.id)}
                         onChange={(event) =>
                           onChange(
                             setMapping(content, option.id, from.id, to.id, event.target.checked),

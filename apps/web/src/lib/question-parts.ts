@@ -60,14 +60,25 @@ function mapOptions(content: Content, change: (mapping: Mapping, optionId: strin
 
 function readMapping(option: unknown): Mapping {
   const raw = isObject(option) ? option.mapping : undefined;
-  const mapping: Mapping = {};
-  if (!isObject(raw)) return mapping;
-  for (const [left, rights] of Object.entries(raw)) {
-    if (!Array.isArray(rights)) continue;
-    const names = rights.filter((right): right is string => typeof right === "string");
-    if (names.length > 0) mapping[left] = names;
-  }
-  return mapping;
+  if (!isObject(raw)) return {};
+  // Built with fromEntries so that an id like "__proto__" becomes a real entry, not a prototype.
+  return Object.fromEntries(
+    Object.entries(raw).flatMap(([left, rights]) => {
+      const names = Array.isArray(rights)
+        ? rights.filter((right): right is string => typeof right === "string")
+        : [];
+      return names.length > 0 ? [[left, names] as const] : [];
+    }),
+  );
+}
+
+/**
+ * The right items a left item matches in a mapping. Only the mapping's own entries count: an id such
+ * as `constructor` or `toString` (the server allows them) must read as "nothing matched", not as the
+ * function every object inherits under that name.
+ */
+export function rightsOf(mapping: Mapping, leftId: string): string[] {
+  return Object.hasOwn(mapping, leftId) ? (mapping[leftId] ?? []) : [];
 }
 
 /**
@@ -84,15 +95,15 @@ export function removeItem(content: Content, field: string, id: string): Content
   return withField(
     next,
     "options",
-    mapOptions(next, (mapping) => {
-      const kept: Mapping = {};
-      for (const [left, rights] of Object.entries(mapping)) {
-        if (field === "left" && left === id) continue;
-        const remaining = field === "right" ? rights.filter((right) => right !== id) : rights;
-        if (remaining.length > 0) kept[left] = remaining;
-      }
-      return kept;
-    }),
+    mapOptions(next, (mapping) =>
+      Object.fromEntries(
+        Object.entries(mapping).flatMap(([left, rights]) => {
+          if (field === "left" && left === id) return [];
+          const remaining = field === "right" ? rights.filter((right) => right !== id) : rights;
+          return remaining.length > 0 ? [[left, remaining] as const] : [];
+        }),
+      ),
+    ),
   );
 }
 
@@ -142,13 +153,12 @@ export function setMapping(
     "options",
     mapOptions(content, (mapping, id) => {
       if (id !== optionId) return mapping;
-      const chosen = new Set(mapping[leftId] ?? []);
+      const chosen = new Set(rightsOf(mapping, leftId));
       if (on) chosen.add(rightId);
       else chosen.delete(rightId);
-      const { [leftId]: _gone, ...others } = mapping;
-      void _gone;
       const ordered = rights.filter((right) => chosen.has(right));
-      return ordered.length > 0 ? { ...others, [leftId]: ordered } : others;
+      const entries = Object.entries(mapping).filter(([left]) => left !== leftId);
+      return Object.fromEntries(ordered.length > 0 ? [...entries, [leftId, ordered]] : entries);
     }),
   );
 }

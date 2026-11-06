@@ -8,6 +8,7 @@ import {
   itemsOf,
   mappingOf,
   removeItem,
+  rightsOf,
   setItemContent,
   setMapping,
 } from "../src/lib/question-parts";
@@ -148,5 +149,48 @@ describe("mappingOf", () => {
     expect(
       mappingOf({ options: [{ id: "A", mapping: { L1: "R1", L2: ["R1", 3] } }] }, "A"),
     ).toEqual({ L2: ["R1"] });
+  });
+});
+
+describe("ids that are also names on every object", () => {
+  // The server accepts any id of letters, digits, "_" and "-", so these can really be saved.
+  const odd = (leftId: string) => ({
+    question_type: "MATCHING",
+    left: [
+      { id: leftId, content: [] },
+      { id: "L2", content: [] },
+    ],
+    right: [
+      { id: "R1", content: [] },
+      { id: "R2", content: [] },
+    ],
+    options: [{ id: "A", mapping: {} }],
+  });
+
+  it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+    "%s as a left id reads as nothing matched, not as an inherited property",
+    (leftId) => {
+      const content = odd(leftId);
+      expect(rightsOf(mappingOf(content, "A"), leftId)).toEqual([]);
+    },
+  );
+
+  it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+    "%s can be matched and unmatched like any other id",
+    (leftId) => {
+      const on = setMapping(odd(leftId), "A", leftId, "R2", true);
+      expect(rightsOf(mappingOf(on, "A"), leftId)).toEqual(["R2"]);
+      expect(Object.keys(mappingOf(on, "A"))).toEqual([leftId]);
+      const off = setMapping(on, "A", leftId, "R2", false);
+      expect(rightsOf(mappingOf(off, "A"), leftId)).toEqual([]);
+      expect(Object.keys(mappingOf(off, "A"))).toEqual([]);
+    },
+  );
+
+  it("removing such an item leaves the other mappings", () => {
+    let content = setMapping(odd("constructor"), "A", "constructor", "R1", true);
+    content = setMapping(content, "A", "L2", "R2", true);
+    const next = removeItem(addItem(content, "left", "L"), "left", "constructor");
+    expect(Object.keys(mappingOf(next, "A"))).toEqual(["L2"]);
   });
 });
