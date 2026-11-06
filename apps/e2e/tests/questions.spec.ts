@@ -769,6 +769,50 @@ test("an equation shows as it will look, and can be written in the visual editor
   ).toHaveCount(1);
 });
 
+test("an equation can be inserted into a paragraph at the cursor with the visual editor", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  const paragraph = page.getByLabel("Question, block 1: paragraph");
+  await expect(paragraph).toBeEnabled();
+
+  // The cursor is after "Find ": the equation goes there, not at the end.
+  await paragraph.fill("Find  now");
+  await paragraph.press("Home");
+  for (let i = 0; i < 5; i++) await paragraph.press("ArrowRight");
+  await stem.getByRole("button", { name: "Insert equation in Question, block 1" }).click();
+  const editor = page.getByRole("group", { name: "Visual equation editor" });
+  const field = editor.locator("math-field");
+  await expect(field).toBeVisible({ timeout: 15_000 });
+  await field.click({ position: { x: 5, y: 10 } });
+  await page.keyboard.type("a/b");
+  await editor.getByRole("button", { name: "Use this equation" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(paragraph).toHaveValue(String.raw`Find \(\frac{a}{b}\) now`);
+  await expect(stem.locator(".katex")).toHaveCount(1);
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Cancel changes nothing; typing in the paragraph while the editor is open closes it.
+  await stem.getByRole("button", { name: "Insert equation in Question, block 1" }).click();
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(paragraph).toHaveValue(String.raw`Find \(\frac{a}{b}\) now`);
+  await stem.getByRole("button", { name: "Insert equation in Question, block 1" }).click();
+  await expect(editor).toBeVisible();
+  await paragraph.press("End");
+  await paragraph.pressSequentially("!");
+  await expect(editor).toHaveCount(0);
+  await expect(paragraph).toHaveValue(String.raw`Find \(\frac{a}{b}\) now!`);
+});
+
 test("a broken equation is flagged beside its source, and the editor is not open for it", async ({
   browser,
   baseURL,
