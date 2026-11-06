@@ -702,3 +702,82 @@ test("a matching question: two lists, what each option matches, and the correct 
   await expect(preview).toContainText("P → 2");
   await expect(preview.locator('[data-correct="true"]')).toContainText("Q → 1");
 });
+
+// M3 PR 3f: a live typeset preview under each block, and the visual equation editor (MathLive).
+
+test("an equation shows as it will look, and can be written in the visual editor", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+
+  // Plain text has no preview; an inline equation in a paragraph does.
+  await page.getByLabel("Question, block 1: paragraph").fill("A body of mass m moves.");
+  await expect(stem.locator(".katex")).toHaveCount(0);
+  await page
+    .getByLabel("Question, block 1: paragraph")
+    .fill(String.raw`A body of mass \(m\) moves.`);
+  await expect(stem.locator(".katex")).toHaveCount(1);
+
+  // A displayed equation shows beneath its source box as it is typed.
+  await stem.getByRole("button", { name: "Add equation" }).click();
+  await page.getByLabel("Question, block 2: equation").fill("x^2");
+  await expect(stem.locator(".qb-live-preview .katex-display")).toHaveCount(1);
+
+  // The visual editor starts from what is written and writes LaTeX back.
+  await page.getByRole("button", { name: "Visual editor for Question, block 2" }).click();
+  const editor = page.getByRole("group", { name: "Visual equation editor" });
+  await expect(editor).toBeVisible();
+  const field = editor.locator("math-field");
+  await expect(field).toBeVisible({ timeout: 15_000 });
+  // The left edge: the middle of the small box is its keyboard button.
+  await field.click({ position: { x: 5, y: 10 } });
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("a/b");
+  await expectNoSeriousA11yViolations(page);
+  await editor.getByRole("button", { name: "Use this equation" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue(/\\frac\{a\}\{b\}/);
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Cancel leaves the source as it was.
+  await page.getByRole("button", { name: "Visual editor for Question, block 2" }).click();
+  await editor.locator("math-field").click({ position: { x: 5, y: 10 } });
+  await page.keyboard.press("Control+a");
+  await page.keyboard.type("z");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue(/\\frac\{a\}\{b\}/);
+
+  // It is stored, and the preview shows it again after a reload.
+  await page.reload();
+  await expect(page.getByLabel("Question, block 2: equation")).toHaveValue(/\\frac\{a\}\{b\}/);
+  await expect(
+    page
+      .getByRole("group", { name: "Question", exact: true })
+      .locator(".qb-live-preview .katex-display"),
+  ).toHaveCount(1);
+});
+
+test("a broken equation is flagged beside its source, and the editor is not open for it", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Integer/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await stem.getByRole("button", { name: "Add equation" }).click();
+  await page.getByLabel("Question, block 2: equation").fill(String.raw`\frac{1`);
+  await expect(stem.locator(".qb-live-preview")).toContainText("could not be shown");
+  await expect(page.getByRole("group", { name: "Visual equation editor" })).toHaveCount(0);
+});

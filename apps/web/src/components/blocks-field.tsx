@@ -1,5 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
+import { EquationVisualEditor } from "@/components/equation-visual-editor";
+import { LivePreview } from "@/components/live-preview";
 import { paragraph, removeBlock, replaceBlock, type Block } from "@/lib/question-content";
 
 const FIELD =
@@ -29,6 +33,8 @@ export function BlocksField({
   onChange: (next: Block[]) => void;
   disabled?: boolean;
 }) {
+  // The equation whose visual editor is open (at most one), by its place in the list.
+  const [editing, setEditing] = useState<number | null>(null);
   return (
     <fieldset disabled={disabled} className="grid gap-3">
       <legend className="mb-1 text-sm font-medium">{label}</legend>
@@ -62,13 +68,45 @@ export function BlocksField({
                   }
                 />
               </label>
-              <button
-                type="button"
-                className="justify-self-start text-sm underline"
-                onClick={() => onChange(removeBlock(blocks, index))}
-              >
-                Remove {equation ? "equation" : "paragraph"} {index + 1}
-              </button>
+              <LivePreview block={block} />
+              {equation && editing === index && (
+                <EquationVisualEditor
+                  initial={value}
+                  onCancel={() => setEditing(null)}
+                  onUse={(latex) => {
+                    onChange(
+                      replaceBlock(blocks, index, {
+                        kind: "equation",
+                        format: "latex",
+                        source: latex,
+                      }),
+                    );
+                    setEditing(null);
+                  }}
+                />
+              )}
+              <div className="flex gap-4">
+                {equation && editing !== index && (
+                  <button
+                    type="button"
+                    className="text-sm underline"
+                    aria-label={`Visual editor for ${where}`}
+                    onClick={() => setEditing(index)}
+                  >
+                    Visual editor
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="justify-self-start text-sm underline"
+                  onClick={() => {
+                    setEditing(null);
+                    onChange(removeBlock(blocks, index));
+                  }}
+                >
+                  Remove {equation ? "equation" : "paragraph"} {index + 1}
+                </button>
+              </div>
             </div>
           );
         }

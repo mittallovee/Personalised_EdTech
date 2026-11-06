@@ -15,6 +15,7 @@
   "dependencies": {
     "@qbank/api-client": "workspace:*",
     "@qbank/content-renderer": "workspace:*",
+    "mathlive": "0.111.1",
     "next": "16.4.3",
     "react": "19.3.1",
     "react-dom": "19.3.1"
