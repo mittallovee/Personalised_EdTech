@@ -420,3 +420,130 @@ test("after a conflict, Reload shows the other tab's kind of numerical answer, n
   await expect(page.getByRole("textbox", { name: "From" })).toHaveValue("1.00");
   await expect(page.getByRole("textbox", { name: "To" })).toHaveValue("2.00");
 });
+
+// M3 PR 3d-4 (D-15): the labels: syllabus, concepts, difficulty, Bloom, past-year details.
+
+test("an author labels a question: syllabus, concepts, difficulty, Bloom and past-year details", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Labels ${unique()}`);
+  const headers = { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) };
+  const post = async (path: string, data: object) => {
+    const res = await context.request.post(path, { headers, data });
+    expect(res.status()).toBe(201);
+    return ((await res.json()) as { id: string }).id;
+  };
+  const node = (kind: string, parent_id: string | null, name: string) =>
+    post("/api/v1/taxonomy/nodes", { kind, parent_id, name, sort_order: 1 });
+  const class11 = await node("CLASS", null, "Class 11");
+  const class12 = await node("CLASS", null, "Class 12");
+  const physics = await node("SUBJECT", class11, "Physics");
+  const chemistry = await node("SUBJECT", class11, "Chemistry");
+  const mechanics = await node("CHAPTER", physics, "Mechanics");
+  await node("TOPIC", mechanics, "Newton's laws");
+  await node("CHAPTER", chemistry, "Atoms");
+  void class12;
+  const concept = (name: string) =>
+    post("/api/v1/taxonomy/concepts", { subject_id: physics, name, aliases: [] });
+  await concept("Newton's second law");
+  await concept("Friction");
+  await post("/api/v1/exams", { name: "JEE Main", short_code: "JM" });
+
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(findings).toContainText("Add the labels");
+
+  // The syllabus goes down one level at a time; a level waits for the one above it.
+  const labels = page.getByRole("group", { name: "Labels" });
+  await expect(labels.getByLabel("Subject")).toBeDisabled();
+  await labels.getByLabel("Class").selectOption({ label: "Class 11" });
+  await labels.getByLabel("Subject").selectOption({ label: "Physics" });
+  await labels.getByLabel("Chapter").selectOption({ label: "Mechanics" });
+  await labels.getByLabel(/^Topic/).selectOption({ label: "Newton's laws" });
+  await expect(labels.getByLabel("Chapter").locator("option")).toHaveText(["Choose…", "Mechanics"]);
+
+  // Concepts are searched among the subject's, and the main one is chosen.
+  await labels.getByLabel("Search concepts").fill("fric");
+  await expect(labels.getByLabel("Main concept").locator("option")).toHaveText([
+    "Choose…",
+    "Friction",
+  ]);
+  await labels.getByLabel("Main concept").selectOption({ label: "Friction" });
+  await labels.getByLabel("Search concepts").fill("");
+  await labels.getByLabel("Add another concept").selectOption({ label: "Newton's second law" });
+  await expect(
+    labels.getByRole("list", { name: "Other concepts" }).getByRole("listitem"),
+  ).toContainText("Newton's second law");
+
+  // Difficulty shows what its level means; Bloom is chosen from the list.
+  await labels.getByLabel(/^Difficulty/).selectOption("4");
+  await expect(labels.getByText(/^Difficulty 4:/)).toBeVisible();
+  await labels.getByLabel("Bloom level").selectOption({ label: "Apply" });
+
+  // Past-year details appear when it is a past-year question.
+  await expect(labels.getByLabel(/^Exam/)).toHaveCount(0);
+  await labels.getByLabel("This question was asked in a past-year exam").check();
+  await labels.getByLabel(/^Exam/).selectOption({ label: "JEE Main (JM)" });
+  await labels.getByLabel("Year", { exact: true }).fill("2024");
+  await labels.getByLabel("Shift (optional)").fill("Shift 1");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  for (const gone of ["Choose the class", "Choose the topic", "Choose the main concept"]) {
+    await expect(findings).not.toContainText(gone);
+  }
+  await expect(findings).not.toContainText("Choose the difficulty");
+  await expect(findings).not.toContainText("Choose the Bloom level");
+  await expect(findings).not.toContainText("Choose the exam");
+  await expectNoSeriousA11yViolations(page);
+
+  // It is really stored: a reload shows every choice, names and all.
+  await page.reload();
+  const again = page.getByRole("group", { name: "Labels" });
+  await expect(again.getByLabel(/^Topic/)).toHaveValue(/.+/);
+  await expect(again.getByLabel(/^Topic/).locator("option:checked")).toHaveText("Newton's laws");
+  await expect(again.getByLabel("Main concept").locator("option:checked")).toHaveText("Friction");
+  await expect(
+    again.getByRole("list", { name: "Other concepts" }).getByRole("listitem"),
+  ).toContainText("Newton's second law");
+  await expect(again.getByLabel(/^Exam/).locator("option:checked")).toHaveText("JEE Main (JM)");
+  await expect(again.getByLabel("Year", { exact: true })).toHaveValue("2024");
+
+  // Another subject clears the chapter, topic and concepts, which belonged to the old one.
+  await again.getByLabel("Subject").selectOption({ label: "Chemistry" });
+  await expect(again.getByLabel("Chapter")).toHaveValue("");
+  await expect(again.getByLabel(/^Topic/)).toHaveValue("");
+  await expect(again.getByLabel("Main concept")).toHaveValue("");
+  await expect(findings).toContainText("Choose the chapter");
+  await expect(findings).toContainText("Choose the main concept");
+
+  // Turning "past-year" off removes the exam details.
+  await again.getByLabel("This question was asked in a past-year exam").uncheck();
+  await expect(again.getByLabel(/^Exam/)).toHaveCount(0);
+});
+
+test("a year that is not a year is kept as typed and flagged by the server", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Labels ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Integer/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const labels = page.getByRole("group", { name: "Labels" });
+  await labels.getByLabel("This question was asked in a past-year exam").check();
+  await labels.getByLabel("Year", { exact: true }).fill("20x4");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByRole("region", { name: "Findings" })).toContainText("year");
+  await page.reload();
+  await expect(
+    page.getByRole("group", { name: "Labels" }).getByLabel("Year", { exact: true }),
+  ).toHaveValue("20x4");
+});

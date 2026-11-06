@@ -9,6 +9,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
 import { FindingsPanel } from "@/components/findings-panel";
+import { MetadataField } from "@/components/metadata-field";
 import { OptionsField } from "@/components/options-field";
 import { TypedAnswerField } from "@/components/typed-answer-field";
 import { api, errorMessage, ifMatch } from "@/lib/api";
@@ -367,12 +368,19 @@ function Editor({ initial }: { initial: Question }) {
                 disabled={locked || busy}
                 onChange={(next) => save.setContent(withField(save.content, "solution", next))}
               />
+              <MetadataField
+                content={save.content}
+                disabled={locked || busy}
+                onChange={save.setContent}
+              />
+              {!hasOptions && !typed && (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  The rest of this format is edited in the next updates.
+                </p>
+              )}
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {hasOptions || typed
-                  ? "The labels (class, subject, chapter, topic, difficulty...) are edited in the next update."
-                  : "The rest of this format and the labels (class, subject, chapter, topic, difficulty...) are edited in the next updates."}{" "}
                 The preview shows what is saved so far.
-              </p>
+              </p>{" "}
             </div>
           ) : (
             <div
