@@ -9,6 +9,8 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
 import { FindingsPanel } from "@/components/findings-panel";
+import { ItemsField } from "@/components/items-field";
+import { MatchingField } from "@/components/matching-field";
 import { MetadataField } from "@/components/metadata-field";
 import { OptionsField } from "@/components/options-field";
 import { TypedAnswerField } from "@/components/typed-answer-field";
@@ -30,7 +32,7 @@ const PRIMARY =
 /**
  * The question editor (D-11, E-04): write the stem, see the findings, preview it as a student
  * will see it, save a checkpoint, archive. Typing is saved by itself a moment after you stop.
- * The rest of the parts of each format come in the next updates.
+ * All eight formats are edited here; the passage that groups questions comes with its own screen.
  */
 export default function QuestionPage() {
   // useParams reads the address at request time, so the page needs a boundary to wait behind.
@@ -152,8 +154,11 @@ function Editor({ initial }: { initial: Question }) {
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState({ number: initial.version_number, id: initial.id });
   const archived = save.state === "archived";
-  const hasOptions =
-    save.content.question_type === "SCQ" || save.content.question_type === "MULTI_CORRECT";
+  const type = save.content.question_type;
+  // These formats list four options written as content; matching's options are mappings instead.
+  const hasOptions = ["SCQ", "MULTI_CORRECT", "ASSERTION_REASON", "MULTIPLE_STATEMENT"].includes(
+    String(type),
+  );
   const typed = ["INTEGER", "SINGLE_DIGIT", "NUMERICAL"].includes(
     String(save.content.question_type),
   );
@@ -348,6 +353,41 @@ function Editor({ initial }: { initial: Question }) {
                 disabled={locked || busy}
                 onChange={(next) => save.setContent(withField(save.content, "stem", next))}
               />
+              {type === "ASSERTION_REASON" && (
+                <>
+                  <BlocksField
+                    label="Assertion (A)"
+                    blocks={blocksOf(save.content.assertion)}
+                    disabled={locked || busy}
+                    onChange={(next) => save.setContent(withField(save.content, "assertion", next))}
+                  />
+                  <BlocksField
+                    label="Reason (R)"
+                    blocks={blocksOf(save.content.reason)}
+                    disabled={locked || busy}
+                    onChange={(next) => save.setContent(withField(save.content, "reason", next))}
+                  />
+                </>
+              )}
+              {type === "MULTIPLE_STATEMENT" && (
+                <ItemsField
+                  content={save.content}
+                  field="statements"
+                  prefix="S"
+                  legend="Statements"
+                  nameOf={(index) => `Statement ${index + 1}`}
+                  addLabel="Add statement"
+                  disabled={locked || busy}
+                  onChange={save.setContent}
+                />
+              )}
+              {type === "MATCHING" && (
+                <MatchingField
+                  content={save.content}
+                  disabled={locked || busy}
+                  onChange={save.setContent}
+                />
+              )}
               {hasOptions && (
                 <OptionsField
                   content={save.content}
@@ -373,11 +413,6 @@ function Editor({ initial }: { initial: Question }) {
                 disabled={locked || busy}
                 onChange={save.setContent}
               />
-              {!hasOptions && !typed && (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  The rest of this format is edited in the next updates.
-                </p>
-              )}
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
                 The preview shows what is saved so far.
               </p>{" "}

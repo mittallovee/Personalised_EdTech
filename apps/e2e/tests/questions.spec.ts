@@ -547,3 +547,158 @@ test("a year that is not a year is kept as typed and flagged by the server", asy
     page.getByRole("group", { name: "Labels" }).getByLabel("Year", { exact: true }),
   ).toHaveValue("20x4");
 });
+
+// M3 PR 3e: matching, assertion-reason and multiple-statement.
+
+const settled = (page: import("@playwright/test").Page) =>
+  expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({ timeout: 15_000 });
+
+test("an assertion-reason question: assertion, reason, four options and the answer", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Assertion/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(findings).toContainText("Write the assertion");
+  await expect(findings).toContainText("Write the reason");
+
+  await page.getByLabel("Question, block 1: paragraph").fill("Read both statements.");
+  await page.getByLabel("Assertion (A), block 1: paragraph").fill("Ice floats on water.");
+  await page.getByLabel("Reason (R), block 1: paragraph").fill("Ice is less dense than water.");
+  const wording = [
+    "Both true, R explains A",
+    "Both true, R does not explain A",
+    "A only",
+    "R only",
+  ];
+  for (const [index, letter] of ["A", "B", "C", "D"].entries()) {
+    await page.getByLabel(`Option ${letter}, block 1: paragraph`).fill(wording[index]!);
+  }
+  await page.getByRole("radio", { name: "Option A is correct" }).check();
+  await settled(page);
+  await expect(findings).not.toContainText("Write the assertion");
+  await expect(findings).not.toContainText("Write the reason");
+  await expect(findings).not.toContainText("Choose the correct answer");
+  await expectNoSeriousA11yViolations(page);
+
+  await page.reload();
+  await expect(page.getByLabel("Assertion (A), block 1: paragraph")).toHaveValue(
+    "Ice floats on water.",
+  );
+  await expect(page.getByLabel("Reason (R), block 1: paragraph")).toHaveValue(
+    "Ice is less dense than water.",
+  );
+  await expect(page.getByRole("radio", { name: "Option A is correct" })).toBeChecked();
+
+  await page.getByRole("tab", { name: "Preview" }).click();
+  const preview = page.locator(".qb-question");
+  await expect(preview).toContainText("Ice floats on water.");
+  await expect(preview).toContainText("Ice is less dense than water.");
+});
+
+test("a multiple-statement question: statements are added and removed, between 2 and 10", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Multiple statement/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const statements = page.getByRole("group", { name: "Statements", exact: true });
+
+  // It starts with two, and cannot go below two.
+  await expect(statements.getByRole("button", { name: /^Remove Statement/ })).toHaveCount(2);
+  await expect(statements.getByRole("button", { name: "Remove Statement 1" })).toBeDisabled();
+
+  await page.getByLabel("Statement 1, block 1: paragraph").fill("Water boils at 100 C.");
+  await page.getByLabel("Statement 2, block 1: paragraph").fill("Ice melts at 0 C.");
+  await page.getByRole("button", { name: "Add statement" }).click();
+  await page.getByLabel("Statement 3, block 1: paragraph").fill("Steam is a liquid.");
+  await expect(statements.getByRole("button", { name: "Remove Statement 2" })).toBeEnabled();
+
+  // Removing the middle one renumbers by position; the others keep their text.
+  await page.getByRole("button", { name: "Remove Statement 2" }).click();
+  await expect(page.getByLabel("Statement 2, block 1: paragraph")).toHaveValue(
+    "Steam is a liquid.",
+  );
+  await expect(page.getByLabel("Statement 3, block 1: paragraph")).toHaveCount(0);
+
+  // The most is ten.
+  for (let count = 2; count < 10; count += 1) {
+    await page.getByRole("button", { name: "Add statement" }).click();
+  }
+  await expect(page.getByRole("button", { name: "Add statement" })).toBeDisabled();
+  await expect(statements).toContainText("10 of 10");
+
+  await page.getByLabel("Option A, block 1: paragraph").fill("1 only");
+  await page.getByRole("radio", { name: "Option A is correct" }).check();
+  await settled(page);
+  await page.reload();
+  await expect(page.getByLabel("Statement 1, block 1: paragraph")).toHaveValue(
+    "Water boils at 100 C.",
+  );
+  await expect(page.getByLabel("Statement 10, block 1: paragraph")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Option A is correct" })).toBeChecked();
+  await expectNoSeriousA11yViolations(page);
+});
+
+test("a matching question: two lists, what each option matches, and the correct option", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Matching/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const findings = page.getByRole("region", { name: "Findings" });
+
+  await page.getByLabel("List I item P, block 1: paragraph").fill("Speed");
+  await page.getByLabel("List I item Q, block 1: paragraph").fill("Force");
+  await page.getByLabel("List II item 1, block 1: paragraph").fill("newton");
+  await page.getByLabel("List II item 2, block 1: paragraph").fill("metre per second");
+
+  const tick = (option: string, from: string, to: string) =>
+    page.getByRole("checkbox", { name: `Option ${option}: ${from} matches ${to}`, exact: true });
+  await tick("A", "P", "2").check();
+  await tick("A", "Q", "1").check();
+  await tick("B", "P", "1").check();
+  await tick("B", "Q", "2").check();
+  await page.getByRole("radio", { name: "Option A is correct" }).check();
+  await settled(page);
+  await expect(findings).not.toContainText("Choose the correct answer");
+
+  // A third item in List II appears in every option, and removing it takes it out again.
+  await page.getByRole("button", { name: "Add List II item" }).click();
+  await tick("A", "Q", "3").check();
+  await expect(tick("C", "P", "3")).toBeVisible();
+  await page.getByRole("button", { name: "Remove List II item 3" }).click();
+  await expect(tick("A", "Q", "3")).toHaveCount(0);
+  await expect(tick("A", "Q", "1")).toBeChecked();
+
+  // In the correct option one List II item may not answer two List I items.
+  await tick("A", "P", "1").check();
+  await expect(findings).toContainText("can match only one", { timeout: 15_000 });
+  await tick("A", "P", "1").uncheck();
+  await settled(page);
+  await expect(findings).not.toContainText("can match only one", { timeout: 15_000 });
+  await expectNoSeriousA11yViolations(page);
+
+  await page.reload();
+  await expect(tick("A", "P", "2")).toBeChecked();
+  await expect(tick("A", "Q", "1")).toBeChecked();
+  await expect(tick("B", "P", "1")).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Option A is correct" })).toBeChecked();
+
+  await page.getByRole("tab", { name: "Preview" }).click();
+  await page.getByLabel("Show the answer and solution").check();
+  const preview = page.locator(".qb-question");
+  await expect(preview).toContainText("Speed");
+  await expect(preview).toContainText("P → 2");
+  await expect(preview.locator('[data-correct="true"]')).toContainText("Q → 1");
+});
