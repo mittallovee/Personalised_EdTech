@@ -8,8 +8,8 @@ export const NETWORK = "Cannot reach the server. Check your connection and try a
 export const STALE = "Someone else changed this. The list was reloaded; please try again.";
 
 /** What an openapi-fetch call returns, as far as these hooks need it. */
-type Answer<D> = { data?: D; error?: unknown; response: Response };
-type Page<T> = { data: T[]; page: { next_cursor?: string | null } };
+export type Answer<D> = { data?: D; error?: unknown; response: Response };
+export type Page<T> = { data: T[]; page: { next_cursor?: string | null } };
 
 /**
  * A list read page by page ("Show more"), for the catalogue screens. `fetchPage` must keep the same
