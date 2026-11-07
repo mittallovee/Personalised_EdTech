@@ -305,3 +305,41 @@ def test_when_the_server_is_busy_decoding_a_picture_is_turned_away_not_queued(
         for place in held:
             place.__exit__(None, None, None)
     assert upload(client, headers, picture()).status_code == 201
+
+
+# --- Cached copies must not outlive the right to see them ---------------------------------------
+
+
+def test_a_picture_is_checked_again_each_time_it_is_asked_for(
+    client: TestClient, headers: dict[str, str], owner_db: Database
+) -> None:
+    asset = upload(client, headers, picture()).json()
+    first = client.get(f"/api/v1/assets/{asset['id']}/content")
+    # The browser may keep it, but must ask before using it, so a different person on the same
+    # browser (another coaching) reaches the permission checks instead of the cached copy.
+    assert "no-cache" in first.headers["cache-control"]
+    assert "max-age=31536000" not in first.headers["cache-control"]
+    etag = first.headers["etag"]
+
+    again = client.get(f"/api/v1/assets/{asset['id']}/content", headers={"If-None-Match": etag})
+    assert again.status_code == 304
+    assert again.content == b""
+    assert again.headers["etag"] == etag
+
+    # The same question from someone of another coaching, even holding the right ETag, is a 404.
+    other = make_member(owner_db, "OWNER")
+    other_client = TestClient(client.app)
+    sign_in(other_client, other.email)
+    stolen = other_client.get(
+        f"/api/v1/assets/{asset['id']}/content", headers={"If-None-Match": etag}
+    )
+    assert stolen.status_code == 404
+
+    # And after signing out, the same question is a 401, never a 304.
+    signed_out = TestClient(client.app)
+    assert (
+        signed_out.get(
+            f"/api/v1/assets/{asset['id']}/content", headers={"If-None-Match": etag}
+        ).status_code
+        == 401
+    )

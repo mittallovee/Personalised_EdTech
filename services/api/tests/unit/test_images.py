@@ -154,3 +154,22 @@ def test_a_very_long_thin_picture_is_refused() -> None:
 def test_a_picture_that_claims_billions_of_pixels_is_refused_not_a_crash() -> None:
     with pytest.raises((ImageInvalid, ImageTooLarge)):
         clean_image(_png_header(2**31 - 1, 2**31 - 1))
+
+
+@pytest.mark.parametrize("fmt", ["PNG", "JPEG", "WEBP"])
+def test_a_colour_profile_is_not_carried_over(fmt: str) -> None:
+    # The profile is arbitrary bytes inside the file: it is a place to hide something, so it goes.
+    original = _encode(Image.new("RGB", (6, 6)), fmt, icc_profile=b"HIDDEN-PROFILE-BYTES" * 20)
+    assert _read(original).info.get("icc_profile") is not None  # the test's own premise
+    cleaned = clean_image(original)
+    assert _read(cleaned.data).info.get("icc_profile") is None
+    assert b"HIDDEN-PROFILE-BYTES" not in cleaned.data
+
+
+def test_a_profile_is_also_dropped_when_the_picture_is_turned_upright() -> None:
+    exif = Image.Exif()
+    exif[0x0112] = 3
+    original = _encode(
+        Image.new("RGB", (6, 4)), "JPEG", exif=exif, icc_profile=b"HIDDEN-PROFILE-BYTES" * 20
+    )
+    assert _read(clean_image(original).data).info.get("icc_profile") is None

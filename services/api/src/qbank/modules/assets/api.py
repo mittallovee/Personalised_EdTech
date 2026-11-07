@@ -153,13 +153,15 @@ def read_asset(
     summary="The picture itself",
     description=(
         "Any member of the coaching; another coaching's picture answers 404. The `Content-Type`"
-        " comes from our own record. The file never changes, so it may be kept in the browser's"
-        " cache (private: not by shared caches)."
+        " comes from our own record. The browser may keep the picture but must ask again each"
+        " time (`Cache-Control: private, no-cache`), so a person who signs in on the same browser"
+        " is checked afresh; if it has not changed (`If-None-Match`) the answer is `304`."
     ),
     responses={
         **_DENIED,
         **_NOT_FOUND,
         200: {"content": {"image/png": {}, "image/jpeg": {}, "image/webp": {}}},
+        304: {"description": "The browser's copy is still the current one"},
     },
 )
 def read_content(
@@ -172,6 +174,17 @@ def read_content(
     with database.transaction(principal.tenant_context) as session:
         asset = service.get_asset(session, asset_id)
         content_type, key, sha256 = asset.content_type, asset.storage_key, asset.sha256
+    etag = f'"{sha256}"'
+    # Kept by the browser but asked about every time (`no-cache`), so someone who signs in on the
+    # same browser as a member of another coaching reaches the checks above instead of a cached
+    # copy. A repeat request for an unchanged picture is answered 304, after those checks.
+    headers = {
+        "Cache-Control": "private, no-cache",
+        "ETag": etag,
+        "X-Content-Type-Options": "nosniff",
+    }
+    if _matches(request.headers.get("if-none-match"), etag):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     storage: Storage = request.app.state.storage
     try:
         data = storage.get(key)
@@ -181,10 +194,16 @@ def read_content(
         content=data,
         media_type=content_type,
         headers={
-            "Cache-Control": "private, max-age=31536000, immutable",
-            "ETag": f'"{sha256}"',
-            "X-Content-Type-Options": "nosniff",
+            **headers,
             "Content-Security-Policy": "default-src 'none'; sandbox",
             "Content-Disposition": "inline",
         },
     )
+
+
+def _matches(if_none_match: str | None, etag: str) -> bool:
+    """Whether the browser already holds this version (`If-None-Match`, weak marks allowed)."""
+    if not if_none_match:
+        return False
+    wanted = [part.strip().removeprefix("W/") for part in if_none_match.split(",")]
+    return etag in wanted or "*" in wanted

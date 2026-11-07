@@ -81,8 +81,10 @@ def _reencode(picture: Image.Image) -> CleanImage:
         upright = upright.convert("RGB")
     else:
         upright = upright.convert("RGBA")
+    # The encoders fall back to what the picture carries (a colour profile, text, EXIF) when they
+    # are not given any, so what it carries is emptied: only the pixels go on.
+    upright.info.clear()
     out = io.BytesIO()
-    # No ``exif``, ``icc_profile`` or text chunks are passed, so none are written.
     if save_as == "PNG":
         upright.save(out, "PNG", optimize=True)
     elif save_as == "JPEG":

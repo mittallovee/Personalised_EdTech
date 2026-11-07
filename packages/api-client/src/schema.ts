@@ -734,7 +734,7 @@ export interface paths {
         };
         /**
          * The picture itself
-         * @description Any member of the coaching; another coaching's picture answers 404. The `Content-Type` comes from our own record. The file never changes, so it may be kept in the browser's cache (private: not by shared caches).
+         * @description Any member of the coaching; another coaching's picture answers 404. The `Content-Type` comes from our own record. The browser may keep the picture but must ask again each time (`Cache-Control: private, no-cache`), so a person who signs in on the same browser is checked afresh; if it has not changed (`If-None-Match`) the answer is `304`.
          */
         get: operations["read_content_api_v1_assets__asset_id__content_get"];
         put?: never;
@@ -5413,6 +5413,13 @@ export interface operations {
                     "image/jpeg": unknown;
                     "image/webp": unknown;
                 };
+            };
+            /** @description The browser's copy is still the current one */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
             400: {
