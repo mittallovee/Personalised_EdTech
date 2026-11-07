@@ -14,7 +14,9 @@ from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
+from qbank.core.storage import LocalDiskStorage
 from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
+from qbank.modules.assets.api import router as assets_router
 from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
 from qbank.modules.identity.api import router as identity_router
@@ -70,6 +72,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.import_uploads_per_user, settings.import_upload_window_seconds
     )
     app.state.import_parse_gate = ConcurrencyGate(settings.import_parses_at_once)
+    app.state.storage = LocalDiskStorage(settings.storage_dir)
+    app.state.asset_upload_limiter = SlidingWindowLimiter(
+        settings.asset_uploads_per_user, settings.asset_upload_window_seconds
+    )
+    app.state.image_decode_gate = ConcurrencyGate(settings.image_decodes_at_once)
 
     # Google sign-in is available only when its client ID and secret are configured (B-02).
     app.state.google = (
@@ -92,6 +99,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ownership_router)
     app.include_router(catalogues_router)
     app.include_router(taxonomy_router)
+    app.include_router(assets_router)
     app.include_router(concepts_router)
     app.include_router(import_router)
     app.include_router(exams_router)

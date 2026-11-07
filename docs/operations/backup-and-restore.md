@@ -10,7 +10,7 @@
 | What | By what | Status |
 |---|---|---|
 | The database: every coaching's data, accounts, sessions, audit log | `infra/scripts/backup-db.sh` | Tooling done and tested (K-03) |
-| Uploaded files (images, documents), from M3 PR 3g on | the storage backend's own copy | Planned with K-16 |
+| Uploaded files (pictures from M3 PR 3g-1; documents later) | locally the Docker volume `assetdata` (mounted at `/data/storage` in the api container); a cloud bucket later. **`backup-db.sh` does not copy it**, so K-16 must back it up with the database | Planned with K-16 |
 | Settings and secrets (`.env`, keys) | your password manager; never in Git | Yours to keep safe |
 | The code | Git | Done |
 

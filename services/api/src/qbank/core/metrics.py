@@ -46,6 +46,11 @@ IMPORT_EVENTS = Counter(
     "Syllabus import uploads and applies, per coaching, by event.",
     ["organization_id", "event"],
 )
+ASSET_EVENTS = Counter(
+    "qbank_asset_events_total",
+    "Picture uploads, per coaching, by event.",
+    ["organization_id", "event"],
+)
 JOBS_FINISHED = Counter(
     "qbank_jobs_finished_total",
     "Background job attempts by type and outcome (succeeded, retried, failed, lease_lost).",
