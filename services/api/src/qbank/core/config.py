@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     import_upload_window_seconds: int = Field(default=600, ge=1)
     import_parses_at_once: int = Field(default=2, ge=1)
 
+    # Where uploaded files are kept (ADR-0012): a folder, in production a mounted volume. Picture
+    # uploads (D-07) are limited per signed-in user, and pictures decoded at the same time (one
+    # decode costs a processor for up to about a second and up to 160 MB for a 40-megapixel one).
+    storage_dir: Path = SERVICE_ROOT / ".storage"
+    asset_uploads_per_user: int = Field(default=60, ge=1)
+    asset_upload_window_seconds: int = Field(default=600, ge=1)
+    image_decodes_at_once: int = Field(default=2, ge=1)
+
     # Google sign-in (B-02) is off until both are set; see docs/operations/google-login.md. The
     # secret never appears in logs or reprs (SecretStr) and must never be committed.
     google_client_id: str | None = None

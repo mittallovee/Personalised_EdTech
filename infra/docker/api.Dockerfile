@@ -14,7 +14,8 @@ COPY services/api/ ./
 RUN uv sync --frozen --no-dev
 
 FROM python:3.14-slim AS runtime
-RUN useradd --create-home --uid 10001 app
+RUN useradd --create-home --uid 10001 app \
+ && mkdir -p /data/storage && chown app:app /data/storage  # uploaded files (ADR-0012)
 COPY --from=build --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 WORKDIR /app

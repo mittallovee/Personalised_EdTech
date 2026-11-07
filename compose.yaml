@@ -72,6 +72,12 @@ services:
       IMPORT_UPLOADS_PER_USER: ${IMPORT_UPLOADS_PER_USER:-10}
       IMPORT_UPLOAD_WINDOW_SECONDS: ${IMPORT_UPLOAD_WINDOW_SECONDS:-600}
       IMPORT_PARSES_AT_ONCE: ${IMPORT_PARSES_AT_ONCE:-2}
+      # Uploaded pictures (ADR-0012) live in the assetdata volume. Uploads per signed-in user in the
+      # window (seconds), and pictures decoded at once; CI may raise the first for the browser tests.
+      STORAGE_DIR: /data/storage
+      ASSET_UPLOADS_PER_USER: ${ASSET_UPLOADS_PER_USER:-60}
+      ASSET_UPLOAD_WINDOW_SECONDS: ${ASSET_UPLOAD_WINDOW_SECONDS:-600}
+      IMAGE_DECODES_AT_ONCE: ${IMAGE_DECODES_AT_ONCE:-2}
       # Sign in with Google is off while these are empty (docs/operations/google-login.md).
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -79,6 +85,8 @@ services:
       # inside the compose network; traces go out only when an endpoint is set (see the profile below).
       METRICS_PORT: 9100
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    volumes:
+      - assetdata:/data/storage
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:
@@ -183,6 +191,7 @@ services:
 
 volumes:
   pgdata:
+  assetdata:
   tempodata:
   lokidata:
   promdata:

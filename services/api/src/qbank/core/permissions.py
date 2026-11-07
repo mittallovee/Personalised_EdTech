@@ -46,6 +46,8 @@ class Action(StrEnum):
     CREATE_QUESTIONS = "CREATE_QUESTIONS"
     # Archive or restore a question someone else wrote (faculty may do it for their own).
     ARCHIVE_ANY_QUESTION = "ARCHIVE_ANY_QUESTION"
+    # Upload a picture for a question, and see the coaching's pictures (M3, D-07).
+    USE_ASSETS = "USE_ASSETS"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -63,6 +65,7 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.MANAGE_CATALOGUES: _ADMINS,
     Action.CREATE_QUESTIONS: _EVERYONE,
     Action.ARCHIVE_ANY_QUESTION: _ADMINS,
+    Action.USE_ASSETS: _EVERYONE,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).

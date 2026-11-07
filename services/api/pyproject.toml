@@ -23,6 +23,7 @@ dependencies = [
     "opentelemetry-api>=1.30,<2",
     "opentelemetry-sdk>=1.30,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
+    "pillow>=12,<13",
 ]
 
 [project.scripts]
@@ -81,6 +82,7 @@ root_package = "qbank"
 name = "feature modules are independent: they may only use each other's public.py"
 type = "independence"
 modules = [
+    "qbank.modules.assets",
     "qbank.modules.audit",
     "qbank.modules.health",
     "qbank.modules.identity",
