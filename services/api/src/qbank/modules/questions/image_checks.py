@@ -16,16 +16,16 @@ from uuid import UUID
 
 from qbank.modules.questions.findings import Finding, Findings, at_index, at_key
 
-# More than this many pictures in one question is not looked up (the shape checks and the size
-# limit of a revision stop such a question long before; this only bounds the lookup).
-MAX_PICTURES = 200
-
 
 def image_refs(content: object) -> list[tuple[str, UUID]]:
-    """Every image block with a readable ``asset_id``: the path of the block and the id."""
+    """Every image block with a readable ``asset_id``: the path of the block and the id.
+
+    All of them, however many: a limit here would leave some picture unchecked and unprotected.
+    The size limit of a revision already bounds the work.
+    """
     found: list[tuple[str, UUID]] = []
     stack: list[tuple[str, object]] = [("", content)]
-    while stack and len(found) < MAX_PICTURES:
+    while stack:
         path, value = stack.pop()
         if isinstance(value, dict):
             if value.get("kind") == "image":

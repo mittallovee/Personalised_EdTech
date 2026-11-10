@@ -47,6 +47,39 @@ def upgrade() -> None:
         );
         CREATE INDEX revision_assets_asset ON revision_assets (asset_id);
 
+        -- Pictures saved before this migration (migration 0021 made them uploadable): record, for
+        -- every existing revision, frozen ones too, the pictures its content names that are this
+        -- coaching's own. Done before the frozen guard below exists, and one coaching at a time
+        -- because the tables involved have forced row-level security.
+        DO $backfill$
+        DECLARE
+            org uuid;
+        BEGIN
+            PERFORM set_config('app.is_platform', 'true', true);
+            FOR org IN SELECT id FROM organizations LOOP
+                PERFORM set_config('app.org_id', org::text, true);
+                INSERT INTO revision_assets (organization_id, revision_id, asset_id)
+                SELECT DISTINCT r.organization_id, r.id, (b ->> 'asset_id')::uuid
+                FROM question_revisions r
+                CROSS JOIN LATERAL jsonb_path_query(
+                    r.content,
+                    ('$.** ? (@.kind == "image" && @.asset_id like_regex "^('
+                     || '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+                     || '|[0-9a-f]{32})$" flag "i")')::jsonpath
+                ) AS b
+                WHERE r.organization_id = org
+                  AND EXISTS (
+                      SELECT 1 FROM assets a
+                      WHERE a.organization_id = r.organization_id
+                        AND a.id = (b ->> 'asset_id')::uuid
+                  )
+                ON CONFLICT DO NOTHING;
+            END LOOP;
+            PERFORM set_config('app.org_id', '', true);
+            PERFORM set_config('app.is_platform', '', true);
+        END
+        $backfill$;
+
         CREATE FUNCTION revision_assets_frozen_guard() RETURNS trigger
         LANGUAGE plpgsql AS $$
         DECLARE

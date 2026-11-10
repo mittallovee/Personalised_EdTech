@@ -1,7 +1,9 @@
 """M1 exit test T8: migrations go up, down and up again cleanly on an empty database."""
 
+import json
 import secrets
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from alembic import command
@@ -118,3 +120,112 @@ def test_existing_password_logins_get_their_email_reserved(
     finally:
         engine.dispose()
     assert reserved == user_id
+
+
+def test_existing_pictures_are_recorded_for_every_revision_when_migration_0022_runs(
+    empty_database: tuple[str, str],
+) -> None:
+    """Migration 0022 fills revision_assets for revisions saved before it, frozen ones included."""
+    owner_url, _ = empty_database
+    config = alembic_config(owner_url)
+    command.upgrade(config, "0021")
+    org, other_org, user = new_id(), new_id(), new_id()
+    own_a, own_b, foreign, unknown = new_id(), new_id(), new_id(), new_id()
+    master, version = new_id(), new_id()
+    working, frozen = new_id(), new_id()
+
+    def picture(asset: object) -> dict[str, object]:
+        return {"kind": "image", "asset_id": str(asset), "alt_text": "x"}
+
+    content_frozen = {
+        "stem": [picture(own_a), picture("not-an-id"), picture(foreign)],
+        "options": [{"id": "A", "content": [picture(own_b), picture(unknown)]}],
+    }
+    content_working = {"stem": [picture(own_a)], "note": {"asset_id": str(own_b)}}
+    engine = create_engine(owner_url)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SELECT set_config('app.is_platform', 'true', true)"))
+            for organization in (org, other_org):
+                conn.execute(
+                    text("INSERT INTO organizations (id, display_name) VALUES (:id, 'C')"),
+                    {"id": organization},
+                )
+            conn.execute(
+                text("INSERT INTO users (id, display_name) VALUES (:id, 'U')"), {"id": user}
+            )
+            for organization, assets in ((org, (own_a, own_b)), (other_org, (foreign,))):
+                conn.execute(
+                    text("SELECT set_config('app.org_id', :o, true)"), {"o": str(organization)}
+                )
+                for asset in assets:
+                    conn.execute(
+                        text(
+                            "INSERT INTO assets (id, organization_id, kind, content_type,"
+                            " byte_size, sha256, width, height, storage_key, created_by)"
+                            " VALUES (:id, :org, 'IMAGE', 'image/png', 1, :sha, 1, 1, :key, :user)"
+                        ),
+                        {
+                            "id": asset,
+                            "org": organization,
+                            "sha": "0" * 64,
+                            "key": f"org/{organization}/image/{asset}",
+                            "user": user,
+                        },
+                    )
+            conn.execute(text("SELECT set_config('app.org_id', :o, true)"), {"o": str(org)})
+            conn.execute(
+                text(
+                    "INSERT INTO public_codes (code, entity_type, organization_id)"
+                    " VALUES ('ABCD2345', 'question', :org)"
+                ),
+                {"org": org},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO question_masters (id, organization_id, code, created_by)"
+                    " VALUES (:id, :org, 'ABCD2345', :user)"
+                ),
+                {"id": master, "org": org, "user": user},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO question_versions (id, organization_id, master_id, number)"
+                    " VALUES (:id, :org, :master, 1)"
+                ),
+                {"id": version, "org": org, "master": master},
+            )
+            for revision_id, number, content, is_frozen in (
+                (frozen, 1, content_frozen, True),
+                (working, 2, content_working, False),
+            ):
+                conn.execute(
+                    text(
+                        "INSERT INTO question_revisions (id, organization_id, version_id, number,"
+                        " content, content_hash, author_id, frozen_at) VALUES (:id, :org,"
+                        " :version, :number, CAST(:content AS jsonb), :hash, :user, :frozen)"
+                    ),
+                    {
+                        "id": revision_id,
+                        "org": org,
+                        "version": version,
+                        "number": number,
+                        "content": json.dumps(content),
+                        "hash": "1" * 64 if is_frozen else None,
+                        "user": user,
+                        "frozen": datetime.now(UTC) if is_frozen else None,
+                    },
+                )
+
+        command.upgrade(config, "head")
+
+        with engine.begin() as conn:
+            conn.execute(text("SELECT set_config('app.org_id', :o, true)"), {"o": str(org)})
+            rows = conn.execute(text("SELECT revision_id, asset_id FROM revision_assets")).all()
+    finally:
+        engine.dispose()
+    # Only the coaching's own pictures that a revision names are recorded: not the other
+    # coaching's, not an unknown id, not an unreadable one, and not a field that is not a block.
+    assert sorted((str(r), str(a)) for r, a in rows) == sorted(
+        [(str(frozen), str(own_a)), (str(frozen), str(own_b)), (str(working), str(own_a))]
+    )

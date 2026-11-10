@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from qbank.modules.questions.findings import Level
-from qbank.modules.questions.image_checks import MAX_PICTURES, check_images, image_ids, image_refs
+from qbank.modules.questions.image_checks import check_images, image_ids, image_refs
 
 A = UUID("00000000-0000-4000-8000-00000000000a")
 B = UUID("00000000-0000-4000-8000-00000000000b")
@@ -55,9 +55,20 @@ def test_no_findings_when_every_picture_is_available() -> None:
     assert check_images({"stem": []}, set()) == []
 
 
-def test_a_question_with_very_many_pictures_is_only_looked_up_in_part() -> None:
-    many = {"stem": [picture(str(UUID(int=n + 1))) for n in range(MAX_PICTURES + 50)]}
-    assert len(image_refs(many)) == MAX_PICTURES
+def test_every_picture_is_found_however_many_there_are() -> None:
+    # The 100-block limit applies to each list of blocks, so a valid question can hold many more
+    # pictures than any one list; none of them may be skipped (it would go unchecked).
+    stem = picture(str(A))
+    solution = [picture(str(UUID(int=n + 1000))) for n in range(300)]
+    option = [picture(str(UUID(int=n + 5000))) for n in range(300)]
+    content = {"stem": [stem], "solution": solution, "options": [{"id": "A", "content": option}]}
+    refs = image_refs(content)
+    assert len(refs) == 601
+    assert ("stem[0]", A) in refs
+    assert check_images(content, {a for _, a in refs}) == []
+    assert [f.path for f in check_images(content, {a for _, a in refs} - {A})] == [
+        "stem[0].asset_id"
+    ]
 
 
 def test_deeply_nested_content_does_not_overflow_the_stack() -> None:
