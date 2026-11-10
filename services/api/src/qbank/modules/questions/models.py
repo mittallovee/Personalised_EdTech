@@ -66,3 +66,21 @@ class QuestionRevision(Base):
     revision: Mapped[int] = mapped_column(default=1)  # the ETag of the working revision
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RevisionAsset(Base):
+    """A picture that a revision uses (migration 0022). The working revision's rows follow its
+    content; the rows of a frozen revision never change."""
+
+    __tablename__ = "revision_assets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "revision_id"],
+            ["question_revisions.organization_id", "question_revisions.id"],
+        ),
+    )
+
+    organization_id: Mapped[UUID]
+    revision_id: Mapped[UUID] = mapped_column(primary_key=True)
+    asset_id: Mapped[UUID] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
