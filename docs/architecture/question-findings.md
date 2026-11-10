@@ -50,6 +50,7 @@ metadata's shape. A "passage-based" question is one of the eight formats with a 
 | `EQUATION_TOO_LONG` | error | More than 2,000 characters (also for an inline equation) |
 | `IMAGE_ASSET_MISSING` | incomplete | No picture chosen yet |
 | `IMAGE_ASSET_ID_INVALID` | error | The picture's id is not valid |
+| `IMAGE_NOT_AVAILABLE` | error | The picture is not one of this coaching's (another coaching's, or no such picture); upload it again |
 | `IMAGE_ALT_MISSING` | incomplete | No alt text (a description for people who cannot see the picture) |
 | `TABLE_ROWS_NOT_LIST` / `TABLE_ROW_NOT_LIST` | error | Table shape is wrong |
 | `TABLE_EMPTY` | incomplete | No rows yet |

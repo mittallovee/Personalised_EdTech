@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.orm import Session, aliased
 
 from qbank.core.auth import Principal
@@ -29,10 +29,17 @@ from qbank.core.permissions import (
     may_archive_draft,
     require,
 )
+from qbank.modules.assets.public import existing_image_ids
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalogue
 from qbank.modules.questions.findings import Finding
-from qbank.modules.questions.models import QuestionMaster, QuestionRevision, QuestionVersion
+from qbank.modules.questions.image_checks import check_images, image_ids
+from qbank.modules.questions.models import (
+    QuestionMaster,
+    QuestionRevision,
+    QuestionVersion,
+    RevisionAsset,
+)
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.validate import validate_content
 from qbank.modules.taxonomy.public import look_up
@@ -124,6 +131,7 @@ def create_question(
     for row in (master, version, revision):
         session.add(row)
         session.flush()
+    _record_pictures(session, revision)
     question_type = content.get("question_type")
     record_event(
         session,
@@ -162,10 +170,45 @@ def _findings_for(
     session: Session, contents: list[dict[str, Any]], rules: Rules
 ) -> list[list[Finding]]:
     """The findings of each content: its shape and parts, then its labels against this coaching's
-    lists. One lookup serves all of them, so a page of questions costs four queries, not many."""
+    lists, then its pictures against this coaching's own. One lookup of each kind serves all of
+    them, so a page of questions costs a handful of queries, not many."""
     ids = set[UUID]().union(*(catalogue_ids(content) for content in contents))
     refs = look_up(session, ids)
-    return [validate_content(c, rules) + check_catalogue(c, refs) for c in contents]
+    pictures = existing_image_ids(session, set[UUID]().union(*(image_ids(c) for c in contents)))
+    return [
+        validate_content(c, rules) + check_catalogue(c, refs) + check_images(c, pictures)
+        for c in contents
+    ]
+
+
+def _record_pictures(session: Session, revision: QuestionRevision) -> None:
+    """Make the pictures recorded for a working revision match its content.
+
+    Only this coaching's own pictures are recorded (a missing or foreign one is a finding, not a
+    row). A picture that a saved revision uses cannot be deleted, so this is what keeps history
+    showing its pictures. The rows of a frozen revision are never touched (the database refuses).
+    """
+    wanted = existing_image_ids(session, image_ids(revision.content))
+    have = set(
+        session.scalars(
+            select(RevisionAsset.asset_id).where(RevisionAsset.revision_id == revision.id)
+        )
+    )
+    if have - wanted:
+        session.execute(
+            delete(RevisionAsset).where(
+                RevisionAsset.revision_id == revision.id, RevisionAsset.asset_id.in_(have - wanted)
+            )
+        )
+    for asset_id in wanted - have:
+        session.add(
+            RevisionAsset(
+                organization_id=revision.organization_id,
+                revision_id=revision.id,
+                asset_id=asset_id,
+            )
+        )
+    session.flush()
 
 
 def _findings(session: Session, content: dict[str, Any], rules: Rules) -> list[Finding]:
@@ -298,6 +341,7 @@ def save_working_revision(
     revision.revision += 1
     revision.updated_at = datetime.now(UTC)
     session.flush()
+    _record_pictures(session, revision)
     return QuestionView(master, version, revision, _findings(session, content, rules))
 
 
@@ -338,6 +382,7 @@ def checkpoint(
     )
     session.add(fresh)
     session.flush()
+    _record_pictures(session, fresh)
     record_event(
         session,
         action="QUESTION_CHECKPOINTED",
