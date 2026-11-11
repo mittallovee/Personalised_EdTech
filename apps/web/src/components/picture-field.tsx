@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PictureCropper } from "@/components/picture-cropper";
 import { api, errorMessage } from "@/lib/api";
@@ -32,6 +32,21 @@ export function PictureField({
   const [uploading, setUploading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const chooser = useRef<HTMLInputElement>(null);
+  // An upload can finish long after it started, when the author has typed more and the lists above
+  // have been rebuilt. Its result is applied to the block as it is now, through the newest
+  // `onChange` (which sees the newest content), never to the one held when the upload began; and
+  // not at all if the block was removed meanwhile.
+  const newest = useRef({ block, onChange });
+  const present = useRef(false);
+  useEffect(() => {
+    newest.current = { block, onChange };
+  });
+  useEffect(() => {
+    present.current = true;
+    return () => {
+      present.current = false;
+    };
+  }, []);
 
   const assetId =
     typeof block.asset_id === "string" && UUID.test(block.asset_id) ? block.asset_id : null;
@@ -48,16 +63,17 @@ export function PictureField({
         bodySerializer: (body: unknown) => body as BodyInit,
         headers: { "Content-Type": contentType },
       });
+      if (!present.current) return;
       if (data) {
-        onChange({ ...block, asset_id: data.id });
+        newest.current.onChange({ ...newest.current.block, asset_id: data.id });
         setChosen(null);
       } else {
         setProblem(errorMessage(error, response.status));
       }
     } catch {
-      setProblem(NETWORK);
+      if (present.current) setProblem(NETWORK);
     } finally {
-      setUploading(false);
+      if (present.current) setUploading(false);
     }
   }
 

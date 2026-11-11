@@ -946,7 +946,9 @@ test("a picture is chosen, cropped, uploaded, described and shown to the student
 
   // It is really stored: after a reload the picture is still there.
   await page.reload();
-  await expect(page.getByRole("group", { name: "Question", exact: true }).locator("img")).toBeVisible();
+  await expect(
+    page.getByRole("group", { name: "Question", exact: true }).locator("img"),
+  ).toBeVisible();
   await expect(page.getByLabel("Question, block 2: alt text")).toHaveValue("A grey rectangle");
 });
 
@@ -998,6 +1000,85 @@ test("a file that is not a picture is explained, and Cancel keeps the picture as
   await stem.getByRole("button", { name: "Remove picture in Question, block 2" }).click();
   await expect(stem.locator("img")).toHaveCount(0);
   await expect(page.getByLabel("Question, block 2: alt text")).toHaveCount(0);
+});
+
+test("what is typed while a picture is uploading is kept when the upload finishes", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  const paragraph = page.getByLabel("Question, block 1: paragraph");
+  await expect(paragraph).toBeEnabled();
+  await stem.getByRole("button", { name: "Add picture" }).click();
+
+  // Hold the upload until the test lets it go, as a slow connection would.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/v1/assets/images", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByLabel("Question, block 2: choose a picture").setInputFiles({
+    name: "slow.png",
+    mimeType: "image/png",
+    buffer: solidPng(40, 30),
+  });
+  await page
+    .getByRole("group", { name: "Crop the picture" })
+    .getByRole("button", { name: "Use this picture" })
+    .click();
+  await expect(page.getByRole("button", { name: "Uploading…" })).toBeVisible();
+
+  // The author keeps writing, and describes the picture, while it uploads.
+  await paragraph.fill("Written while the picture uploads");
+  await page.getByLabel("Question, block 2: alt text").fill("Typed meanwhile");
+  release();
+
+  await expect(stem.locator("img")).toBeVisible();
+  await expect(paragraph).toHaveValue("Written while the picture uploads");
+  await expect(page.getByLabel("Question, block 2: alt text")).toHaveValue("Typed meanwhile");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.reload();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue(
+    "Written while the picture uploads",
+  );
+});
+
+test("removing a picture block does not hand its pending crop to the next one", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
+  await stem.getByRole("button", { name: "Add picture" }).click();
+  await stem.getByRole("button", { name: "Add picture" }).click();
+
+  // A file is chosen for the first picture block, and that block is removed before it is used.
+  await page.getByLabel("Question, block 2: choose a picture").setInputFiles({
+    name: "first.png",
+    mimeType: "image/png",
+    buffer: solidPng(40, 30),
+  });
+  const cropper = page.getByRole("group", { name: "Crop the picture" });
+  await expect(cropper).toBeVisible();
+  await stem.getByRole("button", { name: "Remove picture in Question, block 2" }).click();
+
+  // The surviving block is still empty, and nothing is being cropped for it.
+  await expect(cropper).toHaveCount(0);
+  await expect(stem.locator("img")).toHaveCount(0);
+  await expect(page.getByLabel("Question, block 2: choose a picture")).toBeVisible();
 });
 
 test("a broken equation is flagged beside its source, and the editor is not open for it", async ({
