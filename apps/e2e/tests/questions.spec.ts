@@ -1,3 +1,5 @@
+import { deflateSync } from "node:zlib";
+
 import { expect, test } from "@playwright/test";
 
 import { csrfOf, expectNoSeriousA11yViolations, signedInOwner, unique } from "./helpers";
@@ -851,6 +853,151 @@ test("inserting a second equation without clicking back goes after the first, no
     await expect(editor).toHaveCount(0);
   }
   await expect(paragraph).toHaveValue(String.raw`Find \(a\)\(b\) now`);
+});
+
+// M3 PR 3g-3 (D-07): a picture is chosen, cropped in the browser, uploaded, described and shown.
+
+/** A solid-colour PNG of the given size, made here so the test needs no file on disk. */
+function solidPng(width: number, height: number): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (bytes: Buffer) => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = crcTable[(c ^ byte) & 0xff]! ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (kind: string, body: Buffer) => {
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(body.length);
+    const tail = Buffer.alloc(4);
+    tail.writeUInt32BE(crc(Buffer.concat([Buffer.from(kind), body])));
+    return Buffer.concat([head, Buffer.from(kind), body, tail]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2, 0, 0, 0], 8); // 8 bits, RGB
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(width * 3, 0x40)]);
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+test("a picture is chosen, cropped, uploaded, described and shown to the student", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
+
+  await stem.getByRole("button", { name: "Add picture" }).click();
+  const choose = page.getByLabel("Question, block 2: choose a picture");
+  await choose.setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: solidPng(120, 80),
+  });
+
+  // The crop: trim half of the width away, then use the result.
+  const cropper = page.getByRole("group", { name: "Crop the picture" });
+  await expect(cropper).toBeVisible();
+  await expect(cropper.getByRole("img", { name: "Preview of the cropped picture" })).toBeVisible();
+  await cropper.getByLabel("Trim from the left (%)", { exact: true }).fill("50");
+  await expectNoSeriousA11yViolations(page);
+  await cropper.getByRole("button", { name: "Use this picture" }).click();
+  await expect(cropper).toHaveCount(0);
+
+  // It is uploaded and shown; only the cropped half was kept (60 of 120 pixels).
+  const shown = stem.locator("img");
+  await expect(shown).toBeVisible();
+  await expect
+    .poll(() => shown.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight]))
+    .toEqual([60, 80]);
+
+  // Without a description the question says what is still to do; writing one clears that.
+  const findings = page.getByRole("region", { name: "Findings" });
+  await expect(findings).toContainText("Describe the picture");
+  await page.getByLabel("Question, block 2: alt text").fill("A grey rectangle");
+  await page.getByLabel("Question, block 2: caption").fill("Figure 1");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(findings).not.toContainText("Describe the picture");
+  await expectNoSeriousA11yViolations(page);
+
+  // The student sees the picture, its description and its caption.
+  await page.getByRole("tab", { name: "Preview" }).click();
+  const preview = page.locator(".qb-question");
+  await expect(preview.locator("img")).toHaveAttribute("alt", "A grey rectangle");
+  await expect(preview.locator("figcaption")).toHaveText("Figure 1");
+  await page.getByRole("tab", { name: "Edit" }).click();
+
+  // It is really stored: after a reload the picture is still there.
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Question", exact: true }).locator("img")).toBeVisible();
+  await expect(page.getByLabel("Question, block 2: alt text")).toHaveValue("A grey rectangle");
+});
+
+test("a file that is not a picture is explained, and Cancel keeps the picture as it was", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  const stem = page.getByRole("group", { name: "Question", exact: true });
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
+  await stem.getByRole("button", { name: "Add picture" }).click();
+
+  // A text file called .png is not read as a picture, and nothing is uploaded.
+  await page.getByLabel("Question, block 2: choose a picture").setInputFiles({
+    name: "fake.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("this is not a picture"),
+  });
+  const cropper = page.getByRole("group", { name: "Crop the picture" });
+  await expect(cropper.getByRole("alert")).toContainText("could not be read as a picture");
+  await expect(cropper.getByRole("button", { name: "Use this picture" })).toBeDisabled();
+  await cropper.getByRole("button", { name: "Cancel" }).click();
+  await expect(cropper).toHaveCount(0);
+  await expect(stem.locator("img")).toHaveCount(0);
+
+  // A real picture, kept; choosing another and cancelling leaves it unchanged.
+  await page.getByLabel("Question, block 2: choose a picture").setInputFiles({
+    name: "a.png",
+    mimeType: "image/png",
+    buffer: solidPng(40, 30),
+  });
+  await cropper.getByRole("button", { name: "Use this picture" }).click();
+  await expect(stem.locator("img")).toBeVisible();
+  const before = await stem.locator("img").getAttribute("src");
+  await page.getByLabel("Question, block 2: choose another picture").setInputFiles({
+    name: "b.png",
+    mimeType: "image/png",
+    buffer: solidPng(20, 20),
+  });
+  await expect(cropper).toBeVisible();
+  await cropper.getByRole("button", { name: "Cancel" }).click();
+  await expect(stem.locator("img")).toHaveAttribute("src", before!);
+
+  // Remove takes the whole block away.
+  await stem.getByRole("button", { name: "Remove picture in Question, block 2" }).click();
+  await expect(stem.locator("img")).toHaveCount(0);
+  await expect(page.getByLabel("Question, block 2: alt text")).toHaveCount(0);
 });
 
 test("a broken equation is flagged beside its source, and the editor is not open for it", async ({

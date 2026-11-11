@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { EquationVisualEditor } from "@/components/equation-visual-editor";
 import { LivePreview } from "@/components/live-preview";
+import { PictureField } from "@/components/picture-field";
 import { insertInlineEquationAt } from "@/lib/inline-equation";
 import { paragraph, removeBlock, replaceBlock, type Block } from "@/lib/question-content";
 
@@ -12,16 +13,15 @@ const FIELD =
 const BUTTON = "rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700";
 
 const KIND_NAMES: Record<string, string> = {
-  image: "A picture",
   table: "A table",
   list: "A list",
 };
 
 /**
  * The editor for a list of content blocks (the stem, a solution...). Paragraphs and displayed
- * equations (LaTeX) are written here; inside a paragraph an inline equation goes between `\(` and
- * `\)`. Pictures, tables and lists are not edited here yet: they are kept exactly as they are, so
- * opening and saving a question never loses one.
+ * equations (LaTeX) are written here, and pictures are chosen, cropped and described; inside a
+ * paragraph an inline equation goes between `\(` and `\)`. Tables and lists are not edited here
+ * yet: they are kept exactly as they are, so opening and saving a question never loses one.
  */
 export function BlocksField({
   label,
@@ -147,6 +147,20 @@ export function BlocksField({
             </div>
           );
         }
+        if (block.kind === "image") {
+          return (
+            <PictureField
+              key={index}
+              block={block}
+              where={where}
+              onChange={(next) => onChange(replaceBlock(blocks, index, next))}
+              onRemove={() => {
+                setEditing(null);
+                onChange(removeBlock(blocks, index));
+              }}
+            />
+          );
+        }
         return (
           <div
             key={index}
@@ -167,6 +181,13 @@ export function BlocksField({
           onClick={() => onChange([...blocks, { kind: "equation", format: "latex", source: "" }])}
         >
           Add equation
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() => onChange([...blocks, { kind: "image", alt_text: "", caption: "" }])}
+        >
+          Add picture
         </button>
       </div>
     </fieldset>
