@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { EquationVisualEditor } from "@/components/equation-visual-editor";
 import { LivePreview } from "@/components/live-preview";
+import { PictureField } from "@/components/picture-field";
 import { insertInlineEquationAt } from "@/lib/inline-equation";
 import { paragraph, removeBlock, replaceBlock, type Block } from "@/lib/question-content";
 
@@ -12,16 +13,15 @@ const FIELD =
 const BUTTON = "rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700";
 
 const KIND_NAMES: Record<string, string> = {
-  image: "A picture",
   table: "A table",
   list: "A list",
 };
 
 /**
  * The editor for a list of content blocks (the stem, a solution...). Paragraphs and displayed
- * equations (LaTeX) are written here; inside a paragraph an inline equation goes between `\(` and
- * `\)`. Pictures, tables and lists are not edited here yet: they are kept exactly as they are, so
- * opening and saving a question never loses one.
+ * equations (LaTeX) are written here, and pictures are chosen, cropped and described; inside a
+ * paragraph an inline equation goes between `\(` and `\)`. Tables and lists are not edited here
+ * yet: they are kept exactly as they are, so opening and saving a question never loses one.
  */
 export function BlocksField({
   label,
@@ -48,6 +48,23 @@ export function BlocksField({
   // The cursor (or selection) last seen in each paragraph box, kept so that a click on a button,
   // which moves focus away, still knows where to put an inline equation.
   const cursor = useRef<{ index: number; start: number; end: number } | null>(null);
+  // Each block keeps its own identity when blocks before it are added or removed, so what a block's
+  // editor holds (a picture being cropped, say) stays with that block and never moves to its
+  // neighbour. While the list is in step with ours the keys are ours; when the content was
+  // replaced from outside (a Reload) the blocks are told apart by position again.
+  const [keys, setKeys] = useState<string[]>([]);
+  const made = useRef(0);
+  const keyOf = keys.length === blocks.length ? keys : blocks.map((_, at) => `at-${at}`);
+  function append(block: Block) {
+    made.current += 1;
+    setKeys([...keyOf, `block-${made.current}`]);
+    onChange([...blocks, block]);
+  }
+  function drop(index: number) {
+    setKeys(keyOf.filter((_, at) => at !== index));
+    setEditing(null);
+    onChange(removeBlock(blocks, index));
+  }
   return (
     <fieldset disabled={disabled} className="grid gap-3">
       <legend className="mb-1 text-sm font-medium">{label}</legend>
@@ -58,7 +75,7 @@ export function BlocksField({
           const value = String(equation ? (block.source ?? "") : (block.text ?? ""));
           const session = editing?.index === index && editing.source === value ? editing : null;
           return (
-            <div key={index} className="grid gap-1">
+            <div key={keyOf[index]} className="grid gap-1">
               <label className="grid gap-1 text-sm">
                 <span className="text-zinc-600 dark:text-zinc-400">
                   {equation ? "Equation (LaTeX)" : "Paragraph"}
@@ -136,10 +153,7 @@ export function BlocksField({
                 <button
                   type="button"
                   className="justify-self-start text-sm underline"
-                  onClick={() => {
-                    setEditing(null);
-                    onChange(removeBlock(blocks, index));
-                  }}
+                  onClick={() => drop(index)}
                 >
                   Remove {equation ? "equation" : "paragraph"} {index + 1}
                 </button>
@@ -147,9 +161,20 @@ export function BlocksField({
             </div>
           );
         }
+        if (block.kind === "image") {
+          return (
+            <PictureField
+              key={keyOf[index]}
+              block={block}
+              where={where}
+              onChange={(next) => onChange(replaceBlock(blocks, index, next))}
+              onRemove={() => drop(index)}
+            />
+          );
+        }
         return (
           <div
-            key={index}
+            key={keyOf[index]}
             className="rounded-md border border-dashed border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700"
           >
             {KIND_NAMES[String(block.kind)] ?? "Other content"} is kept as it is; editing it comes
@@ -158,15 +183,22 @@ export function BlocksField({
         );
       })}
       <div className="flex gap-2">
-        <button type="button" className={BUTTON} onClick={() => onChange([...blocks, paragraph()])}>
+        <button type="button" className={BUTTON} onClick={() => append(paragraph())}>
           Add paragraph
         </button>
         <button
           type="button"
           className={BUTTON}
-          onClick={() => onChange([...blocks, { kind: "equation", format: "latex", source: "" }])}
+          onClick={() => append({ kind: "equation", format: "latex", source: "" })}
         >
           Add equation
+        </button>
+        <button
+          type="button"
+          className={BUTTON}
+          onClick={() => append({ kind: "image", alt_text: "", caption: "" })}
+        >
+          Add picture
         </button>
       </div>
     </fieldset>
