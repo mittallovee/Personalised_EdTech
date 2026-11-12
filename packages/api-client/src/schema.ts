@@ -1281,6 +1281,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/passages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Passages you may open, newest first
+         * @description Your own drafts; admins and people with the edit-others grant see every passage in the coaching (`mine=true` narrows it to their own).
+         */
+        get: operations["list_passages_api_v1_passages_get"];
+        put?: never;
+        /**
+         * Start a passage
+         * @description Anyone in the coaching. A passage is shared text that several questions sit under; it has no public code. Leave `content` out to start an empty one. Send an `Idempotency-Key` so a retry after a lost response returns the same passage.
+         */
+        post: operations["create_passage_api_v1_passages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/passages/{passage_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One passage
+         * @description The ETag is the working revision, for the changes that need `If-Match`.
+         */
+        get: operations["get_passage_api_v1_passages__passage_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/passages/{passage_id}/working-revision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Autosave: replace the working content
+         * @description Send the whole content and the ETag you last read in `If-Match`. A save from a stale screen is refused (412) instead of overwriting newer work. Gaps and mistakes are saved and come back as findings.
+         */
+        put: operations["save_working_revision_api_v1_passages__passage_id__working_revision_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/passages/{passage_id}/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a checkpoint
+         * @description Freezes the working revision for good (with a hash of its content) and starts a new working revision as a copy. The answer is that new working revision, whose `latest_checkpoint` is the revision just frozen: the one a child question pins.
+         */
+        post: operations["save_checkpoint_api_v1_passages__passage_id__checkpoints_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/passages/{passage_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The saved revisions, newest first
+         * @description The working revision first, then the checkpoints.
+         */
+        get: operations["list_revisions_api_v1_passages__passage_id__revisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/passage-revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One checkpoint of a passage, by its id
+         * @description What a child question pins in `context.passage_revision_id`. Any member of the coaching may read it, because the questions under it show it; a draft (working) revision is not served here and answers 404.
+         */
+        get: operations["get_checkpoint_api_v1_passage_revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1575,6 +1699,16 @@ export interface components {
              */
             timezone: string;
             owner: components["schemas"]["NewOwner"];
+        };
+        /** CreatePassage */
+        CreatePassage: {
+            /**
+             * Content
+             * @description The passage's content (schema version 1: a `title` and a `body` of content blocks). Leave it out to start an empty passage.
+             */
+            content?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** CreateQuestion */
         CreateQuestion: {
@@ -2151,6 +2285,197 @@ export interface components {
             /** Has More */
             has_more: boolean;
         };
+        /** PassageCheckpointOut */
+        PassageCheckpointOut: {
+            /**
+             * Id
+             * Format: uuid
+             * @description What a child question pins in `context.passage_revision_id`.
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Frozen At
+             * Format: date-time
+             */
+            frozen_at: string;
+        };
+        /** PassageOut */
+        PassageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Working Revision Id
+             * Format: uuid
+             */
+            working_revision_id: string;
+            /**
+             * Revision
+             * @description Also the ETag of the working revision.
+             */
+            revision: number;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** @description The newest frozen revision, which a new child question pins; none until the first checkpoint. */
+            latest_checkpoint: components["schemas"]["PassageCheckpointOut"] | null;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /**
+             * Findings
+             * @description Computed from the content on every read, never stored.
+             */
+            findings: components["schemas"]["FindingOut"][];
+        };
+        /** PassagePage */
+        PassagePage: {
+            /** Data */
+            data: components["schemas"]["PassageSummary"][];
+            page: components["schemas"]["PageInfo"];
+        };
+        /** PassageRevisionList */
+        PassageRevisionList: {
+            /** Data */
+            data: components["schemas"]["PassageRevisionSummary"][];
+        };
+        /** PassageRevisionOut */
+        PassageRevisionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Working
+             * @description The one being edited; the others are frozen checkpoints.
+             */
+            working: boolean;
+            /**
+             * Author Id
+             * Format: uuid
+             * @description Who saved it last.
+             */
+            author_id: string;
+            /**
+             * Content Hash
+             * @description SHA-256 of the content; set when frozen.
+             */
+            content_hash: string | null;
+            /** Frozen At */
+            frozen_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Passage Id
+             * Format: uuid
+             */
+            passage_id: string;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
+            /**
+             * Findings
+             * @description Computed as of now, with today's rules.
+             */
+            findings: components["schemas"]["FindingOut"][];
+        };
+        /** PassageRevisionSummary */
+        PassageRevisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /**
+             * Working
+             * @description The one being edited; the others are frozen checkpoints.
+             */
+            working: boolean;
+            /**
+             * Author Id
+             * Format: uuid
+             * @description Who saved it last.
+             */
+            author_id: string;
+            /**
+             * Content Hash
+             * @description SHA-256 of the content; set when frozen.
+             */
+            content_hash: string | null;
+            /** Frozen At */
+            frozen_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** PassageSummary */
+        PassageSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Title
+             * @description The working revision's title; empty until one is written.
+             */
+            title: string;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Latest Checkpoint Number */
+            latest_checkpoint_number: number | null;
+        };
         /** QuestionOut */
         QuestionOut: {
             /**
@@ -2365,6 +2690,16 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** SavePassage */
+        SavePassage: {
+            /**
+             * Content
+             * @description The whole content, replacing the working revision's. Gaps are fine.
+             */
+            content: {
+                [key: string]: unknown;
+            };
         };
         /** SaveQuestion */
         SaveQuestion: {
@@ -8006,6 +8341,519 @@ export interface operations {
                 };
             };
             /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_passages_api_v1_passages_get: {
+        parameters: {
+            query?: {
+                mine?: boolean;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassagePage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_passage_api_v1_passages_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePassage"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The Idempotency-Key was used for a different request */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too large (`CONTENT_TOO_LARGE`) or not plain data (`CONTENT_NOT_JSON`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_passage_api_v1_passages__passage_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such passage that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_working_revision_api_v1_passages__passage_id__working_revision_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                passage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePassage"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such passage that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_checkpoint_api_v1_passages__passage_id__checkpoints_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                passage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such passage that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_revisions_api_v1_passages__passage_id__revisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageRevisionList"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such passage that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_checkpoint_api_v1_passage_revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageRevisionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such checkpoint in your coaching (`NOT_FOUND`) */
             404: {
                 headers: {
                     [name: string]: unknown;

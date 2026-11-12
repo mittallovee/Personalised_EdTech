@@ -84,3 +84,54 @@ class RevisionAsset(Base):
     revision_id: Mapped[UUID] = mapped_column(primary_key=True)
     asset_id: Mapped[UUID] = mapped_column(primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Passage(Base):
+    """Shared text that questions sit under (migration 0023). It has no public code."""
+
+    __tablename__ = "passages"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PassageRevision(Base):
+    """A saved snapshot of a passage. The one with no ``frozen_at`` is the working revision."""
+
+    __tablename__ = "passage_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "passage_id"], ["passages.organization_id", "passages.id"]
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    passage_id: Mapped[UUID]
+    number: Mapped[int]
+    content: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    content_hash: Mapped[str | None] = mapped_column(String(64))
+    author_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    frozen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revision: Mapped[int] = mapped_column(default=1)  # the ETag of the working revision
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PassageRevisionAsset(Base):
+    """A picture that a passage revision uses (migration 0023); same rules as ``RevisionAsset``."""
+
+    __tablename__ = "passage_revision_assets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "revision_id"],
+            ["passage_revisions.organization_id", "passage_revisions.id"],
+        ),
+    )
+
+    organization_id: Mapped[UUID]
+    revision_id: Mapped[UUID] = mapped_column(primary_key=True)
+    asset_id: Mapped[UUID] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

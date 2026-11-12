@@ -91,3 +91,79 @@ class RevisionList(BaseModel):
 class RevisionOut(RevisionSummary):
     content: dict[str, Any]
     findings: list[FindingOut] = Field(description="Computed as of now, with today's rules.")
+
+
+class CreatePassage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: dict[str, Any] | None = Field(
+        default=None,
+        description="The passage's content (schema version 1: a `title` and a `body` of content"
+        " blocks). Leave it out to start an empty passage.",
+    )
+
+
+class SavePassage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: dict[str, Any] = Field(
+        description="The whole content, replacing the working revision's. Gaps are fine."
+    )
+
+
+class PassageCheckpointOut(BaseModel):
+    id: UUID = Field(description="What a child question pins in `context.passage_revision_id`.")
+    number: int
+    frozen_at: datetime
+
+
+class PassageOut(BaseModel):
+    id: UUID
+    working_revision_id: UUID
+    revision: int = Field(description="Also the ETag of the working revision.")
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+    latest_checkpoint: PassageCheckpointOut | None = Field(
+        description="The newest frozen revision, which a new child question pins; none until the"
+        " first checkpoint."
+    )
+    content: dict[str, Any]
+    findings: list[FindingOut] = Field(
+        description="Computed from the content on every read, never stored."
+    )
+
+
+class PassageSummary(BaseModel):
+    id: UUID
+    title: str = Field(description="The working revision's title; empty until one is written.")
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+    latest_checkpoint_number: int | None
+
+
+class PassagePage(BaseModel):
+    data: list[PassageSummary]
+    page: PageInfo
+
+
+class PassageRevisionSummary(BaseModel):
+    id: UUID
+    number: int
+    working: bool = Field(description="The one being edited; the others are frozen checkpoints.")
+    author_id: UUID = Field(description="Who saved it last.")
+    content_hash: str | None = Field(description="SHA-256 of the content; set when frozen.")
+    frozen_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PassageRevisionList(BaseModel):
+    data: list[PassageRevisionSummary]
+
+
+class PassageRevisionOut(PassageRevisionSummary):
+    passage_id: UUID
+    content: dict[str, Any]
+    findings: list[FindingOut] = Field(description="Computed as of now, with today's rules.")
