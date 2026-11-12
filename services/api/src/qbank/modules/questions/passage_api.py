@@ -16,6 +16,8 @@ from qbank.modules.questions.schemas import (
     CreatePassage,
     FindingOut,
     PassageCheckpointOut,
+    PassageChildList,
+    PassageChildOut,
     PassageOut,
     PassagePage,
     PassageRevisionList,
@@ -249,6 +251,40 @@ def list_revisions(
     with database.transaction(principal.tenant_context) as session:
         revisions = service.list_revisions(session, principal, passage_id)
         return PassageRevisionList(data=[_revision_summary(r) for r in revisions])
+
+
+@router.get(
+    "/{passage_id}/children",
+    summary="The questions under a passage",
+    description="Each question that pins a checkpoint of this passage, in the order of its number,"
+    " with the checkpoint it was written with and whether the passage has a newer one"
+    " (`is_current` false). Questions are drafts of their authors, so ones you may not open are"
+    " not listed; `hidden_count` says how many.",
+    responses={**_DENIED, **_NOT_FOUND},
+)
+def list_children(
+    passage_id: UUID,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> PassageChildList:
+    with database.transaction(principal.tenant_context) as session:
+        found = service.list_children(session, principal, passage_id)
+        return PassageChildList(
+            data=[
+                PassageChildOut(
+                    question_id=c.master.id,
+                    code=c.master.code,
+                    question_type=c.question_type,
+                    archived=c.master.archived_at is not None,
+                    ordinal=c.ordinal,
+                    pinned_checkpoint_number=c.pinned_number,
+                    is_current=c.is_current,
+                )
+                for c in found.children
+            ],
+            latest_checkpoint_number=found.latest_checkpoint_number,
+            hidden_count=found.hidden_count,
+        )
 
 
 @checkpoints_router.get(

@@ -107,7 +107,8 @@ For these formats the answer is one `option_id`; a set of ids gives `ANSWER_SHAP
 ## Passage context
 
 A child of a passage has `context: {passage_revision_id, ordinal}`. That the passage revision exists and
-can be reached is checked where the database is, not here.
+can be reached is checked where the database is: the pin must be a checkpoint (a frozen revision) of a passage
+in this coaching, because a draft would change underneath the question.
 
 | Code | Level | Meaning |
 |---|---|---|
@@ -115,6 +116,7 @@ can be reached is checked where the database is, not here.
 | `CONTEXT_PASSAGE_MISSING` / `CONTEXT_ORDINAL_MISSING` | incomplete | Not chosen yet |
 | `CONTEXT_PASSAGE_INVALID` | error | The passage revision id is not valid |
 | `CONTEXT_ORDINAL_INVALID` | error | The number within the passage is not a whole number from 1 to 1000 |
+| `CONTEXT_PASSAGE_NOT_AVAILABLE` | error | The passage revision is not a checkpoint of a passage in this coaching (another coaching's, a draft, or no such revision) |
 
 ## Passages
 
