@@ -10811,6 +10811,11 @@
             "type": "boolean",
             "title": "Truncated",
             "description": "True when there are more children than this list holds (the first ones, by number, are shown)."
+          },
+          "next_number": {
+            "type": "integer",
+            "title": "Next Number",
+            "description": "The number for a new question: one more than the highest number among every question under the passage, including ones you may not open or that are not listed."
           }
         },
         "type": "object",
@@ -10818,7 +10823,8 @@
           "data",
           "latest_checkpoint_number",
           "hidden_count",
-          "truncated"
+          "truncated",
+          "next_number"
         ],
         "title": "PassageChildList"
       },

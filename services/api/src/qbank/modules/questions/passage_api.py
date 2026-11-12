@@ -286,6 +286,7 @@ def list_children(
             latest_checkpoint_number=found.latest_checkpoint_number,
             hidden_count=found.hidden_count,
             truncated=found.truncated,
+            next_number=found.next_number,
         )
 
 

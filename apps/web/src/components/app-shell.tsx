@@ -42,6 +42,7 @@ export type Page =
   | "coachings"
   | "audit"
   | "questions"
+  | "passages"
   | "syllabus"
   | "concepts"
   | "exams-sources"
@@ -132,6 +133,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "questions" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Questions
+                </Link>
+              </li>
+            )}
+            {showsSyllabus(me) && (
+              <li>
+                <Link
+                  href="/passages"
+                  aria-current={current === "passages" ? "page" : undefined}
+                  className={`${ITEM} ${current === "passages" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Passages
                 </Link>
               </li>
             )}

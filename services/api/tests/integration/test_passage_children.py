@@ -180,6 +180,7 @@ def test_a_passage_with_no_checkpoint_has_no_children(
         "latest_checkpoint_number": None,
         "hidden_count": 0,
         "truncated": False,
+        "next_number": 1,
     }
 
 
@@ -338,3 +339,34 @@ def test_a_pin_written_in_another_spelling_is_a_finding_not_a_silently_missing_c
     shouting = start_child(client, headers, checkpoint["id"].upper())
     assert "CONTEXT_PASSAGE_INVALID" in [f["code"] for f in shouting["findings"]]
     assert children(client, passage["id"])["data"] == []
+
+
+# --- The next number comes from every child, not from what the caller sees ----------------------
+
+
+def test_the_next_number_counts_children_the_caller_cannot_see_or_that_were_cut_off(
+    client: TestClient,
+    headers: dict[str, str],
+    team: dict[str, Member],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from qbank.modules.questions import passage_service
+
+    passage, checkpoint = passage_with_checkpoint(client, headers)
+    assert children(client, passage["id"])["next_number"] == 1
+
+    other = TestClient(client.app)
+    other_headers = sign_in(other, team["other"].email)
+    for ordinal in (1, 2, 7):  # someone else's drafts, which the author cannot open
+        start_child(other, other_headers, checkpoint["id"], ordinal=ordinal)
+    seen = children(client, passage["id"])
+    assert seen["data"] == [] and seen["hidden_count"] == 3
+    assert seen["next_number"] == 8
+
+    # Children that are cut off by the limit still count.
+    for ordinal in (3, 4, 5):
+        start_child(client, headers, checkpoint["id"], ordinal=ordinal)
+    monkeypatch.setattr(passage_service, "MAX_CHILDREN", 1)
+    cut = children(client, passage["id"])
+    assert cut["truncated"] is True and len(cut["data"]) == 1
+    assert cut["next_number"] == 8

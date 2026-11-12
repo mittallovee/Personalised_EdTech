@@ -7,7 +7,14 @@ import { api, errorMessage, ifMatch } from "@/lib/api";
 import { NETWORK } from "@/lib/use-catalogue";
 import type { Content } from "@/lib/question-content";
 
-type Question = components["schemas"]["QuestionOut"];
+/** What the editor needs of a question or a passage read from the server. */
+export type Draft = {
+  id: string;
+  content: Content;
+  findings: Finding[];
+  revision: number;
+  archived?: boolean;
+};
 type Finding = components["schemas"]["FindingOut"];
 
 /** How long to wait after the last keystroke before saving (ms). */
@@ -26,19 +33,20 @@ export type SaveState =
  * save follows after a pause, replacing the working revision under `If-Match`, so a second tab
  * cannot overwrite silently (412 → "conflict"). One save is in flight at a time and the next one
  * sends whatever was typed meanwhile. `flush` saves now (before a checkpoint); `adopt` takes a
- * question read from the server (after a checkpoint, a restore or a reload).
+ * question read from the server (after a checkpoint, a restore or a reload). The same hook saves a
+ * passage (`kind`), which works the same way.
  */
-export function useAutosave(initial: Question) {
+export function useAutosave(initial: Draft, kind: "questions" | "passages" = "questions") {
   const [content, setContentState] = useState<Content>(initial.content);
   const [findings, setFindings] = useState<Finding[]>(initial.findings);
-  const [state, setState] = useState<SaveState>(initial.archived ? "archived" : "saved");
+  const [state, setState] = useState<SaveState>(initial.archived === true ? "archived" : "saved");
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const latest = useRef<Content>(initial.content);
   const revision = useRef(initial.revision);
   const dirty = useRef(false);
-  const blocked = useRef(initial.archived); // conflict or archived: no more saves
+  const blocked = useRef(initial.archived === true); // conflict or archived: no more saves
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const running = useRef<Promise<boolean> | null>(null);
   const id = initial.id;
@@ -49,10 +57,22 @@ export function useAutosave(initial: Question) {
       setState("saving");
       let result;
       try {
-        result = await api().PUT("/api/v1/questions/{question_id}/working-revision", {
-          params: { path: { question_id: id }, header: { "If-Match": ifMatch(revision.current) } },
-          body: { content: sent },
-        });
+        result =
+          kind === "passages"
+            ? await api().PUT("/api/v1/passages/{passage_id}/working-revision", {
+                params: {
+                  path: { passage_id: id },
+                  header: { "If-Match": ifMatch(revision.current) },
+                },
+                body: { content: sent },
+              })
+            : await api().PUT("/api/v1/questions/{question_id}/working-revision", {
+                params: {
+                  path: { question_id: id },
+                  header: { "If-Match": ifMatch(revision.current) },
+                },
+                body: { content: sent },
+              });
       } catch {
         setState("failed");
         setMessage(NETWORK);
@@ -84,7 +104,7 @@ export function useAutosave(initial: Question) {
       }
       return false;
     },
-    [id],
+    [id, kind],
   );
 
   /** Save until nothing is waiting. False if it could not (the changes stay on screen). */
@@ -127,14 +147,14 @@ export function useAutosave(initial: Question) {
    * just been restored) stays on screen and is saved again under the new revision.
    */
   const adopt = useCallback(
-    (question: Question, keepEdits = false) => {
+    (question: Draft, keepEdits = false) => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = null;
       revision.current = question.revision;
-      blocked.current = question.archived;
+      blocked.current = question.archived === true;
       setFindings(question.findings);
       setMessage(null);
-      if (keepEdits && dirty.current && !question.archived) {
+      if (keepEdits && dirty.current && question.archived !== true) {
         setState("dirty");
         timer.current = setTimeout(() => void flush(), 0);
         return;
@@ -142,10 +162,22 @@ export function useAutosave(initial: Question) {
       latest.current = question.content;
       dirty.current = false;
       setContentState(question.content);
-      setState(question.archived ? "archived" : "saved");
+      setState(question.archived === true ? "archived" : "saved");
     },
     [flush],
   );
+
+  /**
+   * Something other than a save found out that this screen is out of date (a checkpoint refused
+   * with 412): stop saving, as a refused save does, and offer to reload.
+   */
+  const markConflict = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    blocked.current = true;
+    setState("conflict");
+    setMessage("Someone else changed this. Reload it to see their version.");
+  }, []);
 
   /** Whether typing is waiting to be saved (or could not be). */
   const unsaved = useCallback(() => dirty.current, []);
@@ -178,6 +210,7 @@ export function useAutosave(initial: Question) {
     message,
     flush,
     adopt,
+    markConflict,
     unsaved,
     revision,
   };
