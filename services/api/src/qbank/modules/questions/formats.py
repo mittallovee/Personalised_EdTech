@@ -239,10 +239,11 @@ def check_context(value: object, out: Findings) -> None:
             where, "CONTEXT_PASSAGE_MISSING", "Choose the passage this question belongs to."
         )
     else:
+        # One spelling only (lower case, with dashes): the passage finds its children by matching
+        # this text, so a differently written id would be a child that silently goes missing.
         try:
-            if not isinstance(passage, str):
+            if not isinstance(passage, str) or str(UUID(passage)) != passage:
                 raise ValueError
-            UUID(passage)
         except ValueError:
             out.error(where, "CONTEXT_PASSAGE_INVALID", "The passage's id is not valid.")
     ordinal = obj.get("ordinal")

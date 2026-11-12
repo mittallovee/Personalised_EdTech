@@ -8731,6 +8731,95 @@
         }
       }
     },
+    "/api/v1/passages/{passage_id}/children": {
+      "get": {
+        "tags": [
+          "passages"
+        ],
+        "summary": "The questions under a passage",
+        "description": "Each question that pins a checkpoint of this passage, in the order of its number, with the checkpoint it was written with and whether the passage has a newer one (`is_current` false). Questions are drafts of their authors, so ones you may not open are not listed; `hidden_count` says how many. A very long list is cut after 500 children and `truncated` says so.",
+        "operationId": "list_children_api_v1_passages__passage_id__children_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "passage_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Passage Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassageChildList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such passage that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/passage-revisions/{revision_id}": {
       "get": {
         "tags": [
@@ -10692,6 +10781,107 @@
           "frozen_at"
         ],
         "title": "PassageCheckpointOut"
+      },
+      "PassageChildList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PassageChildOut"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "latest_checkpoint_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Checkpoint Number"
+          },
+          "hidden_count": {
+            "type": "integer",
+            "title": "Hidden Count",
+            "description": "Children that are other people's drafts which you may not open."
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "True when there are more children than this list holds (the first ones, by number, are shown)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "latest_checkpoint_number",
+          "hidden_count",
+          "truncated"
+        ],
+        "title": "PassageChildList"
+      },
+      "PassageChildOut": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "question_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Type"
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived"
+          },
+          "ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordinal",
+            "description": "The question's number within the passage."
+          },
+          "pinned_checkpoint_number": {
+            "type": "integer",
+            "title": "Pinned Checkpoint Number",
+            "description": "The checkpoint it was written with."
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current",
+            "description": "False when the passage has a newer checkpoint than the one it pins."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "code",
+          "question_type",
+          "archived",
+          "ordinal",
+          "pinned_checkpoint_number",
+          "is_current"
+        ],
+        "title": "PassageChildOut"
       },
       "PassageOut": {
         "properties": {

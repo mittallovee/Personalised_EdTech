@@ -586,3 +586,20 @@ def test_every_concrete_format_can_be_a_passage_child() -> None:
         content = ready(kind)
         content["context"] = {"passage_revision_id": PASSAGE, "ordinal": 1}
         assert codes(content) == [], kind
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "6F1C2A9E-0000-4000-8000-000000000009",
+        "6f1c2a9e000040008000000000000009",
+        "{6f1c2a9e-0000-4000-8000-000000000009}",
+        "urn:uuid:6f1c2a9e-0000-4000-8000-000000000009",
+    ],
+)
+def test_a_passage_id_in_another_spelling_is_not_valid(spelling: str) -> None:
+    content = copy.deepcopy(FIXTURES["SCQ"]["draft"])
+    content["context"] = {"passage_revision_id": spelling, "ordinal": 1}
+    assert ("context.passage_revision_id", "CONTEXT_PASSAGE_INVALID") in [
+        (f.path, f.code) for f in validate_content(content)
+    ]

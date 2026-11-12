@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy import Integer, case, cast, func, select, tuple_
+from sqlalchemy.orm import Session, aliased
 
 from qbank.core.auth import Principal
 from qbank.core.errors import NotFound
@@ -25,7 +25,14 @@ from qbank.modules.assets.public import existing_image_ids
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.findings import Finding
 from qbank.modules.questions.image_checks import check_images, image_ids
-from qbank.modules.questions.models import Passage, PassageRevision, PassageRevisionAsset
+from qbank.modules.questions.models import (
+    Passage,
+    PassageRevision,
+    PassageRevisionAsset,
+    QuestionMaster,
+    QuestionRevision,
+    QuestionVersion,
+)
 from qbank.modules.questions.passage_content import empty_passage, validate_passage
 from qbank.modules.questions.picture_records import record_pictures
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
@@ -311,3 +318,104 @@ def get_checkpoint(
     if revision is None or revision.frozen_at is None:
         raise NotFound("No such passage revision.")
     return revision, passage_findings(session, revision.content, rules)
+
+
+MAX_CHILDREN = 500
+
+
+@dataclass(frozen=True, slots=True)
+class PassageChild:
+    """A question that sits under the passage, and which checkpoint it was written with."""
+
+    master: QuestionMaster
+    question_type: str | None
+    ordinal: int | None
+    pinned_number: int
+    is_current: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PassageChildren:
+    children: list[PassageChild]
+    latest_checkpoint_number: int | None
+    hidden_count: int
+    truncated: bool
+
+
+def _ordinal(content: dict[str, Any]) -> int | None:
+    context = content.get("context")
+    value = context.get("ordinal") if isinstance(context, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def list_children(session: Session, principal: Principal, passage_id: UUID) -> PassageChildren:
+    """The questions that pin a checkpoint of this passage, in the order of their numbers.
+
+    Which children are on an older checkpoint than the newest is told per child. Children are
+    questions, so someone else's draft is not shown to a caller who may not open it; they are
+    counted in ``hidden_count`` instead. A list longer than ``MAX_CHILDREN`` is cut and says so
+    (``truncated``), so it never looks complete when it is not.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    passage = _visible(principal, session.get(Passage, passage_id))
+    checkpoints = {
+        str(r.id): r.number
+        for r in session.scalars(
+            select(PassageRevision).where(
+                PassageRevision.passage_id == passage.id, PassageRevision.frozen_at.is_not(None)
+            )
+        )
+    }
+    if not checkpoints:
+        return PassageChildren([], None, 0, False)
+    latest = max(checkpoints.values())
+    other = aliased(QuestionVersion)
+    newest = (
+        select(func.max(other.number)).where(other.master_id == QuestionMaster.id).scalar_subquery()
+    )
+    pinned = QuestionRevision.content["context"]["passage_revision_id"].astext
+    typed = QuestionRevision.content["context"]["ordinal"].astext
+    # A number that is not a whole number sorts last; the test guards the cast, so it never fails.
+    ordinal = case((typed.op("~")("^[0-9]{1,4}$"), cast(typed, Integer)), else_=None)
+    under_this_passage = (
+        QuestionRevision.frozen_at.is_(None),
+        QuestionVersion.number == newest,
+        pinned.in_(list(checkpoints)),
+    )
+    # What the caller may open is chosen here, not afterwards, so the limit below never fills up
+    # with drafts that would be left out.
+    opens_all = may_access_all_drafts(principal)
+    mine_only = () if opens_all else (QuestionMaster.created_by == principal.user_id,)
+    rows = session.execute(
+        select(QuestionMaster, QuestionRevision)
+        .join(QuestionVersion, QuestionVersion.master_id == QuestionMaster.id)
+        .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
+        .where(*under_this_passage, *mine_only)
+        .order_by(ordinal.asc().nulls_last(), QuestionMaster.created_at, QuestionMaster.id)
+        .limit(MAX_CHILDREN + 1)
+    ).all()
+    hidden = (
+        0
+        if opens_all
+        else session.execute(
+            select(func.count())
+            .select_from(QuestionMaster)
+            .join(QuestionVersion, QuestionVersion.master_id == QuestionMaster.id)
+            .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
+            .where(*under_this_passage, QuestionMaster.created_by != principal.user_id)
+        ).scalar_one()
+    )
+    children: list[PassageChild] = []
+    for master, revision in rows[:MAX_CHILDREN]:
+        number = checkpoints[revision.content["context"]["passage_revision_id"]]
+        question_type = revision.content.get("question_type")
+        children.append(
+            PassageChild(
+                master,
+                question_type if isinstance(question_type, str) else None,
+                _ordinal(revision.content),
+                number,
+                number == latest,
+            )
+        )
+    return PassageChildren(children, latest, hidden, len(rows) > MAX_CHILDREN)

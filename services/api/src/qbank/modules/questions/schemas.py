@@ -167,3 +167,27 @@ class PassageRevisionOut(PassageRevisionSummary):
     passage_id: UUID
     content: dict[str, Any]
     findings: list[FindingOut] = Field(description="Computed as of now, with today's rules.")
+
+
+class PassageChildOut(BaseModel):
+    question_id: UUID
+    code: str
+    question_type: str | None
+    archived: bool
+    ordinal: int | None = Field(description="The question's number within the passage.")
+    pinned_checkpoint_number: int = Field(description="The checkpoint it was written with.")
+    is_current: bool = Field(
+        description="False when the passage has a newer checkpoint than the one it pins."
+    )
+
+
+class PassageChildList(BaseModel):
+    data: list[PassageChildOut]
+    latest_checkpoint_number: int | None
+    hidden_count: int = Field(
+        description="Children that are other people's drafts which you may not open."
+    )
+    truncated: bool = Field(
+        description="True when there are more children than this list holds (the first ones, by"
+        " number, are shown)."
+    )

@@ -1385,6 +1385,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/passages/{passage_id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The questions under a passage
+         * @description Each question that pins a checkpoint of this passage, in the order of its number, with the checkpoint it was written with and whether the passage has a newer one (`is_current` false). Questions are drafts of their authors, so ones you may not open are not listed; `hidden_count` says how many. A very long list is cut after 500 children and `truncated` says so.
+         */
+        get: operations["list_children_api_v1_passages__passage_id__children_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passage-revisions/{revision_id}": {
         parameters: {
             query?: never;
@@ -2300,6 +2320,52 @@ export interface components {
              * Format: date-time
              */
             frozen_at: string;
+        };
+        /** PassageChildList */
+        PassageChildList: {
+            /** Data */
+            data: components["schemas"]["PassageChildOut"][];
+            /** Latest Checkpoint Number */
+            latest_checkpoint_number: number | null;
+            /**
+             * Hidden Count
+             * @description Children that are other people's drafts which you may not open.
+             */
+            hidden_count: number;
+            /**
+             * Truncated
+             * @description True when there are more children than this list holds (the first ones, by number, are shown).
+             */
+            truncated: boolean;
+        };
+        /** PassageChildOut */
+        PassageChildOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /** Question Type */
+            question_type: string | null;
+            /** Archived */
+            archived: boolean;
+            /**
+             * Ordinal
+             * @description The question's number within the passage.
+             */
+            ordinal: number | null;
+            /**
+             * Pinned Checkpoint Number
+             * @description The checkpoint it was written with.
+             */
+            pinned_checkpoint_number: number;
+            /**
+             * Is Current
+             * @description False when the passage has a newer checkpoint than the one it pins.
+             */
+            is_current: boolean;
         };
         /** PassageOut */
         PassageOut: {
@@ -8757,6 +8823,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PassageRevisionList"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such passage that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_children_api_v1_passages__passage_id__children_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passage_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassageChildList"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */

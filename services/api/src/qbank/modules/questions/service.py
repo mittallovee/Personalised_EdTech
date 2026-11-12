@@ -32,6 +32,7 @@ from qbank.core.permissions import (
 from qbank.modules.assets.public import existing_image_ids
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalogue
+from qbank.modules.questions.context_checks import check_pin, passage_pin
 from qbank.modules.questions.findings import Finding
 from qbank.modules.questions.image_checks import check_images, image_ids
 from qbank.modules.questions.models import (
@@ -40,6 +41,7 @@ from qbank.modules.questions.models import (
     QuestionVersion,
     RevisionAsset,
 )
+from qbank.modules.questions.passage_lookup import checkpoint_ids
 from qbank.modules.questions.picture_records import record_pictures
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.validate import validate_content
@@ -171,13 +173,18 @@ def _findings_for(
     session: Session, contents: list[dict[str, Any]], rules: Rules
 ) -> list[list[Finding]]:
     """The findings of each content: its shape and parts, then its labels against this coaching's
-    lists, then its pictures against this coaching's own. One lookup of each kind serves all of
-    them, so a page of questions costs a handful of queries, not many."""
+    lists, then its pictures and the passage it sits under against this coaching's own. One lookup
+    of each kind serves all of them, so a page of questions costs a handful of queries, not many."""
     ids = set[UUID]().union(*(catalogue_ids(content) for content in contents))
     refs = look_up(session, ids)
     pictures = existing_image_ids(session, set[UUID]().union(*(image_ids(c) for c in contents)))
+    pins = {pin for pin in (passage_pin(c) for c in contents) if pin is not None}
+    checkpoints = checkpoint_ids(session, pins)
     return [
-        validate_content(c, rules) + check_catalogue(c, refs) + check_images(c, pictures)
+        validate_content(c, rules)
+        + check_catalogue(c, refs)
+        + check_images(c, pictures)
+        + check_pin(c, checkpoints)
         for c in contents
     ]
 
