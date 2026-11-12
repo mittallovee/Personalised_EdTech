@@ -307,7 +307,7 @@ def list_revisions(
 
 def get_checkpoint(
     session: Session, principal: Principal, revision_id: UUID, rules: Rules = DEFAULT_RULES
-) -> tuple[PassageRevision, list[Finding]]:
+) -> tuple[PassageRevision, list[Finding], PassageRevision]:
     """A frozen revision, by its id: what a child question pins.
 
     Any member of the coaching may read a checkpoint, because the questions under it show it.
@@ -317,7 +317,10 @@ def get_checkpoint(
     revision = session.get(PassageRevision, revision_id)
     if revision is None or revision.frozen_at is None:
         raise NotFound("No such passage revision.")
-    return revision, passage_findings(session, revision.content, rules)
+    # The newest checkpoint of the same passage, so a question pinned to this one can be offered a
+    # move to it; it is always found (this revision is itself a checkpoint).
+    newest = _latest_checkpoint(session, revision.passage_id) or revision
+    return revision, passage_findings(session, revision.content, rules), newest
 
 
 MAX_CHILDREN = 500

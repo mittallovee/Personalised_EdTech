@@ -2469,6 +2469,14 @@ export interface components {
              * Format: uuid
              */
             passage_id: string;
+            /**
+             * Newest Id
+             * Format: uuid
+             * @description The newest checkpoint of the same passage (this one, if it is the newest).
+             */
+            newest_id: string;
+            /** Newest Number */
+            newest_number: number;
             /** Content */
             content: {
                 [key: string]: unknown;

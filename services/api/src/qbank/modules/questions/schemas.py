@@ -165,6 +165,10 @@ class PassageRevisionList(BaseModel):
 
 class PassageRevisionOut(PassageRevisionSummary):
     passage_id: UUID
+    newest_id: UUID = Field(
+        description="The newest checkpoint of the same passage (this one, if it is the newest)."
+    )
+    newest_number: int
     content: dict[str, Any]
     findings: list[FindingOut] = Field(description="Computed as of now, with today's rules.")
 

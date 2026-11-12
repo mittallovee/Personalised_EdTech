@@ -13,12 +13,15 @@ import { ItemsField } from "@/components/items-field";
 import { MatchingField } from "@/components/matching-field";
 import { MetadataField } from "@/components/metadata-field";
 import { OptionsField } from "@/components/options-field";
+import { PassagePanel } from "@/components/passage-panel";
 import { TypedAnswerField } from "@/components/typed-answer-field";
 import { api, errorMessage, ifMatch } from "@/lib/api";
+import { moveToCheckpoint, pinOf } from "@/lib/passage-pin";
 import { blocksOf, formatLabel, savedLabel, withField } from "@/lib/question-content";
 import { useAutosave, type SaveState } from "@/lib/use-autosave";
 import { NETWORK } from "@/lib/use-catalogue";
 import { useMe } from "@/lib/use-me";
+import { usePinnedPassage } from "@/lib/use-pinned-passage";
 
 type Question = components["schemas"]["QuestionOut"];
 
@@ -32,7 +35,8 @@ const PRIMARY =
 /**
  * The question editor (D-11, E-04): write the stem, see the findings, preview it as a student
  * will see it, save a checkpoint, archive. Typing is saved by itself a moment after you stop.
- * All eight formats are edited here; the passage that groups questions comes with its own screen.
+ * All eight formats are edited here. A question written under a passage shows that passage above
+ * the editor and in the preview.
  */
 export default function QuestionPage() {
   // useParams reads the address at request time, so the page needs a boundary to wait behind.
@@ -147,6 +151,7 @@ const STATE_TEXT: Record<SaveState, string> = {
 
 function Editor({ initial }: { initial: Question }) {
   const save = useAutosave(initial);
+  const passage = usePinnedPassage(pinOf(save.content));
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [reveal, setReveal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -350,6 +355,14 @@ function Editor({ initial }: { initial: Question }) {
 
           {tab === "edit" ? (
             <div role="tabpanel" id="panel-edit" aria-labelledby="tab-edit" className="grid gap-6">
+              <PassagePanel
+                passage={passage}
+                disabled={locked || busy}
+                onMove={(checkpointId) => {
+                  save.setContent(moveToCheckpoint(save.content, checkpointId));
+                  setNotice("Moved to the newest checkpoint of the passage.");
+                }}
+              />
               <BlocksField
                 label="Question"
                 blocks={blocksOf(save.content.stem)}
@@ -436,7 +449,11 @@ function Editor({ initial }: { initial: Question }) {
                 Show the answer and solution
               </label>
               <div className="rounded-md border border-zinc-200 p-4 dark:border-zinc-800">
-                <QuestionPreview content={save.content} reveal={reveal} />
+                <QuestionPreview
+                  content={save.content}
+                  reveal={reveal}
+                  passage={passage.state === "ready" ? passage.revision.content : undefined}
+                />
               </div>
             </div>
           )}

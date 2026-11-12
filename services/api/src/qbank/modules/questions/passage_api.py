@@ -307,11 +307,13 @@ def get_checkpoint(
     database: Annotated[Database, Depends(get_database)],
 ) -> PassageRevisionOut:
     with database.transaction(principal.tenant_context) as session:
-        revision, found = service.get_checkpoint(session, principal, revision_id)
+        revision, found, newest = service.get_checkpoint(session, principal, revision_id)
         summary = _revision_summary(revision)
         return PassageRevisionOut(
             **summary.model_dump(),
             passage_id=revision.passage_id,
+            newest_id=newest.id,
+            newest_number=newest.number,
             content=revision.content,
             findings=_findings(found),
         )

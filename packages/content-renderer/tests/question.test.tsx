@@ -207,3 +207,49 @@ describe("whatever it is given", () => {
     expect(out).not.toContain("choice 10");
   });
 });
+
+describe("a question under a passage", () => {
+  const passage = { title: "Free fall", body: p("A stone is dropped from a tower.") };
+  const withPassage = (value: unknown, reveal = false) =>
+    renderToStaticMarkup(<QuestionPreview content={SCQ} passage={value} reveal={reveal} />);
+
+  it("shows the passage above the question, with its title", () => {
+    const out = withPassage(passage);
+    expect(out).toContain("Free fall");
+    expect(out).toContain("A stone is dropped from a tower.");
+    expect(out.indexOf("A stone is dropped")).toBeLessThan(out.indexOf("Which is even?"));
+    expect(out).toContain('class="qb-passage"');
+  });
+
+  it("shows nothing extra when there is no passage", () => {
+    expect(preview(SCQ)).not.toContain("qb-passage");
+    expect(withPassage(undefined)).not.toContain("qb-passage");
+  });
+
+  it("gives nothing away about the answer because of the passage", () => {
+    const out = withPassage(passage);
+    expect(out).not.toContain("data-correct");
+    expect(text(out)).not.toMatch(/correct/i);
+  });
+
+  it("copes with a passage that is not what it should be", () => {
+    for (const odd of [null, 5, "text", [], {}, { title: 7, body: "x" }, { body: [null, 3] }]) {
+      expect(() => withPassage(odd)).not.toThrow();
+    }
+    expect(withPassage({ title: 7, body: "x" })).not.toContain("qb-passage");
+  });
+
+  it("draws a picture or an equation in the passage through the same safe renderer", () => {
+    const out = withPassage({
+      title: "T",
+      body: [
+        { kind: "paragraph", text: String.raw`Height \(h\) of the tower` },
+        { kind: "image", asset_id: "00000000-0000-4000-8000-00000000000a", alt_text: "Tower" },
+        { kind: "paragraph", text: "<script>alert(1)</script>" },
+      ],
+    });
+    expect(out).toContain("katex");
+    expect(out).toContain('alt="Tower"');
+    expect(out).not.toContain("<script>");
+  });
+});

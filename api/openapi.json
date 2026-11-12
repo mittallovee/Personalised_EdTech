@@ -11057,6 +11057,16 @@
             "format": "uuid",
             "title": "Passage Id"
           },
+          "newest_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Newest Id",
+            "description": "The newest checkpoint of the same passage (this one, if it is the newest)."
+          },
+          "newest_number": {
+            "type": "integer",
+            "title": "Newest Number"
+          },
           "content": {
             "additionalProperties": true,
             "type": "object",
@@ -11082,6 +11092,8 @@
           "created_at",
           "updated_at",
           "passage_id",
+          "newest_id",
+          "newest_number",
           "content",
           "findings"
         ],

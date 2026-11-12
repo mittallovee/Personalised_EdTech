@@ -201,3 +201,78 @@ test("the next question number is not guessed from the questions on screen", asy
   await page.reload();
   await expect(page.getByRole("button", { name: "Add question 6" })).toBeVisible();
 });
+
+test("a question shows its passage, and can be moved to the passage's newest checkpoint", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Passages ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/passages");
+  await page.getByRole("button", { name: "Start a passage" }).click();
+  await expect(page).toHaveURL(/\/passages\/[0-9a-f-]{36}$/);
+  const passageUrl = page.url();
+  await page.getByLabel("Title").fill("Free fall");
+  await page
+    .getByRole("group", { name: "Passage text" })
+    .getByRole("button", { name: "Add paragraph" })
+    .click();
+  await page
+    .getByLabel("Passage text, block 1: paragraph")
+    .fill("A stone is dropped from a tower.");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Save checkpoint" }).click();
+  await expect(page.getByText("newest checkpoint: 1")).toBeVisible();
+  await page.getByRole("button", { name: "Add question 1" }).click();
+  await expect(page).toHaveURL(/\/questions\/[0-9a-f-]{36}$/);
+  const questionUrl = page.url();
+
+  // The passage is shown above the question, as written at the checkpoint it was written with.
+  const panel = page.getByRole("region", { name: "Passage" });
+  await expect(panel.getByRole("heading", { name: "Passage: Free fall" })).toBeVisible();
+  await expect(panel).toContainText("A stone is dropped from a tower.");
+  await expect(panel).toContainText("Written with checkpoint 1");
+  await expect(panel.getByRole("link", { name: "Open the passage" })).toHaveAttribute(
+    "href",
+    new URL(passageUrl).pathname,
+  );
+  await expect(panel.getByRole("status")).toHaveCount(0);
+  await expectNoSeriousA11yViolations(page);
+
+  // The student preview has the passage above the question.
+  await page.getByRole("tab", { name: "Preview" }).click();
+  const preview = page.locator(".qb-question").last();
+  await expect(preview.locator(".qb-passage")).toContainText("A stone is dropped from a tower.");
+  await expect(preview.locator(".qb-passage h3")).toHaveText("Free fall");
+  await page.getByRole("tab", { name: "Edit" }).click();
+
+  // The passage gets a second checkpoint with a new text; the question keeps the old one...
+  await page.goto(passageUrl);
+  await page.getByLabel("Passage text, block 1: paragraph").fill("A ball is thrown upward.");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Save checkpoint" }).click();
+  await expect(page.getByText("newest checkpoint: 2")).toBeVisible();
+  await page.goto(questionUrl);
+  await expect(panel).toContainText("A stone is dropped from a tower.");
+  await expect(panel.getByRole("status")).toContainText("The passage has a newer checkpoint (2).");
+
+  // ...until its author moves it.
+  await panel.getByRole("button", { name: "Move to checkpoint 2" }).click();
+  await expect(panel).toContainText("A ball is thrown upward.");
+  await expect(panel).toContainText("Written with checkpoint 2");
+  await expect(panel.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Passage" })).toContainText(
+    "Written with checkpoint 2",
+  );
+  await expect(page.getByRole("region", { name: "Findings" })).not.toContainText(
+    "passage is not available",
+  );
+});
