@@ -35,3 +35,18 @@ def test_a_pin_that_is_not_available_is_an_error_at_the_pin() -> None:
     assert [(f.path, f.code, f.level) for f in findings] == [
         ("context.passage_revision_id", "CONTEXT_PASSAGE_NOT_AVAILABLE", Level.ERROR)
     ]
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        str(A).upper(),
+        str(A).replace("-", ""),
+        "{" + str(A) + "}",
+        "urn:uuid:" + str(A),
+        " " + str(A),
+    ],
+)
+def test_only_the_standard_spelling_of_an_id_is_a_pin(spelling: str) -> None:
+    # The passage's children are found by matching this text, so one spelling is allowed.
+    assert passage_pin(child(spelling)) is None

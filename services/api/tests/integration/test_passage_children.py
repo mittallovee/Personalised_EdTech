@@ -179,6 +179,7 @@ def test_a_passage_with_no_checkpoint_has_no_children(
         "data": [],
         "latest_checkpoint_number": None,
         "hidden_count": 0,
+        "truncated": False,
     }
 
 
@@ -285,3 +286,55 @@ def test_the_child_list_is_not_open_to_other_coachings_or_to_other_peoples_passa
     sign_in(outsider, make_member(owner_db, "OWNER").email)
     assert outsider.get(f"{PASSAGES}/{passage['id']}/children").status_code == 404
     assert TestClient(client.app).get(f"{PASSAGES}/{passage['id']}/children").status_code == 401
+
+
+# --- A long list is never passed off as complete ------------------------------------------------
+
+
+def test_a_list_longer_than_the_limit_says_so_and_still_shows_what_the_caller_may_open(
+    client: TestClient,
+    headers: dict[str, str],
+    team: dict[str, Member],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from qbank.modules.questions import passage_service
+
+    monkeypatch.setattr(passage_service, "MAX_CHILDREN", 2)
+    passage, checkpoint = passage_with_checkpoint(client, headers)
+    other = TestClient(client.app)
+    other_headers = sign_in(other, team["other"].email)
+    for ordinal in (1, 2, 3):  # someone else's drafts come first, so the author's come after
+        start_child(other, other_headers, checkpoint["id"], ordinal=ordinal)
+    mine = [start_child(client, headers, checkpoint["id"], ordinal=n) for n in (4, 5, 6)]
+
+    listed = children(client, passage["id"])
+    assert listed["hidden_count"] == 3
+    assert listed["truncated"] is True
+    assert [c["question_id"] for c in listed["data"]] == [mine[0]["id"], mine[1]["id"]]
+    assert [c["ordinal"] for c in listed["data"]] == [4, 5]
+
+    monkeypatch.setattr(passage_service, "MAX_CHILDREN", 3)
+    assert children(client, passage["id"])["truncated"] is False
+
+
+def test_children_are_ordered_by_their_numbers_even_when_a_number_is_not_a_number(
+    client: TestClient, headers: dict[str, str]
+) -> None:
+    passage, checkpoint = passage_with_checkpoint(client, headers)
+    odd = start_child(client, headers, checkpoint["id"], ordinal="two")
+    ten = start_child(client, headers, checkpoint["id"], ordinal=10)
+    two = start_child(client, headers, checkpoint["id"], ordinal=2)
+    assert [c["question_id"] for c in children(client, passage["id"])["data"]] == [
+        two["id"],
+        ten["id"],
+        odd["id"],
+    ]
+
+
+def test_a_pin_written_in_another_spelling_is_a_finding_not_a_silently_missing_child(
+    client: TestClient, headers: dict[str, str]
+) -> None:
+    passage, checkpoint = passage_with_checkpoint(client, headers)
+    shouting = start_child(client, headers, checkpoint["id"].upper())
+    assert "CONTEXT_PASSAGE_INVALID" in [f["code"] for f in shouting["findings"]]
+    assert children(client, passage["id"])["data"] == []

@@ -1394,7 +1394,7 @@ export interface paths {
         };
         /**
          * The questions under a passage
-         * @description Each question that pins a checkpoint of this passage, in the order of its number, with the checkpoint it was written with and whether the passage has a newer one (`is_current` false). Questions are drafts of their authors, so ones you may not open are not listed; `hidden_count` says how many.
+         * @description Each question that pins a checkpoint of this passage, in the order of its number, with the checkpoint it was written with and whether the passage has a newer one (`is_current` false). Questions are drafts of their authors, so ones you may not open are not listed; `hidden_count` says how many. A very long list is cut after 500 children and `truncated` says so.
          */
         get: operations["list_children_api_v1_passages__passage_id__children_get"];
         put?: never;
@@ -2332,6 +2332,11 @@ export interface components {
              * @description Children that are other people's drafts which you may not open.
              */
             hidden_count: number;
+            /**
+             * Truncated
+             * @description True when there are more children than this list holds (the first ones, by number, are shown).
+             */
+            truncated: boolean;
         };
         /** PassageChildOut */
         PassageChildOut: {

@@ -259,7 +259,8 @@ def list_revisions(
     description="Each question that pins a checkpoint of this passage, in the order of its number,"
     " with the checkpoint it was written with and whether the passage has a newer one"
     " (`is_current` false). Questions are drafts of their authors, so ones you may not open are"
-    " not listed; `hidden_count` says how many.",
+    " not listed; `hidden_count` says how many. A very long list is cut after 500 children and"
+    " `truncated` says so.",
     responses={**_DENIED, **_NOT_FOUND},
 )
 def list_children(
@@ -284,6 +285,7 @@ def list_children(
             ],
             latest_checkpoint_number=found.latest_checkpoint_number,
             hidden_count=found.hidden_count,
+            truncated=found.truncated,
         )
 
 

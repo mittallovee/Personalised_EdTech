@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import Integer, case, cast, func, select, tuple_
 from sqlalchemy.orm import Session, aliased
 
 from qbank.core.auth import Principal
@@ -339,6 +339,7 @@ class PassageChildren:
     children: list[PassageChild]
     latest_checkpoint_number: int | None
     hidden_count: int
+    truncated: bool
 
 
 def _ordinal(content: dict[str, Any]) -> int | None:
@@ -352,7 +353,8 @@ def list_children(session: Session, principal: Principal, passage_id: UUID) -> P
 
     Which children are on an older checkpoint than the newest is told per child. Children are
     questions, so someone else's draft is not shown to a caller who may not open it; they are
-    counted in ``hidden_count`` instead, so the list never looks complete when it is not.
+    counted in ``hidden_count`` instead. A list longer than ``MAX_CHILDREN`` is cut and says so
+    (``truncated``), so it never looks complete when it is not.
     """
     require(principal, Action.CREATE_QUESTIONS)
     passage = _visible(principal, session.get(Passage, passage_id))
@@ -365,32 +367,46 @@ def list_children(session: Session, principal: Principal, passage_id: UUID) -> P
         )
     }
     if not checkpoints:
-        return PassageChildren([], None, 0)
+        return PassageChildren([], None, 0, False)
     latest = max(checkpoints.values())
     other = aliased(QuestionVersion)
     newest = (
         select(func.max(other.number)).where(other.master_id == QuestionMaster.id).scalar_subquery()
     )
+    pinned = QuestionRevision.content["context"]["passage_revision_id"].astext
+    typed = QuestionRevision.content["context"]["ordinal"].astext
+    # A number that is not a whole number sorts last; the test guards the cast, so it never fails.
+    ordinal = case((typed.op("~")("^[0-9]{1,4}$"), cast(typed, Integer)), else_=None)
+    under_this_passage = (
+        QuestionRevision.frozen_at.is_(None),
+        QuestionVersion.number == newest,
+        pinned.in_(list(checkpoints)),
+    )
+    # What the caller may open is chosen here, not afterwards, so the limit below never fills up
+    # with drafts that would be left out.
+    opens_all = may_access_all_drafts(principal)
+    mine_only = () if opens_all else (QuestionMaster.created_by == principal.user_id,)
     rows = session.execute(
         select(QuestionMaster, QuestionRevision)
         .join(QuestionVersion, QuestionVersion.master_id == QuestionMaster.id)
         .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
-        .where(
-            QuestionRevision.frozen_at.is_(None),
-            QuestionVersion.number == newest,
-            QuestionRevision.content["context"]["passage_revision_id"].astext.in_(
-                list(checkpoints)
-            ),
-        )
-        .order_by(QuestionMaster.created_at, QuestionMaster.id)
-        .limit(MAX_CHILDREN)
+        .where(*under_this_passage, *mine_only)
+        .order_by(ordinal.asc().nulls_last(), QuestionMaster.created_at, QuestionMaster.id)
+        .limit(MAX_CHILDREN + 1)
     ).all()
+    hidden = (
+        0
+        if opens_all
+        else session.execute(
+            select(func.count())
+            .select_from(QuestionMaster)
+            .join(QuestionVersion, QuestionVersion.master_id == QuestionMaster.id)
+            .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
+            .where(*under_this_passage, QuestionMaster.created_by != principal.user_id)
+        ).scalar_one()
+    )
     children: list[PassageChild] = []
-    hidden = 0
-    for master, revision in rows:
-        if not may_access_draft(principal, master.created_by):
-            hidden += 1
-            continue
+    for master, revision in rows[:MAX_CHILDREN]:
         number = checkpoints[revision.content["context"]["passage_revision_id"]]
         question_type = revision.content.get("question_type")
         children.append(
@@ -402,5 +418,4 @@ def list_children(session: Session, principal: Principal, passage_id: UUID) -> P
                 number == latest,
             )
         )
-    children.sort(key=lambda c: (c.ordinal is None, c.ordinal or 0))
-    return PassageChildren(children, latest, hidden)
+    return PassageChildren(children, latest, hidden, len(rows) > MAX_CHILDREN)

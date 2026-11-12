@@ -187,3 +187,7 @@ class PassageChildList(BaseModel):
     hidden_count: int = Field(
         description="Children that are other people's drafts which you may not open."
     )
+    truncated: bool = Field(
+        description="True when there are more children than this list holds (the first ones, by"
+        " number, are shown)."
+    )

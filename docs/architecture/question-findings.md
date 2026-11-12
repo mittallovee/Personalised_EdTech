@@ -114,7 +114,7 @@ in this coaching, because a draft would change underneath the question.
 |---|---|---|
 | `CONTEXT_NOT_OBJECT` | error | The context must name a passage and an order |
 | `CONTEXT_PASSAGE_MISSING` / `CONTEXT_ORDINAL_MISSING` | incomplete | Not chosen yet |
-| `CONTEXT_PASSAGE_INVALID` | error | The passage revision id is not valid |
+| `CONTEXT_PASSAGE_INVALID` | error | The passage revision id is not valid (it must be written in lower case with dashes, the way the API gives it) |
 | `CONTEXT_ORDINAL_INVALID` | error | The number within the passage is not a whole number from 1 to 1000 |
 | `CONTEXT_PASSAGE_NOT_AVAILABLE` | error | The passage revision is not a checkpoint of a passage in this coaching (another coaching's, a draft, or no such revision) |
 

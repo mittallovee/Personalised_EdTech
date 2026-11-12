@@ -21,9 +21,11 @@ def passage_pin(content: object) -> UUID | None:
     if not isinstance(pinned, str):
         return None
     try:
-        return UUID(pinned)
+        parsed = UUID(pinned)
     except ValueError:
         return None
+    # Only the standard spelling counts as a pin: children are found by matching this text.
+    return parsed if str(parsed) == pinned else None
 
 
 def check_pin(content: object, checkpoints: Collection[UUID]) -> list[Finding]:
