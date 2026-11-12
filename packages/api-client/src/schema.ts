@@ -2337,6 +2337,11 @@ export interface components {
              * @description True when there are more children than this list holds (the first ones, by number, are shown).
              */
             truncated: boolean;
+            /**
+             * Next Number
+             * @description The number for a new question: one more than the highest number among every question under the passage, including ones you may not open or that are not listed.
+             */
+            next_number: number;
         };
         /** PassageChildOut */
         PassageChildOut: {

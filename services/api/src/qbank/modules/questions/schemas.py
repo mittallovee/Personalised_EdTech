@@ -191,3 +191,7 @@ class PassageChildList(BaseModel):
         description="True when there are more children than this list holds (the first ones, by"
         " number, are shown)."
     )
+    next_number: int = Field(
+        description="The number for a new question: one more than the highest number among every"
+        " question under the passage, including ones you may not open or that are not listed."
+    )

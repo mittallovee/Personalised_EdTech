@@ -1081,6 +1081,40 @@ test("removing a picture block does not hand its pending crop to the next one", 
   await expect(page.getByLabel("Question, block 2: choose a picture")).toBeVisible();
 });
 
+test("a checkpoint refused because the question changed elsewhere offers Reload", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Questions ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/questions");
+  await page.getByRole("radio", { name: /Single correct/ }).check();
+  await page.getByRole("button", { name: "Start question" }).click();
+  await expect(page).toHaveURL(/\/questions\/[0-9a-f-]{36}$/);
+  const id = page.url().split("/").pop()!;
+  await expect(page.getByLabel("Question, block 1: paragraph")).toBeEnabled();
+
+  const read = await context.request.get(`/api/v1/questions/${id}`);
+  const current = await read.json();
+  const elsewhere = await context.request.put(`/api/v1/questions/${id}/working-revision`, {
+    data: {
+      content: { ...current.content, stem: [{ kind: "paragraph", text: "Written elsewhere" }] },
+    },
+    headers: {
+      "If-Match": read.headers()["etag"]!,
+      Origin: baseURL!,
+      "X-CSRF-Token": await csrfOf(context),
+    },
+  });
+  expect(elsewhere.ok()).toBeTruthy();
+
+  // Nothing was typed here, so only the checkpoint finds out that this screen is out of date.
+  await page.getByRole("button", { name: "Save checkpoint" }).click();
+  await expect(page.getByText("Someone else changed this")).toBeVisible();
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByLabel("Question, block 1: paragraph")).toHaveValue("Written elsewhere");
+});
+
 test("a broken equation is flagged beside its source, and the editor is not open for it", async ({
   browser,
   baseURL,

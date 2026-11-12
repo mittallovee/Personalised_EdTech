@@ -178,6 +178,8 @@ function Editor({ initial }: { initial: Passage }) {
         save.adopt(data);
         setCheckpoint(data.latest_checkpoint);
         setNotice("Checkpoint saved. Questions can now be added under it.");
+      } else if (response.status === 412) {
+        save.markConflict();
       } else {
         setProblem(errorMessage(error as never, response.status));
       }
@@ -384,7 +386,8 @@ function PassageChildren({
   );
 
   const children = found?.data ?? [];
-  const nextNumber = Math.max(0, ...children.map((child) => child.ordinal ?? 0)) + 1;
+  // From the server, which counts every question under the passage, not only the listed ones.
+  const nextNumber = found?.next_number ?? 1;
 
   return (
     <section aria-label="Questions under this passage" className="grid gap-3">
@@ -435,7 +438,9 @@ function PassageChildren({
         </p>
       )}
 
-      {checkpoint ? (
+      {checkpoint && !found ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
+      ) : checkpoint ? (
         <form
           aria-label="Add a question under this passage"
           className="flex flex-wrap items-end gap-3"

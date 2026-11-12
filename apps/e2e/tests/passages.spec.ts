@@ -128,3 +128,76 @@ test("a passage that someone else changed is not overwritten by a stale screen",
   await page.getByRole("button", { name: "Reload" }).click();
   await expect(page.getByLabel("Title")).toHaveValue("Written elsewhere");
 });
+
+test("a checkpoint refused because the passage changed elsewhere offers Reload", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Passages ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/passages");
+  await page.getByRole("button", { name: "Start a passage" }).click();
+  await expect(page).toHaveURL(/\/passages\/[0-9a-f-]{36}$/);
+  const id = page.url().split("/").pop()!;
+  await expect(page.getByLabel("Title")).toBeEnabled();
+
+  const read = await context.request.get(`/api/v1/passages/${id}`);
+  const current = await read.json();
+  const other = await context.request.put(`/api/v1/passages/${id}/working-revision`, {
+    data: { content: { ...current.content, title: "Written elsewhere" } },
+    headers: {
+      "If-Match": read.headers()["etag"]!,
+      Origin: baseURL!,
+      "X-CSRF-Token": await csrfOf(context),
+    },
+  });
+  expect(other.ok()).toBeTruthy();
+
+  // Nothing was typed here, so only the checkpoint finds out that this screen is out of date.
+  await page.getByRole("button", { name: "Save checkpoint" }).click();
+  await expect(page.getByText("Someone else changed this")).toBeVisible();
+  await page.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByLabel("Title")).toHaveValue("Written elsewhere");
+  await expect(page.getByText("Someone else changed this")).toHaveCount(0);
+});
+
+test("the next question number is not guessed from the questions on screen", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Passages ${unique()}`);
+  const page = await context.newPage();
+  await page.goto("/passages");
+  await page.getByRole("button", { name: "Start a passage" }).click();
+  await expect(page).toHaveURL(/\/passages\/[0-9a-f-]{36}$/);
+  await page.getByLabel("Title").fill("Numbers");
+  await page
+    .getByRole("group", { name: "Passage text" })
+    .getByRole("button", { name: "Add paragraph" })
+    .click();
+  await page.getByLabel("Passage text, block 1: paragraph").fill("Some text.");
+  await expect(page.getByRole("status").filter({ hasText: SAVED })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole("button", { name: "Save checkpoint" }).click();
+  await expect(page.getByText("newest checkpoint: 1")).toBeVisible();
+
+  // A question that is not shown in the list but exists (here: made through the API as number 5).
+  const id = page.url().split("/").pop()!;
+  const passage = await (await context.request.get(`/api/v1/passages/${id}`)).json();
+  const started = await context.request.post("/api/v1/questions", {
+    data: {
+      content: {
+        schema_version: 1,
+        question_type: "SCQ",
+        language: "en",
+        stem: [],
+        context: { passage_revision_id: passage.latest_checkpoint.id, ordinal: 5 },
+      },
+    },
+    headers: { Origin: baseURL!, "X-CSRF-Token": await csrfOf(context) },
+  });
+  expect(started.ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Add question 6" })).toBeVisible();
+});

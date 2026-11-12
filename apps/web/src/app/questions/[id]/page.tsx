@@ -188,6 +188,9 @@ function Editor({ initial }: { initial: Question }) {
         if (data) {
           save.adopt(data, keepEdits);
           setVersion((v) => ({ ...v, number: data.version_number }));
+        } else if (response.status === 412) {
+          // The screen is out of date: stop saving and offer to reload, as a refused save does.
+          save.markConflict();
         } else {
           setProblem(errorMessage(error as never, response.status));
         }

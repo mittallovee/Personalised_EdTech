@@ -167,6 +167,18 @@ export function useAutosave(initial: Draft, kind: "questions" | "passages" = "qu
     [flush],
   );
 
+  /**
+   * Something other than a save found out that this screen is out of date (a checkpoint refused
+   * with 412): stop saving, as a refused save does, and offer to reload.
+   */
+  const markConflict = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    blocked.current = true;
+    setState("conflict");
+    setMessage("Someone else changed this. Reload it to see their version.");
+  }, []);
+
   /** Whether typing is waiting to be saved (or could not be). */
   const unsaved = useCallback(() => dirty.current, []);
 
@@ -198,6 +210,7 @@ export function useAutosave(initial: Draft, kind: "questions" | "passages" = "qu
     message,
     flush,
     adopt,
+    markConflict,
     unsaved,
     revision,
   };

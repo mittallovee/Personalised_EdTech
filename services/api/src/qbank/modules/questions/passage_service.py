@@ -340,6 +340,7 @@ class PassageChildren:
     latest_checkpoint_number: int | None
     hidden_count: int
     truncated: bool
+    next_number: int
 
 
 def _ordinal(content: dict[str, Any]) -> int | None:
@@ -367,7 +368,7 @@ def list_children(session: Session, principal: Principal, passage_id: UUID) -> P
         )
     }
     if not checkpoints:
-        return PassageChildren([], None, 0, False)
+        return PassageChildren([], None, 0, False, 1)
     latest = max(checkpoints.values())
     other = aliased(QuestionVersion)
     newest = (
@@ -405,6 +406,15 @@ def list_children(session: Session, principal: Principal, passage_id: UUID) -> P
             .where(*under_this_passage, QuestionMaster.created_by != principal.user_id)
         ).scalar_one()
     )
+    # The next number is worked out over every child, not only the ones listed: some are drafts
+    # the caller may not open, and a long list is cut.
+    highest = session.execute(
+        select(func.max(ordinal))
+        .select_from(QuestionMaster)
+        .join(QuestionVersion, QuestionVersion.master_id == QuestionMaster.id)
+        .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
+        .where(*under_this_passage)
+    ).scalar_one()
     children: list[PassageChild] = []
     for master, revision in rows[:MAX_CHILDREN]:
         number = checkpoints[revision.content["context"]["passage_revision_id"]]
@@ -418,4 +428,4 @@ def list_children(session: Session, principal: Principal, passage_id: UUID) -> P
                 number == latest,
             )
         )
-    return PassageChildren(children, latest, hidden, len(rows) > MAX_CHILDREN)
+    return PassageChildren(children, latest, hidden, len(rows) > MAX_CHILDREN, (highest or 0) + 1)
