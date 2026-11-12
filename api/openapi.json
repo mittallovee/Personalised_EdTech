@@ -8908,6 +8908,180 @@
           }
         }
       }
+    },
+    "/api/v1/settings/answer-rules": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "The answer limits of the coaching",
+        "description": "Owner and admins. The built-in values, the widest range each setting may take, and what this coaching changed (for itself and for particular exams). The ETag is for the save. A changed limit never rewrites a saved revision; it only changes what the findings say.",
+        "operationId": "get_answer_rules_api_v1_settings_answer_rules_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerRulesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Change the answer limits of the coaching",
+        "description": "Owner and admins. Send everything that differs from the built-in values, with the ETag you last read in `If-Match` (`\"rev-0\"` before the first save); a save from a stale screen is refused (412). A minimum above its maximum, a value outside its bounds, an unknown setting or an exam that is not this coaching's is refused with every problem listed (`ANSWER_RULES_INVALID`). The change is written to the audit log.",
+        "operationId": "save_answer_rules_api_v1_settings_answer_rules_put",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAnswerRules"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerRulesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it; reload (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Some limits cannot be used; `details.problems` lists them",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8965,6 +9139,70 @@
           "expires_at"
         ],
         "title": "ActivationLink"
+      },
+      "AnswerRulesOut": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision",
+            "description": "Also the ETag; 0 until the coaching first saves."
+          },
+          "built_in": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Built In",
+            "description": "The values used when nothing is changed."
+          },
+          "bounds": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SettingBounds"
+            },
+            "type": "object",
+            "title": "Bounds",
+            "description": "The widest range each setting may take."
+          },
+          "defaults": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Defaults",
+            "description": "What this coaching changed."
+          },
+          "exams": {
+            "items": {
+              "$ref": "#/components/schemas/ExamLimits"
+            },
+            "type": "array",
+            "title": "Exams",
+            "description": "What it changed for particular exams."
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "built_in",
+          "bounds",
+          "defaults",
+          "exams"
+        ],
+        "title": "AnswerRulesOut"
       },
       "AssetOut": {
         "properties": {
@@ -9689,6 +9927,35 @@
         ],
         "title": "ErrorResponse",
         "type": "object"
+      },
+      "ExamLimits": {
+        "properties": {
+          "exam_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Exam Id"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exam_id",
+          "values"
+        ],
+        "title": "ExamLimits"
       },
       "ExamOut": {
         "properties": {
@@ -11617,6 +11884,31 @@
         ],
         "title": "RevisionSummary"
       },
+      "SaveAnswerRules": {
+        "properties": {
+          "defaults": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Defaults",
+            "description": "The coaching's values by setting name; leave out what is not changed."
+          },
+          "exams": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Exams",
+            "description": "Values by exam id, each on top of the coaching's own. An exam with none is left out."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "defaults"
+        ],
+        "title": "SaveAnswerRules"
+      },
       "SavePassage": {
         "properties": {
           "content": {
@@ -11671,6 +11963,48 @@
           "grants"
         ],
         "title": "SetGrants"
+      },
+      "SettingBounds": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "int",
+              "decimal"
+            ],
+            "title": "Kind",
+            "description": "A whole number, or a number written as text with at most two decimals."
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Low"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "low",
+          "high"
+        ],
+        "title": "SettingBounds"
       },
       "SourceOut": {
         "properties": {

@@ -1,7 +1,7 @@
 """What the question routes send and receive (API style guide)."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -198,4 +198,38 @@ class PassageChildList(BaseModel):
     next_number: int = Field(
         description="The number for a new question: one more than the highest number among every"
         " question under the passage, including ones you may not open or that are not listed."
+    )
+
+
+class SettingBounds(BaseModel):
+    kind: Literal["int", "decimal"] = Field(
+        description="A whole number, or a number written as text with at most two decimals."
+    )
+    low: int | str
+    high: int | str
+
+
+class ExamLimits(BaseModel):
+    exam_id: UUID
+    values: dict[str, int | str]
+
+
+class AnswerRulesOut(BaseModel):
+    revision: int = Field(description="Also the ETag; 0 until the coaching first saves.")
+    built_in: dict[str, int | str] = Field(description="The values used when nothing is changed.")
+    bounds: dict[str, SettingBounds] = Field(description="The widest range each setting may take.")
+    defaults: dict[str, int | str] = Field(description="What this coaching changed.")
+    exams: list[ExamLimits] = Field(description="What it changed for particular exams.")
+
+
+class SaveAnswerRules(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    defaults: dict[str, Any] = Field(
+        description="The coaching's values by setting name; leave out what is not changed."
+    )
+    exams: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Values by exam id, each on top of the coaching's own. An exam with none is"
+        " left out.",
     )

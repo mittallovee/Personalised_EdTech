@@ -135,3 +135,16 @@ class PassageRevisionAsset(Base):
     revision_id: Mapped[UUID] = mapped_column(primary_key=True)
     asset_id: Mapped[UUID] = mapped_column(primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AnswerRuleSettings(Base):
+    """What a coaching changed in the answer limits (migration 0024): one row per coaching."""
+
+    __tablename__ = "answer_rule_settings"
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    revision: Mapped[int] = mapped_column(default=1)  # the ETag
+    defaults: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    exams: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
