@@ -48,6 +48,8 @@ class Action(StrEnum):
     ARCHIVE_ANY_QUESTION = "ARCHIVE_ANY_QUESTION"
     # Upload a picture for a question, and see the coaching's pictures (M3, D-07).
     USE_ASSETS = "USE_ASSETS"
+    # Read and change the answer limits of the coaching (M3, D-03).
+    MANAGE_ANSWER_RULES = "MANAGE_ANSWER_RULES"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -66,6 +68,7 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.CREATE_QUESTIONS: _EVERYONE,
     Action.ARCHIVE_ANY_QUESTION: _ADMINS,
     Action.USE_ASSETS: _EVERYONE,
+    Action.MANAGE_ANSWER_RULES: _ADMINS,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).

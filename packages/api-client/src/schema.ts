@@ -1425,6 +1425,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/answer-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The answer limits of the coaching
+         * @description Owner and admins. The built-in values, the widest range each setting may take, and what this coaching changed (for itself and for particular exams). The ETag is for the save. A changed limit never rewrites a saved revision; it only changes what the findings say.
+         */
+        get: operations["get_answer_rules_api_v1_settings_answer_rules_get"];
+        /**
+         * Change the answer limits of the coaching
+         * @description Owner and admins. Send everything that differs from the built-in values, with the ETag you last read in `If-Match` (`"rev-0"` before the first save); a save from a stale screen is refused (412). A minimum above its maximum, a value outside its bounds, an unknown setting or an exam that is not this coaching's is refused with every problem listed (`ANSWER_RULES_INVALID`). The change is written to the audit log.
+         */
+        put: operations["save_answer_rules_api_v1_settings_answer_rules_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1462,6 +1486,40 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** AnswerRulesOut */
+        AnswerRulesOut: {
+            /**
+             * Revision
+             * @description Also the ETag; 0 until the coaching first saves.
+             */
+            revision: number;
+            /**
+             * Built In
+             * @description The values used when nothing is changed.
+             */
+            built_in: {
+                [key: string]: number | string;
+            };
+            /**
+             * Bounds
+             * @description The widest range each setting may take.
+             */
+            bounds: {
+                [key: string]: components["schemas"]["SettingBounds"];
+            };
+            /**
+             * Defaults
+             * @description What this coaching changed.
+             */
+            defaults: {
+                [key: string]: number | string;
+            };
+            /**
+             * Exams
+             * @description What it changed for particular exams.
+             */
+            exams: components["schemas"]["ExamLimits"][];
         };
         /**
          * AssetOut
@@ -1795,6 +1853,18 @@ export interface components {
          */
         ErrorResponse: {
             error: components["schemas"]["ErrorInfo"];
+        };
+        /** ExamLimits */
+        ExamLimits: {
+            /**
+             * Exam Id
+             * Format: uuid
+             */
+            exam_id: string;
+            /** Values */
+            values: {
+                [key: string]: number | string;
+            };
         };
         /** ExamOut */
         ExamOut: {
@@ -2770,6 +2840,25 @@ export interface components {
              */
             updated_at: string;
         };
+        /** SaveAnswerRules */
+        SaveAnswerRules: {
+            /**
+             * Defaults
+             * @description The coaching's values by setting name; leave out what is not changed.
+             */
+            defaults: {
+                [key: string]: unknown;
+            };
+            /**
+             * Exams
+             * @description Values by exam id, each on top of the coaching's own. An exam with none is left out.
+             */
+            exams?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
         /** SavePassage */
         SavePassage: {
             /**
@@ -2801,6 +2890,19 @@ export interface components {
              *     ]
              */
             grants: components["schemas"]["Grant"][];
+        };
+        /** SettingBounds */
+        SettingBounds: {
+            /**
+             * Kind
+             * @description A whole number, or a number written as text with at most two decimals.
+             * @enum {string}
+             */
+            kind: "int" | "decimal";
+            /** Low */
+            low: number | string;
+            /** High */
+            high: number | string;
         };
         /** SourceOut */
         SourceOut: {
@@ -9001,6 +9103,134 @@ export interface operations {
             };
             /** @description No such checkpoint in your coaching (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_answer_rules_api_v1_settings_answer_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerRulesOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_answer_rules_api_v1_settings_answer_rules_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAnswerRules"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerRulesOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Some limits cannot be used; `details.problems` lists them */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

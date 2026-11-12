@@ -35,6 +35,7 @@ from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalo
 from qbank.modules.questions.context_checks import check_pin, passage_pin
 from qbank.modules.questions.findings import Finding
 from qbank.modules.questions.image_checks import check_images, image_ids
+from qbank.modules.questions.limits import effective_rules, exam_of
 from qbank.modules.questions.models import (
     QuestionMaster,
     QuestionRevision,
@@ -44,6 +45,7 @@ from qbank.modules.questions.models import (
 from qbank.modules.questions.passage_lookup import checkpoint_ids
 from qbank.modules.questions.picture_records import record_pictures
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
+from qbank.modules.questions.settings_service import load_overrides
 from qbank.modules.questions.validate import validate_content
 from qbank.modules.taxonomy.public import look_up
 
@@ -180,8 +182,10 @@ def _findings_for(
     pictures = existing_image_ids(session, set[UUID]().union(*(image_ids(c) for c in contents)))
     pins = {pin for pin in (passage_pin(c) for c in contents) if pin is not None}
     checkpoints = checkpoint_ids(session, pins)
+    # The coaching's answer limits, and an exam's on top, apply to each question (D-03).
+    overrides = load_overrides(session)
     return [
-        validate_content(c, rules)
+        validate_content(c, effective_rules(rules, overrides, exam_of(c)))
         + check_catalogue(c, refs)
         + check_images(c, pictures)
         + check_pin(c, checkpoints)

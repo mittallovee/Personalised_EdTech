@@ -60,6 +60,7 @@ TABLE = {
     Action.CREATE_QUESTIONS: (True, True, True, False, True),
     Action.ARCHIVE_ANY_QUESTION: (False, True, True, False, True),
     Action.USE_ASSETS: (True, True, True, False, True),
+    Action.MANAGE_ANSWER_RULES: (False, True, True, False, True),
 }
 WHO = (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)
 
