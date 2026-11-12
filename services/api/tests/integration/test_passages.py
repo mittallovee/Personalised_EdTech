@@ -460,3 +460,25 @@ def test_there_is_one_working_revision_per_passage(
             ),
             {"p": passage["id"]},
         )
+
+
+def test_a_checkpoint_says_which_checkpoint_of_its_passage_is_the_newest(
+    client: TestClient, headers: dict[str, str], team: dict[str, Member]
+) -> None:
+    passage = save(client, headers, start(client, headers), READY)
+    first = checkpoint(client, headers, passage)
+    one = first["latest_checkpoint"]
+    alone = client.get(f"/api/v1/passage-revisions/{one['id']}").json()
+    assert (alone["number"], alone["newest_number"], alone["newest_id"]) == (1, 1, one["id"])
+
+    second = checkpoint(client, headers, first)["latest_checkpoint"]
+    older = client.get(f"/api/v1/passage-revisions/{one['id']}").json()
+    assert (older["number"], older["newest_number"], older["newest_id"]) == (1, 2, second["id"])
+
+    # Another member who cannot open the passage draft still learns this: the questions under the
+    # passage need it to offer a move to the newest checkpoint.
+    other = TestClient(client.app)
+    sign_in(other, team["other"].email)
+    assert other.get(f"{PATH}/{passage['id']}").status_code == 404
+    seen = other.get(f"/api/v1/passage-revisions/{one['id']}").json()
+    assert seen["newest_id"] == second["id"]

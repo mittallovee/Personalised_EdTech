@@ -22,10 +22,13 @@ export function QuestionPreview({
   content,
   reveal = false,
   assetUrl = defaultAssetUrl,
+  passage,
 }: {
   content: unknown;
   reveal?: boolean;
   assetUrl?: AssetUrl;
+  /** The passage the question sits under (its `title` and `body`), shown above the question. */
+  passage?: unknown;
 }) {
   if (!isObject(content)) return <p className="qb-missing">[nothing to preview]</p>;
   const type = typeof content.question_type === "string" ? content.question_type : "";
@@ -110,6 +113,7 @@ export function QuestionPreview({
 
   return (
     <article className="qb-question">
+      <PassageText passage={passage} assetUrl={assetUrl} />
       <div className="qb-stem">{blocks(content.stem)}</div>
       {body}
       {reveal && solution.length > 0 && (
@@ -280,4 +284,16 @@ function TypedAnswer({ answer }: { answer: Obj }) {
     shown = `${answer.lower} to ${answer.upper}`;
   }
   return shown ? <p className="qb-correct-note">Answer: {shown}</p> : null;
+}
+
+/** The shared text of a passage, above the question that sits under it. Nothing without a body. */
+function PassageText({ passage, assetUrl }: { passage: unknown; assetUrl: AssetUrl }) {
+  if (!isObject(passage) || !Array.isArray(passage.body)) return null;
+  const title = typeof passage.title === "string" ? passage.title.trim() : "";
+  return (
+    <section className="qb-passage">
+      {title && <h3>{title}</h3>}
+      <Blocks blocks={passage.body} assetUrl={assetUrl} />
+    </section>
+  );
 }
