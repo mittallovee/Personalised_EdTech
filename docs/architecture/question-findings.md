@@ -116,6 +116,19 @@ can be reached is checked where the database is, not here.
 | `CONTEXT_PASSAGE_INVALID` | error | The passage revision id is not valid |
 | `CONTEXT_ORDINAL_INVALID` | error | The number within the passage is not a whole number from 1 to 1000 |
 
+## Passages
+
+A passage's content is `{schema_version, title, body}`: a short one-line title (up to 200 characters) and a
+body of the same content blocks as a question's stem, so the block and picture findings above apply to
+`body[...]`. A passage has no `context`, so it cannot sit under another passage.
+
+| Code | Level | Meaning |
+|---|---|---|
+| `PASSAGE_TITLE_MISSING` | incomplete | No title yet |
+| `PASSAGE_BODY_EMPTY` | incomplete | Nothing written in the body |
+| `PASSAGE_TITLE_TOO_LONG` / `PASSAGE_TITLE_NOT_ONE_LINE` | error | More than 200 characters, or a new line or tab in it |
+| `FIELD_NOT_ALLOWED` / `SCHEMA_VERSION_UNSUPPORTED` / `CONTENT_NOT_OBJECT` / `CONTENT_TOO_LARGE` | error | As for questions |
+
 ## Metadata
 
 The labels in `metadata` (D-15). Only the **shape** is checked here; that an id exists in this coaching's

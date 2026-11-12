@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session, aliased
 
 from qbank.core.auth import Principal
@@ -40,6 +40,7 @@ from qbank.modules.questions.models import (
     QuestionVersion,
     RevisionAsset,
 )
+from qbank.modules.questions.picture_records import record_pictures
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.validate import validate_content
 from qbank.modules.taxonomy.public import look_up
@@ -182,33 +183,13 @@ def _findings_for(
 
 
 def _record_pictures(session: Session, revision: QuestionRevision) -> None:
-    """Make the pictures recorded for a working revision match its content.
-
-    Only this coaching's own pictures are recorded (a missing or foreign one is a finding, not a
-    row). A picture that a saved revision uses cannot be deleted, so this is what keeps history
-    showing its pictures. The rows of a frozen revision are never touched (the database refuses).
-    """
-    wanted = existing_image_ids(session, image_ids(revision.content))
-    have = set(
-        session.scalars(
-            select(RevisionAsset.asset_id).where(RevisionAsset.revision_id == revision.id)
-        )
+    record_pictures(
+        session,
+        RevisionAsset,
+        organization_id=revision.organization_id,
+        revision_id=revision.id,
+        content=revision.content,
     )
-    if have - wanted:
-        session.execute(
-            delete(RevisionAsset).where(
-                RevisionAsset.revision_id == revision.id, RevisionAsset.asset_id.in_(have - wanted)
-            )
-        )
-    for asset_id in wanted - have:
-        session.add(
-            RevisionAsset(
-                organization_id=revision.organization_id,
-                revision_id=revision.id,
-                asset_id=asset_id,
-            )
-        )
-    session.flush()
 
 
 def _findings(session: Session, content: dict[str, Any], rules: Rules) -> list[Finding]:
