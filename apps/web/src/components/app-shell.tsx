@@ -47,6 +47,7 @@ export type Page =
   | "concepts"
   | "exams-sources"
   | "import"
+  | "answer-limits"
   | "profile";
 
 const ITEM = "block rounded-md px-3 py-2";
@@ -210,6 +211,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "import" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Bulk import
+                </Link>
+              </li>
+            )}
+            {showsUsers(me) && (
+              <li>
+                <Link
+                  href="/admin/answer-limits"
+                  aria-current={current === "answer-limits" ? "page" : undefined}
+                  className={`${ITEM} ${current === "answer-limits" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Answer limits
                 </Link>
               </li>
             )}
