@@ -162,6 +162,8 @@ Rules:
   added to every line automatically. The client IP is logged only in security events (`login_failed`, `rate_limited`).
   A redaction step (`core/logredact.py`) blanks forbidden fields as a safety net; it does not replace care. Every
   state change recorded with `record_event` is also logged as `audit_recorded` (names and IDs, not before/after data).
+- **Job queue gauges:** the worker publishes `qbank_jobs_queue_depth` and `qbank_jobs_oldest_ready_age_seconds`, read through
+  the worker-only database function `jobs_stats()` (migration 0025); the API's role cannot call it.
 - **Traces** (`core/telemetry.py`, off until `OTEL_EXPORTER_OTLP_ENDPOINT` is set): one span per request, SQL statement and
   job run, written by hand so attributes are identifiers and route templates only (never query strings, headers, bodies
   or bind values). A job's `traceparent` is stored on the `jobs` row so the worker continues the request's trace.
