@@ -12,13 +12,18 @@ import time
 from collections.abc import Awaitable, Callable, Iterable
 from uuid import UUID
 
+import structlog
 from fastapi import FastAPI, Request, Response
 from prometheus_client import REGISTRY, Counter, Histogram, start_http_server
 from prometheus_client.core import GaugeMetricFamily, Metric
 from prometheus_client.registry import Collector
+from sqlalchemy import text
 from sqlalchemy.pool import QueuePool
 
 from qbank.core.db import Database
+from qbank.core.tenancy import NO_CONTEXT
+
+log = structlog.get_logger("qbank.metrics")
 
 _LATENCY_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30)
 
@@ -115,8 +120,49 @@ class _PoolCollector(Collector):
         yield size
 
 
+class _JobQueueCollector(Collector):
+    """Counts waiting and running jobs when Prometheus asks (the worker process only: the
+    API's database role is not allowed to see other coachings' jobs)."""
+
+    def __init__(self) -> None:
+        self.database: Database | None = None
+
+    def collect(self) -> Iterable[Metric]:
+        if self.database is None:
+            return
+        try:
+            with self.database.transaction(NO_CONTEXT) as session:
+                rows = session.execute(text("SELECT * FROM jobs_stats()")).all()
+        except Exception:  # the database is busy or restarting: skip this scrape, keep serving
+            log.warning("job_queue_metrics_unavailable", exc_info=True)
+            return
+        depth = GaugeMetricFamily(
+            "qbank_jobs_queue_depth",
+            "Jobs waiting (QUEUED) or being worked on (RUNNING), by type.",
+            labels=["job_type", "state"],
+        )
+        age = GaugeMetricFamily(
+            "qbank_jobs_oldest_ready_age_seconds",
+            "How long the oldest job that is ready to run has been waiting, by type.",
+            labels=["job_type"],
+        )
+        for row in rows:
+            depth.add_metric([row.job_type, row.state], row.jobs)
+            if row.oldest_ready_age_seconds is not None:
+                age.add_metric([row.job_type], row.oldest_ready_age_seconds)
+        yield depth
+        yield age
+
+
 _pool_collector = _PoolCollector()
 REGISTRY.register(_pool_collector)
+_job_queue_collector = _JobQueueCollector()
+REGISTRY.register(_job_queue_collector)
+
+
+def watch_job_queue(database: Database) -> None:
+    """Report the job queue from this process (the worker's, which may read the stats)."""
+    _job_queue_collector.database = database
 
 
 def watch_pool(database: Database) -> None:
