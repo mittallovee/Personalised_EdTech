@@ -117,8 +117,18 @@ Try your own questions in **Explore** with the **Prometheus** source, for exampl
   the `api` and `worker` containers). Check the Collector with `docker compose logs otel-collector`.
 - **Graphs are empty but logs work:** in **Explore** (Prometheus) run `up`; `0` for `qbank-api` or `qbank-worker` means Prometheus
   cannot reach the metrics page (port 9100 / 9101 inside the network; they are never published to your PC).
-- **You forgot the password:** change `GRAFANA_ADMIN_PASSWORD` in `.env`, then
-  `docker compose --profile observability down -v` (this also deletes the stored monitoring data) and start again.
+- **You forgot the Grafana password:** `GRAFANA_ADMIN_PASSWORD` in `.env` is used only the first time Grafana starts, so changing
+  it later does nothing. Reset it without losing any data:
+
+  ```bash
+  docker compose exec grafana grafana cli admin reset-admin-password "your new password"
+  ```
+
+  and put the same password in `.env` so you remember it.
+- **Never run `docker compose down -v`** to "start the monitoring fresh": `-v` deletes **every** volume of the project, including
+  the database (`pgdata`) and uploaded pictures (`assetdata`). To clear only the monitoring data, stop the stack
+  (`docker compose --profile observability down`) and remove just its volumes:
+  `docker volume rm qbank_tempodata qbank_lokidata qbank_promdata qbank_grafanadata`.
 - **It uses too much memory:** turn it off (above) when you are not debugging.
 
 ## Moving to the cloud later (M7)
