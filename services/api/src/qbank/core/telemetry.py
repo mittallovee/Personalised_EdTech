@@ -5,17 +5,26 @@ one job run). The spans here are written by hand, not by an automatic instrument
 nothing is recorded that we did not choose: attributes are identifiers, route templates and SQL
 text with placeholders. Never a URL with its query string, a header, a body or a bind value.
 
+Log lines travel the same way: when the endpoint is set, each finished (already redacted) JSON line
+is also sent to the Collector, so Loki can search it and link it to its trace.
+
 Everything is off, and almost free, until ``OTEL_EXPORTER_OTLP_ENDPOINT`` is set.
 """
 
+import logging
+import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from opentelemetry import trace
-from opentelemetry.context import Context
+from opentelemetry._logs import LogRecord, SeverityNumber
+from opentelemetry.context import Context, get_current
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -53,6 +62,67 @@ def setup_tracing(settings: Settings, service: str) -> None:
     )
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
     use_provider(provider)
+    logs = LoggerProvider(resource=provider.resource)
+    logs.add_log_record_processor(
+        BatchLogRecordProcessor(
+            OTLPLogExporter(endpoint=settings.otel_exporter_otlp_endpoint.rstrip("/") + "/v1/logs")
+        )
+    )
+    attach_log_shipper(logs)
+
+
+_SHIPPER = "qbank-otlp"
+# Records about the exporting itself must not be exported (they would feed on each other).
+_NOT_SHIPPED = ("opentelemetry", "urllib3", "requests", "httpcore", "httpx")
+_SEVERITY = {
+    logging.DEBUG: SeverityNumber.DEBUG,
+    logging.INFO: SeverityNumber.INFO,
+    logging.WARNING: SeverityNumber.WARN,
+    logging.ERROR: SeverityNumber.ERROR,
+    logging.CRITICAL: SeverityNumber.FATAL,
+}
+
+
+class _LogShipper(logging.Handler):
+    """Sends each log line to the OTLP endpoint as the body of one log record.
+
+    The body is the line our own formatter wrote, after redaction. Nothing else is attached: the
+    standard OpenTelemetry handler would add the raw exception message and stack trace as
+    attributes, bypassing the redaction.
+    """
+
+    def __init__(self, provider: LoggerProvider) -> None:
+        super().__init__()
+        self.set_name(_SHIPPER)
+        self._logger = provider.get_logger("qbank")
+        self.addFilter(lambda record: not record.name.startswith(_NOT_SHIPPED))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._logger.emit(
+                LogRecord(
+                    timestamp=int(record.created * 1e9),
+                    observed_timestamp=time.time_ns(),
+                    context=get_current(),  # carries the trace and span IDs
+                    severity_text=record.levelname,
+                    severity_number=_SEVERITY.get(record.levelno, SeverityNumber.INFO),
+                    body=self.format(record),
+                )
+            )
+        except Exception:
+            self.handleError(record)
+
+
+def attach_log_shipper(provider: LoggerProvider) -> None:
+    """Add the shipper to the root logger, reusing the JSON formatter of the stdout handler."""
+    root = logging.getLogger()
+    shipper = _LogShipper(provider)
+    for existing in list(root.handlers):
+        if existing.get_name() == _SHIPPER:
+            root.removeHandler(existing)
+        elif existing.formatter is not None and existing.get_name() == "qbank-json":
+            shipper.setFormatter(existing.formatter)
+    root.addHandler(shipper)
 
 
 def tracer() -> trace.Tracer:
