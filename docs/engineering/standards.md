@@ -167,6 +167,8 @@ Rules:
 - **Traces** (`core/telemetry.py`, off until `OTEL_EXPORTER_OTLP_ENDPOINT` is set): one span per request, SQL statement and
   job run, written by hand so attributes are identifiers and route templates only (never query strings, headers, bodies
   or bind values). A job's `traceparent` is stored on the `jobs` row so the worker continues the request's trace.
+- **Log shipping:** with the same endpoint set, every finished (already redacted) log line is also sent to the Collector as one OTLP log
+  record (`telemetry.attach_log_shipper`), so Loki can search it. Only the line is sent, never the raw exception text.
 - **OpenTelemetry** traces for API, DB and outgoing AI calls; metrics for request rate/latency/errors,
   job queue depth/age, AI tokens/cost/errors.
 - **Metrics** ([ADR-0019](../architecture/adr/0019-monitoring-stack-and-logging-rules.md)): `core/metrics.py` serves Prometheus
