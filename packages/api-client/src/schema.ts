@@ -1281,6 +1281,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the question for review
+         * @description Freezes the working revision as the one under review and makes the question readable by every member of the coaching. Send the working revision's ETag (`rev-N`) in `If-Match`. Things still to do are allowed; mistakes (`error` findings) are refused with `QUESTION_HAS_ERRORS`. The editor is read-only until the question is withdrawn.
+         */
+        post: operations["submit_question_api_v1_questions__question_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the question back from review to edit it
+         * @description From in review, passed QC or approved, back to draft. The decisions so far stay in the history. Send the workflow ETag (`flow-N`, from the question) in `If-Match`.
+         */
+        post: operations["withdraw_question_api_v1_questions__question_id__withdraw_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passages": {
         parameters: {
             query?: never;
@@ -2644,6 +2684,23 @@ export interface components {
              * @description Also the ETag of the working revision.
              */
             revision: number;
+            /** @description Where the version is in the review workflow. */
+            state: components["schemas"]["State"];
+            /**
+             * Flow Etag
+             * @description The workflow ETag, e.g. `"flow-3"`: send it in `If-Match` for every step after submit. It moves with every change of state.
+             */
+            flow_etag: string;
+            /**
+             * Allowed Steps
+             * @description The steps you may take now. The screen shows exactly these.
+             */
+            allowed_steps: components["schemas"]["Step"][];
+            /**
+             * Review Revision Id
+             * @description The frozen revision under review, shown instead of the working copy; null while the question is a draft or returned.
+             */
+            review_revision_id: string | null;
             /** Archived */
             archived: boolean;
             /**
@@ -2943,6 +3000,16 @@ export interface components {
             data: components["schemas"]["SourceOut"][];
             page: components["schemas"]["PageInfo"];
         };
+        /**
+         * State
+         * @enum {string}
+         */
+        State: "DRAFT" | "IN_REVIEW" | "CHANGES_REQUESTED" | "QC_PASSED" | "APPROVED" | "PUBLISHED";
+        /**
+         * Step
+         * @enum {string}
+         */
+        Step: "SUBMIT" | "RETURN" | "PASS_QC" | "APPROVE" | "PUBLISH" | "WITHDRAW" | "START_CORRECTION";
         /** TransferOwnership */
         TransferOwnership: {
             /**
@@ -8137,7 +8204,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The question is archived (`QUESTION_ARCHIVED`) */
+            /** @description The question is archived (`QUESTION_ARCHIVED`), or it is in review or published, so its content cannot be changed (`QUESTION_NOT_EDITABLE`; withdraw it first) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8234,7 +8301,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description The question is archived (`QUESTION_ARCHIVED`) */
+            /** @description The question is archived (`QUESTION_ARCHIVED`), or it is in review or published, so its content cannot be changed (`QUESTION_NOT_EDITABLE`; withdraw it first) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8523,6 +8590,200 @@ export interface operations {
             };
             /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submit_question_api_v1_questions__question_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question has mistakes (`QUESTION_HAS_ERRORS`, with the findings) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    withdraw_question_api_v1_questions__question_id__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it; reload (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -7519,7 +7519,7 @@
             }
           },
           "409": {
-            "description": "The question is archived (`QUESTION_ARCHIVED`)",
+            "description": "The question is archived (`QUESTION_ARCHIVED`), or it is in review or published, so its content cannot be changed (`QUESTION_NOT_EDITABLE`; withdraw it first)",
             "content": {
               "application/json": {
                 "schema": {
@@ -7658,7 +7658,7 @@
             }
           },
           "409": {
-            "description": "The question is archived (`QUESTION_ARCHIVED`)",
+            "description": "The question is archived (`QUESTION_ARCHIVED`), or it is in review or published, so its content cannot be changed (`QUESTION_NOT_EDITABLE`; withdraw it first)",
             "content": {
               "application/json": {
                 "schema": {
@@ -8048,6 +8048,284 @@
           },
           "404": {
             "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}/submit": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Send the question for review",
+        "description": "Freezes the working revision as the one under review and makes the question readable by every member of the coaching. Send the working revision's ETag (`rev-N`) in `If-Match`. Things still to do are allowed; mistakes (`error` findings) are refused with `QUESTION_HAS_ERRORS`. The editor is read-only until the question is withdrawn.",
+        "operationId": "submit_question_api_v1_questions__question_id__submit_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it; reload (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The question has mistakes (`QUESTION_HAS_ERRORS`, with the findings)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}/withdraw": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Take the question back from review to edit it",
+        "description": "From in review, passed QC or approved, back to draft. The decisions so far stay in the history. Send the workflow ETag (`flow-N`, from the question) in `If-Match`.",
+        "operationId": "withdraw_question_api_v1_questions__question_id__withdraw_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it; reload (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -11507,6 +11785,36 @@
             "title": "Revision",
             "description": "Also the ETag of the working revision."
           },
+          "state": {
+            "$ref": "#/components/schemas/State",
+            "description": "Where the version is in the review workflow."
+          },
+          "flow_etag": {
+            "type": "string",
+            "title": "Flow Etag",
+            "description": "The workflow ETag, e.g. `\"flow-3\"`: send it in `If-Match` for every step after submit. It moves with every change of state."
+          },
+          "allowed_steps": {
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "type": "array",
+            "title": "Allowed Steps",
+            "description": "The steps you may take now. The screen shows exactly these."
+          },
+          "review_revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Revision Id",
+            "description": "The frozen revision under review, shown instead of the working copy; null while the question is a draft or returned."
+          },
           "archived": {
             "type": "boolean",
             "title": "Archived"
@@ -11546,6 +11854,10 @@
           "code",
           "version_number",
           "revision",
+          "state",
+          "flow_etag",
+          "allowed_steps",
+          "review_revision_id",
           "archived",
           "created_by",
           "created_at",
@@ -12083,6 +12395,31 @@
           "page"
         ],
         "title": "SourcePage"
+      },
+      "State": {
+        "type": "string",
+        "enum": [
+          "DRAFT",
+          "IN_REVIEW",
+          "CHANGES_REQUESTED",
+          "QC_PASSED",
+          "APPROVED",
+          "PUBLISHED"
+        ],
+        "title": "State"
+      },
+      "Step": {
+        "type": "string",
+        "enum": [
+          "SUBMIT",
+          "RETURN",
+          "PASS_QC",
+          "APPROVE",
+          "PUBLISH",
+          "WITHDRAW",
+          "START_CORRECTION"
+        ],
+        "title": "Step"
       },
       "TransferOwnership": {
         "properties": {
