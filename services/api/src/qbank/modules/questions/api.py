@@ -20,6 +20,7 @@ from qbank.modules.questions.schemas import (
     QuestionOut,
     QuestionPage,
     QuestionSummary,
+    ReturnIn,
     RevisionList,
     RevisionOut,
     RevisionSummary,
@@ -51,6 +52,12 @@ _STEP: dict[int | str, dict[str, Any]] = {
     409: {
         "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`,"
         " with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)"
+    }
+}
+_CHECKLIST: dict[int | str, dict[str, Any]] = {
+    422: {
+        "description": "The publication checklist is not met (`PUBLICATION_CHECKLIST_FAILED`):"
+        " `details.findings` lists every `error` and `incomplete` item"
     }
 }
 _MAX_CURSOR_LENGTH = 200
@@ -408,6 +415,103 @@ def withdraw_question(
 ) -> QuestionOut:
     with database.transaction(principal.tenant_context) as session:
         view = service.withdraw(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/return",
+    summary="Send the question back to its author",
+    description="From in review (QC grant), passed QC (approve grant) or approved (publish"
+    " grant). Needs one or more reasons from the list and a note of at least 10 characters"
+    " (`RETURN_REASON_REQUIRED`). The question becomes the author's draft again. Send the"
+    " workflow ETag (`flow-N`) in `If-Match`.",
+    responses={
+        **_DENIED,
+        **_NOT_FOUND,
+        **_STALE,
+        **_STEP,
+        422: {"description": "No reason, or a note under 10 characters (`RETURN_REASON_REQUIRED`)"},
+    },
+)
+def return_question(
+    question_id: UUID,
+    payload: ReturnIn,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.return_question(
+            session,
+            principal,
+            question_id,
+            reasons=payload.reasons,
+            note=payload.note,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/pass-qc",
+    summary="Pass quality control",
+    description="Quality control accepts the frozen revision. Allowed only when it has no `error`"
+    " and no `incomplete` finding against the coaching's current lists and limits"
+    " (`PUBLICATION_CHECKLIST_FAILED`). Send the workflow ETag (`flow-N`) in `If-Match`.",
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_STEP, **_CHECKLIST},
+)
+def pass_qc_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.pass_qc(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/approve",
+    summary="Approve the question",
+    description="Approves the revision that passed QC. The publication checklist is checked again,"
+    " because the lists or limits may have changed since QC (`PUBLICATION_CHECKLIST_FAILED`)."
+    " Send the workflow ETag (`flow-N`) in `If-Match`.",
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_STEP, **_CHECKLIST},
+)
+def approve_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.approve(
             session,
             principal,
             question_id,

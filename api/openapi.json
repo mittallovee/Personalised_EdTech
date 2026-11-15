@@ -8347,6 +8347,433 @@
         }
       }
     },
+    "/api/v1/questions/{question_id}/return": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Send the question back to its author",
+        "description": "From in review (QC grant), passed QC (approve grant) or approved (publish grant). Needs one or more reasons from the list and a note of at least 10 characters (`RETURN_REASON_REQUIRED`). The question becomes the author's draft again. Send the workflow ETag (`flow-N`) in `If-Match`.",
+        "operationId": "return_question_api_v1_questions__question_id__return_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it; reload (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No reason, or a note under 10 characters (`RETURN_REASON_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}/pass-qc": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Pass quality control",
+        "description": "Quality control accepts the frozen revision. Allowed only when it has no `error` and no `incomplete` finding against the coaching's current lists and limits (`PUBLICATION_CHECKLIST_FAILED`). Send the workflow ETag (`flow-N`) in `If-Match`.",
+        "operationId": "pass_qc_question_api_v1_questions__question_id__pass_qc_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it; reload (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The publication checklist is not met (`PUBLICATION_CHECKLIST_FAILED`): `details.findings` lists every `error` and `incomplete` item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}/approve": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Approve the question",
+        "description": "Approves the revision that passed QC. The publication checklist is checked again, because the lists or limits may have changed since QC (`PUBLICATION_CHECKLIST_FAILED`). Send the workflow ETag (`flow-N`) in `If-Match`.",
+        "operationId": "approve_question_api_v1_questions__question_id__approve_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open. Someone else's draft is also 404, so its existence is not given away (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`, with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it; reload (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The publication checklist is not met (`PUBLICATION_CHECKLIST_FAILED`): `details.findings` lists every `error` and `incomplete` item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/passages": {
       "post": {
         "tags": [
@@ -12024,6 +12451,45 @@
           "expected_role"
         ],
         "title": "RemoveMember"
+      },
+      "ReturnIn": {
+        "properties": {
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnReason"
+            },
+            "type": "array",
+            "maxItems": 9,
+            "title": "Reasons",
+            "description": "One or more reasons from the fixed list."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Note",
+            "description": "What to fix, in at least 10 characters. Shown as text, never as markup.",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "ReturnIn",
+        "description": "Why a question goes back to its author (E-06). The note is plain text."
+      },
+      "ReturnReason": {
+        "type": "string",
+        "enum": [
+          "ANSWER_WRONG",
+          "STATEMENT_UNCLEAR",
+          "OPTIONS_FLAWED",
+          "SOLUTION_WRONG",
+          "LABELS_WRONG",
+          "DIFFICULTY_OR_BLOOM_WRONG",
+          "DUPLICATE",
+          "FORMATTING",
+          "OTHER"
+        ],
+        "title": "ReturnReason",
+        "description": "Why a question is sent back. Stable codes, so the web can show them and later count them."
       },
       "RevisionList": {
         "properties": {

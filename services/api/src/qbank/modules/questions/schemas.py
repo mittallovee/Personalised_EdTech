@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from qbank.core.pagination import PageInfo
-from qbank.modules.questions.domain.workflow import State, Step
+from qbank.modules.questions.domain.workflow import ReturnReason, State, Step
 from qbank.modules.questions.findings import Level
 
 
@@ -245,4 +245,19 @@ class SaveAnswerRules(BaseModel):
         default_factory=dict,
         description="Values by exam id, each on top of the coaching's own. An exam with none is"
         " left out.",
+    )
+
+
+class ReturnIn(BaseModel):
+    """Why a question goes back to its author (E-06). The note is plain text."""
+
+    reasons: list[ReturnReason] = Field(
+        default_factory=list,
+        max_length=len(ReturnReason),
+        description="One or more reasons from the fixed list.",
+    )
+    note: str = Field(
+        default="",
+        max_length=2000,
+        description="What to fix, in at least 10 characters. Shown as text, never as markup.",
     )
