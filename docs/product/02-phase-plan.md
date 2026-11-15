@@ -138,4 +138,4 @@ None blocking. M1, M2 and M3 are built. Next: the owner checks M3 with the [M3 d
 [setup guide](../operations/google-login.md)). M3's exit criterion (all nine formats: valid saves,
 invalid answers named) is covered by the tests listed in the M3 demo. Open owner items: choose the K-16
 backup destination (it must include the picture volume `assetdata`), and review the Dependabot PRs. Then
-M4 (review and bank): its [design note](../architecture/m4-design-note.md) is written and waits for your approval; no M4 code until you approve it.
+M4 (review and bank): its [design note](../architecture/m4-design-note.md) is approved; M4 is being built in the pull requests of its section 14.

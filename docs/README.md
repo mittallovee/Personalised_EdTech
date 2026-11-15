@@ -20,7 +20,7 @@
 7. [M1 design note](./architecture/m1-design-note.md): approved; the foundation milestone (done).
    [M2 design note](./architecture/m2-design-note.md): identity and coaching admin: approved; built (done).
    [M3 design note](./architecture/m3-design-note.md): question authoring: approved; built (done).
-   [M4 design note](./architecture/m4-design-note.md): review and bank: **draft for your approval**.
+   [M4 design note](./architecture/m4-design-note.md): review and bank: **approved**; being built.
 8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [M2 demo](./operations/m2-demo.md): check identity and coaching admin yourself; [M3 demo](./operations/m3-demo.md): check question authoring yourself; [remote access](./operations/remote-access.md) on your own domain;
    [Google login](./operations/google-login.md): one-time Google Cloud setup (M2).
    [Backup and restore](./operations/backup-and-restore.md): taking and restoring database backups, targets, the restore drill (K-03).
