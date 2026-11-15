@@ -106,6 +106,10 @@ repeats the allowed pairs, so a bug in code cannot publish something that skippe
   second request gets `412 REVISION_STALE` with the current ETag, and the screen reloads. The ETag for the
   working text (`"rev-N"`, M3) is a different value space, so the two cannot be mixed up. Submit uses the
   working text's ETag, like *Save checkpoint*.
+- **Both counters carry on across versions of one question.** The URLs name only the question, so a correction
+  (version n+1) starts its workflow counter at the previous version's final value plus one, and its working
+  revision's counter above every earlier one. A tag read on version 1 therefore never matches version 2
+  (the first draft restarted both at 1; found in review of 4a-4).
 - Each step locks the question (`SELECT … FOR UPDATE`) and rechecks state and review revision inside the
   transaction, so two simultaneous requests cannot both succeed. The `If-Match` is checked **before** the
   state, so a screen that read an older state hears "changed, reload" (412) rather than "step invalid" (409).

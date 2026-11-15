@@ -350,11 +350,13 @@ def test_a_correction_is_a_new_draft_version_with_the_same_code(
     assert body["code"] == published["code"]
     assert body["version_number"] == 2
     assert body["state"] == "DRAFT"
-    assert body["flow_etag"] == '"flow-1"'
+    # The counters carry on from version 1 and never repeat, so a tag read on version 1 can
+    # never match version 2.
+    assert body["flow_etag"] == '"flow-6"'
     assert body["allowed_steps"] == ["SUBMIT"]
     assert body["review_revision_id"] is None
     assert body["content"] == published["content"]
-    assert body["revision"] == 1
+    assert body["revision"] > published["revision"]
     decision = rows(
         owner_db,
         team,
@@ -362,7 +364,7 @@ def test_a_correction_is_a_new_draft_version_with_the_same_code(
         " WHERE step = 'START_CORRECTION' AND organization_id = :org",
     )
     assert [(r.from_state, r.to_state, r.flow_revision) for r in decision] == [
-        ("PUBLISHED", "DRAFT", 1)
+        ("PUBLISHED", "DRAFT", 6)
     ]
     assert str(decision[0].revision_id) == published["review_revision_id"]
     versions = rows(
@@ -397,6 +399,34 @@ def test_while_a_correction_is_open_everyone_else_still_reads_the_published_vers
         assert (read["version_number"], read["state"]) == (1, "PUBLISHED"), who
         assert read["content"] == published["content"]
         assert read["allowed_steps"] == []
+
+
+def test_a_tag_read_on_version_one_never_matches_version_two(
+    client: TestClient, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    """The mutation URLs name only the question, so a stale ``flow-N`` or ``rev-N`` from version 1
+    must not be accepted for version 2 (every counter carries on from the one before)."""
+    in_review = submit(client, team, start(client, team, ready_for(catalogue)))
+    at_qc = ok(act(client, team, "qc", in_review, "pass-qc"))
+    at_approved = ok(act(client, team, "approver", at_qc, "approve"))
+    first = ok(act(client, team, "publisher", at_approved, "publish"))
+    seen = [in_review, at_qc, at_approved, first]
+    correction = ok(act(client, team, "author", first, "start-correction"))
+    # A save with the working-copy tag of version 1 is refused as stale.
+    author = as_(client, team, "author")
+    for old in (first["revision"], in_review["revision"]):
+        stale_save = client.put(
+            f"{PATH}/{first['id']}/working-revision",
+            json={"content": correction["content"]},
+            headers={**author, "If-Match": f'"rev-{old}"'},
+        )
+        assert stale_save.status_code == 412, old
+    second = submit(client, team, correction)
+    for old in seen:
+        reply = act(client, team, "qc", second, "pass-qc", flow_etag=old["flow_etag"])
+        assert reply.status_code == 412, old["flow_etag"]
+        assert reply.json()["error"]["details"]["current_etag"] == second["flow_etag"]
+    assert act(client, team, "qc", second, "pass-qc").status_code == 200
 
 
 def test_only_one_correction_is_open_at_a_time(

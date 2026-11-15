@@ -994,11 +994,19 @@ def start_correction(
             details={"version_id": str(newest.id)},
         )
     source = _under_review(session, target)
+    # Both counters carry on from the version before and never repeat, because the URLs name only
+    # the question: a tag read on version 1 must never match version 2.
+    last_revision = session.scalar(
+        select(func.max(QuestionRevision.revision))
+        .join(QuestionVersion, QuestionRevision.version_id == QuestionVersion.id)
+        .where(QuestionVersion.master_id == master.id)
+    )
     version = QuestionVersion(
         id=new_id(),
         organization_id=master.organization_id,
         master_id=master.id,
         number=newest.number + 1,
+        flow_revision=target.flow_revision + 1,
     )
     session.add(version)
     session.flush()
@@ -1008,6 +1016,7 @@ def start_correction(
         number=1,
         content=copy.deepcopy(source.content),
         author_id=principal.user_id,
+        revision=(last_revision or 0) + 1,
     )
     session.add(revision)
     session.flush()
