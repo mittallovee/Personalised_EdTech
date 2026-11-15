@@ -1,6 +1,6 @@
 # M4 Design Note — Review & bank
 
-> Status: **Draft for owner approval** · Milestone M4 of Phase 1 ([phase plan](../product/02-phase-plan.md))
+> Status: **Approved by the owner on 2026-11-15** (PR #114) · Milestone M4 of Phase 1 ([phase plan](../product/02-phase-plan.md))
 > Requirements: E-01, E-02, E-04 to E-10, F-01 to F-03, D-12 (a correction is a new version), D-16 (exact and
 > fuzzy duplicate check), I-01 (in-app notifications for returned and published questions), I-03 (per-question
 > history) · Hardening items due with M4: K-07, K-08, K-16 (see §13)

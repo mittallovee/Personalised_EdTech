@@ -5,7 +5,7 @@ solve and verify them, and reviewed questions are published into a versioned, se
 tests and papers, student apps, live exams, analytics, courses and personalized AI teaching on the same API.
 
 **Status:** Phase 1, milestones M1 (foundation), M2 (identity & coaching admin) and M3 (question authoring) built; check them yourself with the [M1 demo](docs/operations/m1-demo.md), the [M2 demo](docs/operations/m2-demo.md) and the [M3 demo](docs/operations/m3-demo.md).
-Next: you check M3 and approve the M4 design note (review and bank). Designs: [M1](docs/architecture/m1-design-note.md), [M2](docs/architecture/m2-design-note.md), [M3](docs/architecture/m3-design-note.md), [M4 (draft)](docs/architecture/m4-design-note.md).
+Next: M4 (review and bank) is being built, starting with the workflow state machine; you check M3 with its demo. Designs: [M1](docs/architecture/m1-design-note.md), [M2](docs/architecture/m2-design-note.md), [M3](docs/architecture/m3-design-note.md), [M4 (approved)](docs/architecture/m4-design-note.md).
 
 ## Documentation
 - Start here: [`docs/README.md`](docs/README.md)
