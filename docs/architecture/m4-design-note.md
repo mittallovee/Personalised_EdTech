@@ -291,6 +291,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | Step | Change |
 |---|---|
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
+| Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
 | Bank index | `bank_index`, the `pg_trgm` extension, the indexes; backfilled by the reindex command, not by SQL |
 | Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
@@ -308,7 +309,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 
 New error codes (added to `error-codes.md` in the PR that introduces each): `WORKFLOW_STEP_INVALID` (409),
 `QUESTION_NOT_EDITABLE` (409), `QUESTION_HAS_ERRORS` (422, submit with `error` findings; added in 4a-2),
-`CORRECTION_ALREADY_OPEN` (409), `PUBLICATION_CHECKLIST_FAILED` (422, with the findings; added in 4a-3),
+`CORRECTION_ALREADY_OPEN` (409; added in 4a-4), `PUBLICATION_CHECKLIST_FAILED` (422, with the findings; added in 4a-3),
 `RETURN_REASON_REQUIRED` (422; added in 4a-3), `QC_BLOCKED_DUPLICATE` (409). Stale requests reuse `REVISION_STALE`
 (412) and `IF_MATCH_REQUIRED` (428).
 

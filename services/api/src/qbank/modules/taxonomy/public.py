@@ -45,3 +45,21 @@ def look_up(session: Session, ids: Iterable[UUID]) -> dict[UUID, CatalogueRef]:
     for source in session.scalars(select(Source).where(Source.id.in_(wanted))):
         found[source.id] = CatalogueRef("SOURCE", None, None, source.state)
     return found
+
+
+def names_of(session: Session, ids: Iterable[UUID]) -> dict[UUID, str]:
+    """The English name of each of ``ids`` that is in the caller's coaching (others are left out),
+    for a record that must keep how an item was called on a given day."""
+    wanted = set(ids)
+    names: dict[UUID, str] = {}
+    if not wanted:
+        return names
+    for node in session.scalars(select(TaxonomyNode).where(TaxonomyNode.id.in_(wanted))):
+        names[node.id] = node.name
+    for concept in session.scalars(select(Concept).where(Concept.id.in_(wanted))):
+        names[concept.id] = concept.name
+    for exam in session.scalars(select(Exam).where(Exam.id.in_(wanted))):
+        names[exam.id] = exam.name
+    for source in session.scalars(select(Source).where(Source.id.in_(wanted))):
+        names[source.id] = source.name
+    return names

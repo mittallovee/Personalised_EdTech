@@ -521,3 +521,72 @@ def approve_question(
         result = _out(view, principal)
     response.headers["ETag"] = etag(result.revision)
     return result
+
+
+@router.post(
+    "/{question_id}/publish",
+    summary="Publish the approved question",
+    description="Publishes the approved revision; from then on the version never changes. The"
+    " publication checklist is checked again, because the lists or limits may have changed since"
+    " QC (`PUBLICATION_CHECKLIST_FAILED`). The names of its labels are kept with the publication."
+    " Send the workflow ETag (`flow-N`) in `If-Match`.",
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_STEP, **_CHECKLIST},
+)
+def publish_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.publish(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/start-correction",
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a correction of a published question",
+    description="Starts the next version of the same question (same code) as a draft copy of the"
+    " published text. The published version stays what everyone reads until the new one is"
+    " published. Only one correction can be open (`CORRECTION_ALREADY_OPEN`, with"
+    " `details.version_id`). Send the published version's workflow ETag (`flow-N`) in `If-Match`.",
+    responses={
+        **_DENIED,
+        **_NOT_FOUND,
+        **_STALE,
+        409: {
+            "description": "The question is not published (`WORKFLOW_STEP_INVALID`), a correction"
+            " is already open (`CORRECTION_ALREADY_OPEN`), or it is archived (`QUESTION_ARCHIVED`)"
+        },
+    },
+)
+def start_correction_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.start_correction(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result

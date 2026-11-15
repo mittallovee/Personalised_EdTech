@@ -49,6 +49,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `QUESTION_HAS_ERRORS` | 422 | A question cannot be submitted while it has `error` findings (a mistake, not just something still to do); `details.findings` lists them | M4 |
 | `PUBLICATION_CHECKLIST_FAILED` | 422 | Pass QC and approve need a question with no `error` and no `incomplete` finding, checked against the coaching's lists and answer limits as they are now; `details.findings` lists each blocking item (`path`, `code`, `level`, `message`). Nothing moved, so the same `flow-N` still works for a return | M4 |
 | `RETURN_REASON_REQUIRED` | 422 | A return needs at least one reason from the list and a note of at least 10 characters (spaces around it do not count). An unknown reason or a note over 2,000 characters is a malformed request (400) | M4 |
+| `CORRECTION_ALREADY_OPEN` | 409 | A correction (the next version) of this published question is already open; only one at a time. `details.version_id` is the open version | M4 |
 | `CONTENT_TOO_LARGE` | 422 | A question's content is larger than the limit (256 KB by default), so it was not saved. (Gaps and mistakes *inside* content are findings, never this error) | M3 |
 | `CONTENT_NOT_JSON` | 422 | A question holds a value that is not plain data (for example a number that is not a number), so it was not saved | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in), too many syllabus import uploads in a short time, or the server is busy reading other import files; wait `Retry-After` seconds | M1 |

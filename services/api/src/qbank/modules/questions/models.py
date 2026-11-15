@@ -23,6 +23,9 @@ class QuestionMaster(Base):
     created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revision: Mapped[int] = mapped_column(default=1)
+    # The version readers see once something is published (migration 0027). A correction leaves it
+    # alone until that version is published too. Its foreign key is in the database only.
+    published_version_id: Mapped[UUID | None]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -78,6 +81,30 @@ class ReviewDecision(Base):
     note: Mapped[str | None]
     checklist: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PublishedVersion(Base):
+    """One publication (migration 0027): the label names as they were that day, and the hash of
+    the published text. Append-only: written, never changed."""
+
+    __tablename__ = "published_versions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "version_id"],
+            ["question_versions.organization_id", "question_versions.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    revision_id: Mapped[UUID]  # the frozen revision that was published
+    published_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    published_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    content_hash: Mapped[str] = mapped_column(String(64))
+    labels: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
 class QuestionRevision(Base):
