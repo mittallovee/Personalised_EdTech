@@ -133,7 +133,9 @@ hosting (K-06, K-16, K-19, M7), or give legal advice (K-15).
 
 ## 8. Open questions
 
-None blocking. M1 and M2 are built. Next: the owner checks M2 with the [M2 demo](../operations/m2-demo.md)
-(and, optionally, turns on Google login with its [setup guide](../operations/google-login.md)). The [M3 design note](../architecture/m3-design-note.md)
-(question authoring) is being built (the Syllabus screen is merged). The hardening track above
-(K-01 to K-05, then K-10) is built before the rest of M3.
+None blocking. M1, M2 and M3 are built. Next: the owner checks M3 with the [M3 demo](../operations/m3-demo.md)
+(and, if not yet done, M2 with the [M2 demo](../operations/m2-demo.md); Google login has its
+[setup guide](../operations/google-login.md)). M3's exit criterion (all nine formats: valid saves,
+invalid answers named) is covered by the tests listed in the M3 demo. Open owner items: choose the K-16
+backup destination (it must include the picture volume `assetdata`), and review the Dependabot PRs. Then
+M4 (review and bank) starts with its design note.

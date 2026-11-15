@@ -4,8 +4,8 @@ A multi-coaching platform where faculty create and import questions (PDF/Word/im
 solve and verify them, and reviewed questions are published into a versioned, searchable bank. Later phases add
 tests and papers, student apps, live exams, analytics, courses and personalized AI teaching on the same API.
 
-**Status:** Phase 1, milestones M1 (foundation) and M2 (identity & coaching admin) built; check them yourself with the [M1 demo](docs/operations/m1-demo.md) and the [M2 demo](docs/operations/m2-demo.md).
-Next: you check M2; the [M3 design note](docs/architecture/m3-design-note.md) (question authoring) awaits your approval. Designs: [M1](docs/architecture/m1-design-note.md), [M2](docs/architecture/m2-design-note.md).
+**Status:** Phase 1, milestones M1 (foundation), M2 (identity & coaching admin) and M3 (question authoring) built; check them yourself with the [M1 demo](docs/operations/m1-demo.md), the [M2 demo](docs/operations/m2-demo.md) and the [M3 demo](docs/operations/m3-demo.md).
+Next: you check M3; then M4 (review and bank). Designs: [M1](docs/architecture/m1-design-note.md), [M2](docs/architecture/m2-design-note.md), [M3](docs/architecture/m3-design-note.md).
 
 ## Documentation
 - Start here: [`docs/README.md`](docs/README.md)
@@ -53,6 +53,7 @@ Then view and test it:
 
 The full M1 walkthrough, with what each check proves, is in [`docs/operations/m1-demo.md`](docs/operations/m1-demo.md).
 To try creating a coaching, inviting faculty, roles, grants and the audit log, follow [`docs/operations/m2-demo.md`](docs/operations/m2-demo.md).
+To try the syllabus, writing questions in all nine formats, equations, pictures, passages and answer limits, follow [`docs/operations/m3-demo.md`](docs/operations/m3-demo.md).
 
 Useful addresses: API readiness http://localhost:8000/health/ready · API docs (local only)
 http://localhost:8000/api/docs. To open the app on your own domain, see
