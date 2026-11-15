@@ -116,6 +116,10 @@ A return needs one or more reasons from a fixed list and a written note (at leas
 stable codes so the web can show them and, later, count them: `ANSWER_WRONG`, `STATEMENT_UNCLEAR`,
 `OPTIONS_FLAWED`, `SOLUTION_WRONG`, `LABELS_WRONG`, `DIFFICULTY_OR_BLOOM_WRONG`, `DUPLICATE`, `FORMATTING`,
 `OTHER` (appendix; wording for you to approve). The note is plain text, shown as text, never as markup.
+Fewer than one reason or fewer than 10 characters (spaces around the note do not count) is `RETURN_REASON_REQUIRED`;
+a reason outside the list or a note over 2,000 characters is a malformed request. A returned question is the
+author's private work in progress again, so the reply to the reviewer shows the revision they just returned (the
+text they had in front of them), never the author's working copy.
 
 ### 4.4 The publication checklist (E-07)
 
@@ -125,8 +129,8 @@ only with **no `error` and no `incomplete` finding** (the "still to do" list alr
 subject, one chapter, one topic, primary concept, difficulty, Bloom, and exam and year when it is a past-year
 question). Warnings do not block; an item retired from the catalogue since the question was written is a
 warning (C-04). The solution stays optional. Publish **runs the check again inside its transaction**, because
-the catalogue or an answer limit may have changed since QC. The decision records the checklist result (the
-finding codes, which were none) as evidence.
+the catalogue or an answer limit may have changed since QC. The decision records the checklist result as evidence
+(`{"passed": true, "warnings": [finding codes]}`: a pass has no blocking finding, so only warnings can be listed).
 
 ### 4.5 Published means immutable (the exit criterion)
 
@@ -304,8 +308,8 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 
 New error codes (added to `error-codes.md` in the PR that introduces each): `WORKFLOW_STEP_INVALID` (409),
 `QUESTION_NOT_EDITABLE` (409), `QUESTION_HAS_ERRORS` (422, submit with `error` findings; added in 4a-2),
-`CORRECTION_ALREADY_OPEN` (409), `PUBLICATION_CHECKLIST_FAILED` (422, with the findings),
-`RETURN_REASON_REQUIRED` (422), `QC_BLOCKED_DUPLICATE` (409). Stale requests reuse `REVISION_STALE`
+`CORRECTION_ALREADY_OPEN` (409), `PUBLICATION_CHECKLIST_FAILED` (422, with the findings; added in 4a-3),
+`RETURN_REASON_REQUIRED` (422; added in 4a-3), `QC_BLOCKED_DUPLICATE` (409). Stale requests reuse `REVISION_STALE`
 (412) and `IF_MATCH_REQUIRED` (428).
 
 ## 11. Web

@@ -37,6 +37,7 @@ from qbank.modules.questions.context_checks import check_pin, passage_pin
 from qbank.modules.questions.domain.workflow import (
     EDITABLE_STATES,
     PRIVATE_STATES,
+    ReturnReason,
     State,
     Step,
     Transition,
@@ -521,9 +522,15 @@ def _move(
     review_revision_id: UUID | None,
     audit_action: str,
     request_id: str | None,
+    reasons: list[str] | None = None,
+    note: str | None = None,
+    checklist: dict[str, Any] | None = None,
 ) -> None:
     """Take the step: change the state, raise the workflow ETag, and write the decision and the
-    audit event in the same transaction. The database trigger checks the pair again."""
+    audit event in the same transaction. The database trigger checks the pair again.
+
+    ``reasons`` and ``note`` belong to a return; ``checklist`` is the evidence kept for a step that
+    needed the publication checklist."""
     from_state = version.state
     version.state = transition.result.value
     version.flow_revision += 1
@@ -540,7 +547,9 @@ def _move(
             to_state=version.state,
             flow_revision=version.flow_revision,
             actor_id=principal.user_id,
-            reasons=[],
+            reasons=reasons or [],
+            note=note,
+            checklist=checklist,
         )
     )
     session.flush()
@@ -559,6 +568,7 @@ def _move(
             "state": version.state,
             "version_number": version.number,
             "revision_id": str(revision_id),
+            **({"reasons": reasons} if reasons else {}),
         },
     )
 
@@ -722,3 +732,172 @@ def set_archived(
             after={"code": master.code},
         )
     return _load(session, master, rules)
+
+
+# --- Return, pass QC and approve (M4 design note 4.3 and 4.4) ----------------------------------
+
+
+MIN_NOTE = 10  # characters, after the spaces around it are removed (design note 4.3)
+_BLOCKING = frozenset({Level.ERROR, Level.INCOMPLETE})
+
+
+def _under_review(session: Session, version: QuestionVersion) -> QuestionRevision:
+    reviewed = (
+        session.get(QuestionRevision, version.review_revision_id)
+        if version.review_revision_id is not None
+        else None
+    )
+    if reviewed is None:  # the database already guarantees this for a state that is under review
+        raise Conflict("This question has nothing under review.", code="WORKFLOW_STEP_INVALID")
+    return reviewed
+
+
+def _publication_checklist(
+    session: Session, reviewed: QuestionRevision, rules: Rules
+) -> tuple[list[Finding], dict[str, Any]]:
+    """The checklist (E-07) is the findings engine run on the frozen review revision, against the
+    coaching's catalogue and answer limits as they are now. Anything that is an ``error`` or still
+    to do blocks; a warning does not. Returns all the findings and the evidence to keep."""
+    found = _findings(session, reviewed.content, rules)
+    blocking = [f for f in found if f.level in _BLOCKING]
+    if blocking:
+        raise ValidationFailed(
+            "This question does not meet the publication checklist yet.",
+            code="PUBLICATION_CHECKLIST_FAILED",
+            details={
+                "findings": [
+                    {"path": f.path, "code": f.code, "level": f.level.value, "message": f.message}
+                    for f in blocking
+                ]
+            },
+        )
+    warnings = [f.code for f in found if f.level == Level.WARNING]
+    return found, {"passed": True, "warnings": warnings}
+
+
+def _checked_step(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    step: Step,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    audit_action: str,
+    rules: Rules,
+) -> QuestionView:
+    """Pass QC or approve: the same frozen revision moves on, but only with a complete checklist."""
+    require(principal, Action.CREATE_QUESTIONS)
+    master, version, working = _lock(session, principal, question_id)
+    require_flow_if_match(if_match, version.flow_revision)
+    transition = _require_step(principal, master, version, step)
+    reviewed = _under_review(session, version)
+    found, checklist = _publication_checklist(session, reviewed, rules)
+    _move(
+        session,
+        principal,
+        master,
+        version,
+        transition,
+        revision_id=reviewed.id,
+        review_revision_id=reviewed.id,
+        audit_action=audit_action,
+        request_id=request_id,
+        checklist=checklist,
+    )
+    return QuestionView(master, version, working, found, reviewed)
+
+
+def pass_qc(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Quality control passes the frozen revision (E-01, E-07). ``if_match`` is ``"flow-N"``."""
+    return _checked_step(
+        session,
+        principal,
+        question_id,
+        Step.PASS_QC,
+        if_match=if_match,
+        request_id=request_id,
+        audit_action="QUESTION_QC_PASSED",
+        rules=rules,
+    )
+
+
+def approve(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Approval of the revision QC passed; the checklist is checked again (E-07)."""
+    return _checked_step(
+        session,
+        principal,
+        question_id,
+        Step.APPROVE,
+        if_match=if_match,
+        request_id=request_id,
+        audit_action="QUESTION_APPROVED",
+        rules=rules,
+    )
+
+
+def _clean_reasons(reasons: list[ReturnReason], note: str) -> tuple[list[str], str]:
+    """The reasons (each once, in the order given) and the note without the spaces around it."""
+    kept = list(dict.fromkeys(reason.value for reason in reasons))
+    text = note.strip()
+    if not kept or len(text) < MIN_NOTE:
+        raise ValidationFailed(
+            f"Choose at least one reason and write a note of at least {MIN_NOTE} characters.",
+            code="RETURN_REASON_REQUIRED",
+        )
+    return kept, text
+
+
+def return_question(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    reasons: list[ReturnReason],
+    note: str,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Send a question back to its author with reasons and a note (E-06).
+
+    It becomes the author's work in progress again, so the reply shows the revision that was
+    returned, the text the reviewer had in front of them, not the author's working copy.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    master, version, working = _lock(session, principal, question_id)
+    require_flow_if_match(if_match, version.flow_revision)
+    transition = _require_step(principal, master, version, Step.RETURN)
+    kept, text = _clean_reasons(reasons, note)
+    reviewed = _under_review(session, version)
+    _move(
+        session,
+        principal,
+        master,
+        version,
+        transition,
+        revision_id=reviewed.id,
+        review_revision_id=None,
+        audit_action="QUESTION_RETURNED",
+        request_id=request_id,
+        reasons=kept,
+        note=text,
+    )
+    found = _findings(session, reviewed.content, rules)
+    return QuestionView(master, version, working, found, reviewed)
