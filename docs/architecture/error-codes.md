@@ -44,6 +44,9 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `IMPORT_STALE` | 409 | The syllabus changed after an import preview was made (or something it would add appeared meanwhile), so it was not applied; upload the file again | M3 |
 | `INVALID_CODE` | 422 | A typed question code is not 8 letters and digits of the code alphabet (lower case, spaces and dashes are forgiven; O reads as 0, I and L as 1) | M3 |
 | `QUESTION_ARCHIVED` | 409 | The question is archived, so it cannot be saved or checkpointed until it is restored | M3 |
+| `QUESTION_NOT_EDITABLE` | 409 | The question is in review (submitted, passed QC or approved) or published, so its content cannot be saved or checkpointed; withdraw it first. `details.state` names the state | M4 |
+| `WORKFLOW_STEP_INVALID` | 409 | The question's state does not allow this step (for example approving a question that has not passed QC). `details.state` is where it is, `details.allowed` the steps it allows. Checked after `If-Match`, so a stale screen gets `REVISION_STALE` first | M4 |
+| `QUESTION_HAS_ERRORS` | 422 | A question cannot be submitted while it has `error` findings (a mistake, not just something still to do); `details.findings` lists them | M4 |
 | `CONTENT_TOO_LARGE` | 422 | A question's content is larger than the limit (256 KB by default), so it was not saved. (Gaps and mistakes *inside* content are findings, never this error) | M3 |
 | `CONTENT_NOT_JSON` | 422 | A question holds a value that is not plain data (for example a number that is not a number), so it was not saved | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in), too many syllabus import uploads in a short time, or the server is busy reading other import files; wait `Retry-After` seconds | M1 |

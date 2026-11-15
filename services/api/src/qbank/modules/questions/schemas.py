@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from qbank.core.pagination import PageInfo
+from qbank.modules.questions.domain.workflow import State, Step
 from qbank.modules.questions.findings import Level
 
 
@@ -47,6 +48,18 @@ class QuestionOut(BaseModel):
     code: str = Field(description="The permanent 8-character code, never reused.")
     version_number: int
     revision: int = Field(description="Also the ETag of the working revision.")
+    state: State = Field(description="Where the version is in the review workflow.")
+    flow_etag: str = Field(
+        description='The workflow ETag, e.g. `"flow-3"`: send it in `If-Match` for every step'
+        " after submit. It moves with every change of state."
+    )
+    allowed_steps: list[Step] = Field(
+        description="The steps you may take now. The screen shows exactly these."
+    )
+    review_revision_id: UUID | None = Field(
+        description="The frozen revision under review, shown instead of the working copy;"
+        " null while the question is a draft or returned."
+    )
     archived: bool
     created_by: UUID
     created_at: datetime

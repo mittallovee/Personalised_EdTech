@@ -106,8 +106,9 @@ repeats the allowed pairs, so a bug in code cannot publish something that skippe
   second request gets `412 REVISION_STALE` with the current ETag, and the screen reloads. The ETag for the
   working text (`"rev-N"`, M3) is a different value space, so the two cannot be mixed up. Submit uses the
   working text's ETag, like *Save checkpoint*.
-- Each step locks the version row (`SELECT … FOR UPDATE`) and rechecks state and review revision inside the
-  transaction, so two simultaneous requests cannot both succeed.
+- Each step locks the question (`SELECT … FOR UPDATE`) and rechecks state and review revision inside the
+  transaction, so two simultaneous requests cannot both succeed. The `If-Match` is checked **before** the
+  state, so a screen that read an older state hears "changed, reload" (412) rather than "step invalid" (409).
 
 ### 4.3 Reasons for return (E-06)
 
@@ -302,8 +303,9 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
 
 New error codes (added to `error-codes.md` in the PR that introduces each): `WORKFLOW_STEP_INVALID` (409),
-`QUESTION_NOT_EDITABLE` (409), `CORRECTION_ALREADY_OPEN` (409), `PUBLICATION_CHECKLIST_FAILED` (422, with the
-findings), `RETURN_REASON_REQUIRED` (422), `QC_BLOCKED_DUPLICATE` (409). Stale requests reuse `REVISION_STALE`
+`QUESTION_NOT_EDITABLE` (409), `QUESTION_HAS_ERRORS` (422, submit with `error` findings; added in 4a-2),
+`CORRECTION_ALREADY_OPEN` (409), `PUBLICATION_CHECKLIST_FAILED` (422, with the findings),
+`RETURN_REASON_REQUIRED` (422), `QC_BLOCKED_DUPLICATE` (409). Stale requests reuse `REVISION_STALE`
 (412) and `IF_MATCH_REQUIRED` (428).
 
 ## 11. Web

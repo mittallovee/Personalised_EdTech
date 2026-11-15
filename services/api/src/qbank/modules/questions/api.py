@@ -5,12 +5,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
-from qbank.core.auth import CurrentPrincipal
+from qbank.core.auth import CurrentPrincipal, Principal
 from qbank.core.db import Database, get_database
-from qbank.core.etag import IfMatchHeader, etag
+from qbank.core.etag import IfMatchHeader, etag, flow_etag
 from qbank.core.idempotency import IdempotencyKeyHeader
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo, decode_cursor, encode_cursor
 from qbank.modules.questions import service
+from qbank.modules.questions.domain.workflow import State
 from qbank.modules.questions.findings import Level
 from qbank.modules.questions.schemas import (
     CreateQuestion,
@@ -41,22 +42,35 @@ _STALE: dict[int | str, dict[str, Any]] = {
     428: {"description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)"},
 }
 _ARCHIVED: dict[int | str, dict[str, Any]] = {
-    409: {"description": "The question is archived (`QUESTION_ARCHIVED`)"}
+    409: {
+        "description": "The question is archived (`QUESTION_ARCHIVED`), or it is in review or"
+        " published, so its content cannot be changed (`QUESTION_NOT_EDITABLE`; withdraw it first)"
+    }
+}
+_STEP: dict[int | str, dict[str, Any]] = {
+    409: {
+        "description": "The question's state does not allow this step (`WORKFLOW_STEP_INVALID`,"
+        " with `details.state` and `details.allowed`), or it is archived (`QUESTION_ARCHIVED`)"
+    }
 }
 _MAX_CURSOR_LENGTH = 200
 
 
-def _out(view: service.QuestionView) -> QuestionOut:
+def _out(view: service.QuestionView, principal: Principal) -> QuestionOut:
     return QuestionOut(
         id=view.master.id,
         code=view.master.code,
         version_number=view.version.number,
         revision=view.revision.revision,
+        state=State(view.version.state),
+        flow_etag=flow_etag(view.version.flow_revision),
+        allowed_steps=service.steps_for(principal, view),
+        review_revision_id=view.version.review_revision_id,
         archived=view.master.archived_at is not None,
         created_by=view.master.created_by,
         created_at=view.master.created_at,
         updated_at=view.revision.updated_at,
-        content=view.revision.content,
+        content=view.shown.content,
         findings=[
             FindingOut(path=f.path, code=f.code, level=f.level, message=f.message)
             for f in view.findings
@@ -126,7 +140,7 @@ def create_question(
             idempotency_key=idempotency_key,
             request_id=request.state.request_id,
         )
-        result = _out(view)
+        result = _out(view, principal)
     response.headers["Location"] = f"{router.prefix}/{result.id}"
     response.headers["ETag"] = etag(result.revision)
     return result
@@ -176,7 +190,7 @@ def get_question_by_code(
     database: Annotated[Database, Depends(get_database)],
 ) -> QuestionOut:
     with database.transaction(principal.tenant_context) as session:
-        result = _out(service.get_question_by_code(session, principal, code))
+        result = _out(service.get_question_by_code(session, principal, code), principal)
     response.headers["ETag"] = etag(result.revision)
     return result
 
@@ -194,7 +208,7 @@ def get_question(
     database: Annotated[Database, Depends(get_database)],
 ) -> QuestionOut:
     with database.transaction(principal.tenant_context) as session:
-        result = _out(service.get_question(session, principal, question_id))
+        result = _out(service.get_question(session, principal, question_id), principal)
     response.headers["ETag"] = etag(result.revision)
     return result
 
@@ -219,7 +233,7 @@ def save_working_revision(
         view = service.save_working_revision(
             session, principal, question_id, body.content, if_match=if_match
         )
-        result = _out(view)
+        result = _out(view, principal)
     response.headers["ETag"] = etag(result.revision)
     return result
 
@@ -249,7 +263,7 @@ def save_checkpoint(
             if_match=if_match,
             request_id=request.state.request_id,
         )
-        result = _out(view)
+        result = _out(view, principal)
     response.headers["Location"] = f"{router.prefix}/{question_id}/revisions/{frozen_number}"
     response.headers["ETag"] = etag(result.revision)
     return result
@@ -290,7 +304,7 @@ def get_revision(
         return RevisionOut(
             **_revision_summary(view.version.number, view.revision).model_dump(),
             content=view.revision.content,
-            findings=_out(view).findings,
+            findings=_out(view, principal).findings,
         )
 
 
@@ -312,7 +326,7 @@ def archive_question(
         view = service.set_archived(
             session, principal, question_id, True, request_id=request.state.request_id
         )
-        result = _out(view)
+        result = _out(view, principal)
     response.headers["ETag"] = etag(result.revision)
     return result
 
@@ -334,6 +348,72 @@ def restore_question(
         view = service.set_archived(
             session, principal, question_id, False, request_id=request.state.request_id
         )
-        result = _out(view)
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/submit",
+    summary="Send the question for review",
+    description="Freezes the working revision as the one under review and makes the question"
+    " readable by every member of the coaching. Send the working revision's ETag (`rev-N`) in"
+    " `If-Match`. Things still to do are allowed; mistakes (`error` findings) are refused with"
+    " `QUESTION_HAS_ERRORS`. The editor is read-only until the question is withdrawn.",
+    responses={
+        **_DENIED,
+        **_NOT_FOUND,
+        **_STALE,
+        **_STEP,
+        422: {
+            "description": "The question has mistakes (`QUESTION_HAS_ERRORS`, with the findings)"
+        },
+    },
+)
+def submit_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.submit(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
+    response.headers["ETag"] = etag(result.revision)
+    return result
+
+
+@router.post(
+    "/{question_id}/withdraw",
+    summary="Take the question back from review to edit it",
+    description="From in review, passed QC or approved, back to draft. The decisions so far stay in"
+    " the history. Send the workflow ETag (`flow-N`, from the question) in `If-Match`.",
+    responses={**_DENIED, **_NOT_FOUND, **_STALE, **_STEP},
+)
+def withdraw_question(
+    question_id: UUID,
+    principal: CurrentPrincipal,
+    request: Request,
+    response: Response,
+    database: Annotated[Database, Depends(get_database)],
+    if_match: Annotated[str | None, IfMatchHeader] = None,
+) -> QuestionOut:
+    with database.transaction(principal.tenant_context) as session:
+        view = service.withdraw(
+            session,
+            principal,
+            question_id,
+            if_match=if_match,
+            request_id=request.state.request_id,
+        )
+        result = _out(view, principal)
     response.headers["ETag"] = etag(result.revision)
     return result

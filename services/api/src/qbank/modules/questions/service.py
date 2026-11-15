@@ -19,11 +19,12 @@ from sqlalchemy.orm import Session, aliased
 from qbank.core.auth import Principal
 from qbank.core.codes import normalize_code, reserve_code
 from qbank.core.errors import Conflict, NotFound, PermissionDenied, ValidationFailed
-from qbank.core.etag import require_if_match
+from qbank.core.etag import require_flow_if_match, require_if_match
 from qbank.core.idempotency import claim
 from qbank.core.ids import new_id
 from qbank.core.permissions import (
     Action,
+    is_allowed,
     may_access_all_drafts,
     may_access_draft,
     may_archive_draft,
@@ -33,13 +34,24 @@ from qbank.modules.assets.public import existing_image_ids
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalogue
 from qbank.modules.questions.context_checks import check_pin, passage_pin
-from qbank.modules.questions.findings import Finding
+from qbank.modules.questions.domain.workflow import (
+    EDITABLE_STATES,
+    PRIVATE_STATES,
+    State,
+    Step,
+    Transition,
+    allowed_steps,
+    find_transition,
+)
+from qbank.modules.questions.domain.workflow_access import may_take_step
+from qbank.modules.questions.findings import Finding, Level
 from qbank.modules.questions.image_checks import check_images, image_ids
 from qbank.modules.questions.limits import effective_rules, exam_of
 from qbank.modules.questions.models import (
     QuestionMaster,
     QuestionRevision,
     QuestionVersion,
+    ReviewDecision,
     RevisionAsset,
 )
 from qbank.modules.questions.passage_lookup import checkpoint_ids
@@ -51,15 +63,27 @@ from qbank.modules.taxonomy.public import look_up
 
 ENTITY_TYPE = "question"
 
+_PRIVATE = frozenset(state.value for state in PRIVATE_STATES)
+_EDITABLE = frozenset(state.value for state in EDITABLE_STATES)
+
 
 @dataclass(frozen=True, slots=True)
 class QuestionView:
-    """A question as read: its master, current version, working revision and the findings."""
+    """A question as read: its master, current version, working revision and the findings.
+
+    While a version is in review, ``review_revision`` is the frozen revision the reviewers act on;
+    what is shown and the findings are those of that revision, never of a working copy.
+    """
 
     master: QuestionMaster
     version: QuestionVersion
     revision: QuestionRevision
     findings: list[Finding]
+    review_revision: QuestionRevision | None = None
+
+    @property
+    def shown(self) -> QuestionRevision:
+        return self.review_revision or self.revision
 
 
 def _organization_id(principal: Principal) -> UUID:
@@ -221,18 +245,43 @@ def _open(
     master: QuestionMaster | None,
     rules: Rules = DEFAULT_RULES,
 ) -> QuestionView:
-    return _load(session, _visible(principal, master), rules)
+    """Open one question. From submit on, every member may read it (M4 section 5); work in
+    progress (a draft or a returned question) stays with its author, admins and the edit-others
+    grant, and to anyone else it is "not found"."""
+    if master is None or not is_allowed(principal, Action.CREATE_QUESTIONS):
+        raise NotFound("No such question.")
+    return _load(
+        session, master, rules, include_private=may_access_draft(principal, master.created_by)
+    )
 
 
-def _load(session: Session, master: QuestionMaster, rules: Rules = DEFAULT_RULES) -> QuestionView:
-    version, revision = session.execute(
+def _load(
+    session: Session,
+    master: QuestionMaster,
+    rules: Rules = DEFAULT_RULES,
+    *,
+    include_private: bool = True,
+) -> QuestionView:
+    query = (
         select(QuestionVersion, QuestionRevision)
         .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
         .where(QuestionVersion.master_id == master.id, QuestionRevision.frozen_at.is_(None))
         .order_by(QuestionVersion.number.desc())
         .limit(1)
-    ).one()
-    return QuestionView(master, version, revision, _findings(session, revision.content, rules))
+    )
+    if not include_private:
+        query = query.where(QuestionVersion.state.not_in(_PRIVATE))
+    row = session.execute(query).first()
+    if row is None:
+        raise NotFound("No such question.")
+    version, revision = row
+    reviewed = (
+        session.get(QuestionRevision, version.review_revision_id)
+        if version.review_revision_id is not None
+        else None
+    )
+    findings = _findings(session, (reviewed or revision).content, rules)
+    return QuestionView(master, version, revision, findings, reviewed)
 
 
 def list_questions(
@@ -285,22 +334,20 @@ def list_questions(
 # --- Changing the working revision -----------------------------------------------------------
 
 
-def _lock_for_change(
+def _lock(
     session: Session, principal: Principal, question_id: UUID
 ) -> tuple[QuestionMaster, QuestionVersion, QuestionRevision]:
-    """The question and its working revision, locked so two saves cannot interleave.
+    """The question, its newest version and that version's working revision, locked so two
+    changes (saves or workflow steps) cannot interleave: every writer locks the master first.
 
-    Someone else's draft is "not found". An archived question cannot be changed.
+    Work in progress that is someone else's is "not found"; submitted work is readable by every
+    member. An archived question cannot be changed.
     """
     master = session.scalars(
         select(QuestionMaster).where(QuestionMaster.id == question_id).with_for_update()
     ).first()
-    if master is None or not may_access_draft(principal, master.created_by):
+    if master is None or not is_allowed(principal, Action.CREATE_QUESTIONS):
         raise NotFound("No such question.")
-    if master.archived_at is not None:
-        raise Conflict(
-            "This question is archived. Restore it to change it.", code="QUESTION_ARCHIVED"
-        )
     version, revision = session.execute(
         select(QuestionVersion, QuestionRevision)
         .join(QuestionRevision, QuestionRevision.version_id == QuestionVersion.id)
@@ -309,6 +356,28 @@ def _lock_for_change(
         .limit(1)
         .with_for_update(of=QuestionRevision)
     ).one()
+    if version.state in _PRIVATE and not may_access_draft(principal, master.created_by):
+        raise NotFound("No such question.")
+    if master.archived_at is not None:
+        raise Conflict(
+            "This question is archived. Restore it to change it.", code="QUESTION_ARCHIVED"
+        )
+    return master, version, revision
+
+
+def _lock_for_change(
+    session: Session, principal: Principal, question_id: UUID
+) -> tuple[QuestionMaster, QuestionVersion, QuestionRevision]:
+    """``_lock`` for a change to the content: only editable work in progress may be saved."""
+    master, version, revision = _lock(session, principal, question_id)
+    if not may_access_draft(principal, master.created_by):
+        raise NotFound("No such question.")
+    if version.state not in _EDITABLE:
+        raise Conflict(
+            "This question is in review or published, so it cannot be edited. Withdraw it first.",
+            code="QUESTION_NOT_EDITABLE",
+            details={"state": version.state},
+        )
     return master, version, revision
 
 
@@ -342,6 +411,34 @@ def content_hash(content: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _freeze_working(
+    session: Session,
+    principal: Principal,
+    master: QuestionMaster,
+    version: QuestionVersion,
+    revision: QuestionRevision,
+) -> QuestionRevision:
+    """Freeze the working revision (with a hash of its content) and start a new working revision
+    as a copy of it. Returns the new one; its ETag continues the old one's count, so a tab that
+    still holds the old ETag can never match it."""
+    revision.content_hash = content_hash(revision.content)
+    revision.frozen_at = datetime.now(UTC)
+    session.flush()  # frozen first: a version has only one working revision at a time
+    fresh = QuestionRevision(
+        id=new_id(),
+        organization_id=master.organization_id,
+        version_id=version.id,
+        number=revision.number + 1,
+        content=copy.deepcopy(revision.content),
+        author_id=principal.user_id,
+        revision=revision.revision + 1,
+    )
+    session.add(fresh)
+    session.flush()
+    _record_pictures(session, fresh)
+    return fresh
+
+
 def checkpoint(
     session: Session,
     principal: Principal,
@@ -359,22 +456,7 @@ def checkpoint(
     require(principal, Action.CREATE_QUESTIONS)
     master, version, revision = _lock_for_change(session, principal, question_id)
     require_if_match(if_match, revision.revision)
-    now = datetime.now(UTC)
-    revision.content_hash = content_hash(revision.content)
-    revision.frozen_at = now
-    session.flush()  # frozen first: a version has only one working revision at a time
-    fresh = QuestionRevision(
-        id=new_id(),
-        organization_id=master.organization_id,
-        version_id=version.id,
-        number=revision.number + 1,
-        content=copy.deepcopy(revision.content),
-        author_id=principal.user_id,
-        revision=revision.revision + 1,
-    )
-    session.add(fresh)
-    session.flush()
-    _record_pictures(session, fresh)
+    fresh = _freeze_working(session, principal, master, version, revision)
     record_event(
         session,
         action="QUESTION_CHECKPOINTED",
@@ -388,6 +470,176 @@ def checkpoint(
     )
     view = QuestionView(master, version, fresh, _findings(session, fresh.content, rules))
     return view, revision.number
+
+
+# --- Workflow steps (M4 design note section 4, ADR-0020) ---------------------------------------
+
+
+def steps_for(principal: Principal, view: QuestionView) -> list[Step]:
+    """The steps this person may take now. The web shows exactly these and holds no rules."""
+    if view.master.archived_at is not None:
+        return []
+    state = State(view.version.state)
+    return [
+        step
+        for step in allowed_steps(state)
+        if may_take_step(principal, state, step, author_id=view.master.created_by)
+    ]
+
+
+def _require_step(
+    principal: Principal, master: QuestionMaster, version: QuestionVersion, step: Step
+) -> Transition:
+    """The transition if the version's state allows the step and this person may take it.
+
+    The caller has already checked ``If-Match``, so a person who read an older state hears
+    "changed, reload" (412) before anything else. After that, the state is told first (409):
+    anyone who got this far may read the question, so it gives nothing away. A step the person
+    may not take is 403.
+    """
+    state = State(version.state)
+    transition = find_transition(state, step)
+    if transition is None:
+        raise Conflict(
+            f"A question that is {state.value.lower().replace('_', ' ')} cannot take that step.",
+            code="WORKFLOW_STEP_INVALID",
+            details={"state": state.value, "allowed": [s.value for s in allowed_steps(state)]},
+        )
+    if not may_take_step(principal, state, step, author_id=master.created_by):
+        raise PermissionDenied("You don't have permission to do this.")
+    return transition
+
+
+def _move(
+    session: Session,
+    principal: Principal,
+    master: QuestionMaster,
+    version: QuestionVersion,
+    transition: Transition,
+    *,
+    revision_id: UUID,
+    review_revision_id: UUID | None,
+    audit_action: str,
+    request_id: str | None,
+) -> None:
+    """Take the step: change the state, raise the workflow ETag, and write the decision and the
+    audit event in the same transaction. The database trigger checks the pair again."""
+    from_state = version.state
+    version.state = transition.result.value
+    version.flow_revision += 1
+    version.review_revision_id = review_revision_id
+    version.state_changed_at = datetime.now(UTC)
+    session.flush()
+    session.add(
+        ReviewDecision(
+            organization_id=master.organization_id,
+            version_id=version.id,
+            revision_id=revision_id,
+            step=transition.step.value,
+            from_state=from_state,
+            to_state=version.state,
+            flow_revision=version.flow_revision,
+            actor_id=principal.user_id,
+            reasons=[],
+        )
+    )
+    session.flush()
+    record_event(
+        session,
+        action=audit_action,
+        entity_type=ENTITY_TYPE,
+        entity_id=master.id,
+        organization_id=master.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=principal.acting_organization_id is not None,
+        request_id=request_id,
+        before={"state": from_state},
+        after={
+            "code": master.code,
+            "state": version.state,
+            "version_number": version.number,
+            "revision_id": str(revision_id),
+        },
+    )
+
+
+def submit(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Send the working revision for review (E-01).
+
+    It is frozen as the review revision; reviewers act on that text, never on a working copy, and
+    the editor stays read-only until a withdraw. Gaps ("still to do") are allowed; mistakes
+    (``error`` findings) are not. ``if_match`` is the working revision's ETag, as for a checkpoint.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    master, version, working = _lock(session, principal, question_id)
+    require_if_match(if_match, working.revision)
+    transition = _require_step(principal, master, version, Step.SUBMIT)
+    found = _findings(session, working.content, rules)
+    errors = [f for f in found if f.level == Level.ERROR]
+    if errors:
+        raise ValidationFailed(
+            "Fix the mistakes in this question before sending it for review.",
+            code="QUESTION_HAS_ERRORS",
+            details={
+                "findings": [
+                    {"path": f.path, "code": f.code, "level": f.level.value, "message": f.message}
+                    for f in errors
+                ]
+            },
+        )
+    fresh = _freeze_working(session, principal, master, version, working)
+    _move(
+        session,
+        principal,
+        master,
+        version,
+        transition,
+        revision_id=working.id,
+        review_revision_id=working.id,
+        audit_action="QUESTION_SUBMITTED",
+        request_id=request_id,
+    )
+    return QuestionView(master, version, fresh, found, working)
+
+
+def withdraw(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Take a question back from review so it can be edited again (decision 2). The decisions
+    so far stay in the history. ``if_match`` is the workflow ETag (``"flow-N"``)."""
+    require(principal, Action.CREATE_QUESTIONS)
+    master, version, working = _lock(session, principal, question_id)
+    require_flow_if_match(if_match, version.flow_revision)
+    transition = _require_step(principal, master, version, Step.WITHDRAW)
+    reviewed = version.review_revision_id
+    if reviewed is None:  # the database already guarantees this for a state that can be withdrawn
+        raise Conflict("This question has nothing under review.", code="WORKFLOW_STEP_INVALID")
+    _move(
+        session,
+        principal,
+        master,
+        version,
+        transition,
+        revision_id=reviewed,
+        review_revision_id=None,
+        audit_action="QUESTION_WITHDRAWN",
+        request_id=request_id,
+    )
+    return QuestionView(master, version, working, _findings(session, working.content, rules))
 
 
 # --- History ---------------------------------------------------------------------------------

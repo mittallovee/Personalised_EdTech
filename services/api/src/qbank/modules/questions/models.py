@@ -41,6 +41,42 @@ class QuestionVersion(Base):
     organization_id: Mapped[UUID]
     master_id: Mapped[UUID]
     number: Mapped[int]
+    # The review workflow (migration 0026, M4 design note §4). ``state`` moves only along the pairs
+    # of ``domain/workflow.py``, which a database trigger repeats; ``flow_revision`` is the number
+    # in the workflow ETag ("flow-N"). The foreign key from ``review_revision_id`` to the revision
+    # under review is in the database only: the two tables point at each other.
+    state: Mapped[str] = mapped_column(String(20), default="DRAFT", server_default="DRAFT")
+    flow_revision: Mapped[int] = mapped_column(default=1, server_default="1")
+    review_revision_id: Mapped[UUID | None]
+    state_changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReviewDecision(Base):
+    """One step taken on a version (migration 0026). Append-only: written, never changed."""
+
+    __tablename__ = "review_decisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "version_id"],
+            ["question_versions.organization_id", "question_versions.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    revision_id: Mapped[UUID]  # the frozen revision the step was taken on
+    step: Mapped[str] = mapped_column(String(20))
+    from_state: Mapped[str] = mapped_column(String(20))
+    to_state: Mapped[str] = mapped_column(String(20))
+    flow_revision: Mapped[int]  # the workflow revision the version had after the step
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    reasons: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    note: Mapped[str | None]
+    checklist: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
