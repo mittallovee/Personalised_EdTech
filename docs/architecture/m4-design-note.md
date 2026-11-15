@@ -158,8 +158,8 @@ submit of each child that should use it.
 | Return / pass QC | No | `QC` | Yes | Acting |
 | Approve (and return from QC_PASSED) | No | `APPROVE` | Yes | Acting |
 | Publish (and return from APPROVED) | No | `PUBLISH` | Yes | Acting |
-| **Read** a question that is IN_REVIEW or later, and the bank | **Yes, every member** | | Yes | Acting |
-| Read a DRAFT or CHANGES_REQUESTED question | Own | `EDIT_OTHERS`: any | Any | Acting |
+| **Read** a version that is IN_REVIEW or later (or PUBLISHED), and the bank | **Yes, every member** | | Yes | Acting |
+| Read a version that is DRAFT or CHANGES_REQUESTED (including an open correction of a published question) | Own | `EDIT_OTHERS`: any | Any | Acting |
 | Archive / restore (any state) | Own | | Any (`ARCHIVE_ANY_QUESTION`) | Acting |
 | See the review queue and counts | Those holding at least one of QC, APPROVE, PUBLISH | | Yes | Acting |
 | See a question's history | Anyone who can read the question | | Yes | Acting |
@@ -263,15 +263,19 @@ coaching, needed after a bug fix or a change to what is indexed).
 ## 8. Diff and history (E-08, E-09)
 
 - **Diff** (`GET /questions/{id}/diff?from=<revision>&to=<revision>`): both revisions must belong to this
-  question (any version of it). The server compares them field by field (format, stem blocks, each option,
+  question, and **each is checked on its own** against the visibility rule of its version (§5): access to the
+  question or to its published version is not access to a private correction. A revision of a version the caller
+  may not read answers 404, as if it did not exist. The server compares them field by field (format, stem blocks, each option,
   answer, solution, each label) and returns a list of changes. Changed prose carries **word-level segments**
   (`equal` / `insert` / `delete`), equations and pictures count as single items, so an edited equation shows
   as *removed old / added new*. The web draws segments as text with marks; no content is ever turned into
-  HTML. Default pair: the published version against the open correction.
+  HTML. Default pair: the published version against the open correction, offered only to someone who may read
+  both; anyone else gets the published version's own checkpoints and no mention of the correction.
 - **History** (`GET /questions/{id}/history`): one timeline merging checkpoints, review decisions (submit,
   return with reasons and note, pass QC, approve, publish, withdraw), archive and restore, and the start of
-  a correction, each with who and when. It is read from the question's own tables, so any member who can read
-  the question sees it; the coaching-wide audit log stays for admins (I-03).
+  a correction, each with who and when. It is read from the question's own tables, and each entry is shown only if
+  the caller may read the version it belongs to (so the steps of a private correction are not listed to
+  people who can read only the published version); the coaching-wide audit log stays for admins (I-03).
 
 ## 9. Database (migrations 0026 onwards)
 
@@ -322,7 +326,7 @@ The browser holds no rules: allowed steps, findings, visibility and counts all c
 | T34 | **Stale approvals:** edit-after-QC needs a withdraw; resubmit gives a new review revision; old decisions cannot authorise it; two reviewers racing, one gets 412; a missing `If-Match` gets 428; a request naming another coaching's question gets 404 | integration + api |
 | T35 | **Published is immutable:** UPDATE/DELETE of a published version or its revisions fails even as the table owner; correction makes version 2 while version 1 still reads the same; one open correction only; label snapshot survives a rename | integration |
 | T36 | **Checklist:** each missing publication item blocks Pass QC, Approve and Publish; the check is repeated at publish after an answer limit or a catalogue change; warnings do not block | integration |
-| T37 | **Visibility:** drafts and returned questions are invisible to other faculty in list, count, search, duplicates, history and by-code; visible after submit; removed member sees nothing | api |
+| T37 | **Visibility:** drafts and returned questions, and an open correction of a published question, are invisible to other faculty in list, count, search, duplicates, history, diff (by revision id too) and by-code; visible after submit; removed member sees nothing | api |
 | T38 | **Search and lists:** filters and `total` agree with a plain count; typo and Hindi fixtures; code lookup forms; hostile search text is inert; the 1-lakh fixture timings (K-08) are recorded | integration + k6 |
 | T39 | **Duplicates:** exact (same), near (typo), not exact (a changed equation or answer), never another coaching's, exact blocks Pass QC until decided | integration |
 | T40 | **Diff and history:** unit tests (including Hypothesis) that diff of equal revisions is empty and applying changes round-trips; history lists every step in order | unit + api |
