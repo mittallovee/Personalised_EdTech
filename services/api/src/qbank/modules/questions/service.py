@@ -47,8 +47,10 @@ from qbank.modules.questions.domain.workflow import (
 from qbank.modules.questions.domain.workflow_access import may_take_step
 from qbank.modules.questions.findings import Finding, Level
 from qbank.modules.questions.image_checks import check_images, image_ids
+from qbank.modules.questions.label_snapshot import label_ids, snapshot_labels
 from qbank.modules.questions.limits import effective_rules, exam_of
 from qbank.modules.questions.models import (
+    PublishedVersion,
     QuestionMaster,
     QuestionRevision,
     QuestionVersion,
@@ -60,7 +62,7 @@ from qbank.modules.questions.picture_records import record_pictures
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.settings_service import load_overrides
 from qbank.modules.questions.validate import validate_content
-from qbank.modules.taxonomy.public import look_up
+from qbank.modules.taxonomy.public import look_up, names_of
 
 ENTITY_TYPE = "question"
 
@@ -901,3 +903,153 @@ def return_question(
     )
     found = _findings(session, reviewed.content, rules)
     return QuestionView(master, version, working, found, reviewed)
+
+
+# --- Publish and start a correction (M4 design note 4.5) ---------------------------------------
+
+
+def publish(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Publish the approved revision (E-01). From here the version never changes.
+
+    The publication checklist is run once more in this transaction, because a limit or the lists
+    may have changed since QC. The English names of the labels are kept with the publication, and
+    the master now points at this version, which is what every member reads.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    master, version, working = _lock(session, principal, question_id)
+    require_flow_if_match(if_match, version.flow_revision)
+    transition = _require_step(principal, master, version, Step.PUBLISH)
+    reviewed = _under_review(session, version)
+    found, checklist = _publication_checklist(session, reviewed, rules)
+    labels = snapshot_labels(reviewed.content, names_of(session, label_ids(reviewed.content)))
+    _move(
+        session,
+        principal,
+        master,
+        version,
+        transition,
+        revision_id=reviewed.id,
+        review_revision_id=reviewed.id,
+        audit_action="QUESTION_PUBLISHED",
+        request_id=request_id,
+        checklist=checklist,
+    )
+    session.add(
+        PublishedVersion(
+            organization_id=master.organization_id,
+            version_id=version.id,
+            revision_id=reviewed.id,
+            published_by=principal.user_id,
+            content_hash=reviewed.content_hash or content_hash(reviewed.content),
+            labels=labels,
+        )
+    )
+    session.flush()
+    master.published_version_id = version.id
+    session.flush()
+    return QuestionView(master, version, working, found, reviewed)
+
+
+def start_correction(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    if_match: str | None,
+    request_id: str | None,
+    rules: Rules = DEFAULT_RULES,
+) -> QuestionView:
+    """Start version n+1 of a published question as a draft copy of the published text.
+
+    The published version stays exactly as it is, and stays what members read, until the new one
+    is published. Only one correction may be open (``CORRECTION_ALREADY_OPEN``).
+    ``if_match`` is the published version's workflow ETag.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    master, newest, _ = _lock(session, principal, question_id)
+    published = session.scalars(
+        select(QuestionVersion)
+        .where(
+            QuestionVersion.master_id == master.id,
+            QuestionVersion.state == State.PUBLISHED.value,
+        )
+        .order_by(QuestionVersion.number.desc())
+        .limit(1)
+    ).first()
+    target = published or newest
+    require_flow_if_match(if_match, target.flow_revision)
+    _require_step(principal, master, target, Step.START_CORRECTION)
+    if newest.id != target.id:
+        raise Conflict(
+            "A correction of this question is already open.",
+            code="CORRECTION_ALREADY_OPEN",
+            details={"version_id": str(newest.id)},
+        )
+    source = _under_review(session, target)
+    # Both counters carry on from the version before and never repeat, because the URLs name only
+    # the question: a tag read on version 1 must never match version 2.
+    last_revision = session.scalar(
+        select(func.max(QuestionRevision.revision))
+        .join(QuestionVersion, QuestionRevision.version_id == QuestionVersion.id)
+        .where(QuestionVersion.master_id == master.id)
+    )
+    version = QuestionVersion(
+        id=new_id(),
+        organization_id=master.organization_id,
+        master_id=master.id,
+        number=newest.number + 1,
+        flow_revision=target.flow_revision + 1,
+    )
+    session.add(version)
+    session.flush()
+    revision = QuestionRevision(
+        organization_id=master.organization_id,
+        version_id=version.id,
+        number=1,
+        content=copy.deepcopy(source.content),
+        author_id=principal.user_id,
+        revision=(last_revision or 0) + 1,
+    )
+    session.add(revision)
+    session.flush()
+    _record_pictures(session, revision)
+    session.add(
+        ReviewDecision(
+            organization_id=master.organization_id,
+            version_id=version.id,
+            revision_id=source.id,  # the published text the correction starts from
+            step=Step.START_CORRECTION.value,
+            from_state=State.PUBLISHED.value,
+            to_state=State.DRAFT.value,
+            flow_revision=version.flow_revision,
+            actor_id=principal.user_id,
+            reasons=[],
+        )
+    )
+    session.flush()
+    record_event(
+        session,
+        action="QUESTION_CORRECTION_STARTED",
+        entity_type=ENTITY_TYPE,
+        entity_id=master.id,
+        organization_id=master.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=principal.acting_organization_id is not None,
+        request_id=request_id,
+        before={"state": State.PUBLISHED.value},
+        after={
+            "code": master.code,
+            "state": State.DRAFT.value,
+            "version_number": version.number,
+            "revision_id": str(source.id),
+        },
+    )
+    return QuestionView(master, version, revision, _findings(session, revision.content, rules))

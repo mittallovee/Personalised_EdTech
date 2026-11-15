@@ -255,7 +255,156 @@ def test_a_new_version_starts_as_a_draft(owner_db: Database, rows: Rows) -> None
                 master=rows.master_id,
                 state=state,
             )
+    # Only one version may be open, so a correction can start only once the first is published.
+    put_in(owner_db, rows, S.PUBLISHED)
     run(owner_db, rows, insert, id=new_id(), org=rows.org_id, master=rows.master_id, state="DRAFT")
+
+
+def test_only_one_version_of_a_question_is_open_at_a_time(owner_db: Database, rows: Rows) -> None:
+    insert = (
+        "INSERT INTO question_versions (id, organization_id, master_id, number)"
+        " VALUES (:id, :org, :master, 2)"
+    )
+    with pytest.raises(DBAPIError, match="question_versions_one_open"):
+        run(owner_db, rows, insert, id=new_id(), org=rows.org_id, master=rows.master_id)
+    put_in(owner_db, rows, S.PUBLISHED)
+    run(owner_db, rows, insert, id=new_id(), org=rows.org_id, master=rows.master_id)
+    with pytest.raises(DBAPIError, match="question_versions_one_open"):
+        run(
+            owner_db,
+            rows,
+            insert.replace(", 2)", ", 3)"),
+            id=new_id(),
+            org=rows.org_id,
+            master=rows.master_id,
+        )
+
+
+# ---- the revisions of a published version never change (migration 0027) ------------------------
+
+
+def test_the_revisions_of_a_published_version_never_change_even_for_the_table_owner(
+    owner_db: Database, rows: Rows
+) -> None:
+    put_in(owner_db, rows, S.PUBLISHED)
+    statements = (
+        # The working copy, which the frozen-revision guard does not cover.
+        ("UPDATE question_revisions SET content = '{}'::jsonb WHERE id = :r", rows.working),
+        ("DELETE FROM question_revisions WHERE id = :r", rows.working),
+        ("DELETE FROM question_revisions WHERE id = :r", rows.frozen[1]),
+        ("UPDATE question_revisions SET number = 99 WHERE id = :r", rows.frozen[0]),
+    )
+    for sql, revision_id in statements:
+        with pytest.raises(DBAPIError, match="never change"):
+            run(owner_db, rows, sql, r=revision_id)
+    with pytest.raises(DBAPIError, match="revisions of a published version never change"):
+        run(
+            owner_db,
+            rows,
+            "INSERT INTO question_revisions (id, organization_id, version_id, number, content,"
+            " author_id) SELECT :id, organization_id, version_id, 99, '{}'::jsonb, author_id"
+            " FROM question_revisions WHERE id = :r",
+            id=new_id(),
+            r=rows.working,
+        )
+
+
+def test_a_revision_may_still_change_while_its_version_is_not_published(
+    owner_db: Database, rows: Rows
+) -> None:
+    put_in(owner_db, rows, S.APPROVED)
+    run(
+        owner_db,
+        rows,
+        "UPDATE question_revisions SET content = '{}'::jsonb WHERE id = :r",
+        r=rows.working,
+    )
+
+
+# ---- the published version a master points at ----------------------------------------------------
+
+
+def point(owner_db: Database, rows: Rows, version: UUID | None) -> None:
+    run(
+        owner_db,
+        rows,
+        "UPDATE question_masters SET published_version_id = :v WHERE id = :m",
+        v=version,
+        m=rows.master_id,
+    )
+
+
+def test_a_master_points_only_at_one_of_its_own_published_versions(
+    owner_db: Database, rows: Rows
+) -> None:
+    with pytest.raises(DBAPIError, match="only at one of its published versions"):
+        point(owner_db, rows, rows.version_id)  # not published yet
+    put_in(owner_db, rows, S.PUBLISHED)
+    point(owner_db, rows, rows.version_id)
+    with pytest.raises(DBAPIError, match="never unpublished"):
+        point(owner_db, rows, None)
+    with pytest.raises(DBAPIError, match="only at one of its published versions"):
+        point(owner_db, rows, new_id())  # no such version
+
+
+# ---- publication records are append-only ---------------------------------------------------------
+
+
+def add_publication(owner_db: Database, rows: Rows) -> UUID:
+    record_id = new_id()
+    with owner_db.transaction(TenantContext(organization_id=rows.org_id)) as session:
+        author = session.execute(
+            text("SELECT created_by FROM question_masters WHERE id = :m"), {"m": rows.master_id}
+        ).scalar_one()
+        session.execute(
+            text(
+                "INSERT INTO published_versions (id, organization_id, version_id, revision_id,"
+                " published_by, content_hash, labels)"
+                " VALUES (:id, :org, :v, :r, :by, :hash, '{}'::jsonb)"
+            ),
+            {
+                "id": record_id,
+                "org": rows.org_id,
+                "v": rows.version_id,
+                "r": rows.frozen[0],
+                "by": author,
+                "hash": "0" * 64,
+            },
+        )
+    return record_id
+
+
+def test_a_publication_record_is_never_changed_or_deleted_even_by_the_owner(
+    owner_db: Database, rows: Rows
+) -> None:
+    record_id = add_publication(owner_db, rows)
+    for sql in (
+        "UPDATE published_versions SET labels = '{\"x\": 1}'::jsonb WHERE id = :d",
+        "DELETE FROM published_versions WHERE id = :d",
+    ):
+        with pytest.raises(DBAPIError, match="never changed or deleted"):
+            run(owner_db, rows, sql, d=record_id)
+
+
+def test_a_version_is_published_only_once(owner_db: Database, rows: Rows) -> None:
+    add_publication(owner_db, rows)
+    with pytest.raises(DBAPIError, match="published_versions_version_id_key"):
+        add_publication(owner_db, rows)
+
+
+def test_the_runtime_role_can_only_add_and_read_publication_records(
+    db: Database, rows: Rows
+) -> None:
+    context = TenantContext(organization_id=rows.org_id)
+    for sql in (
+        "UPDATE published_versions SET labels = '{}'::jsonb",
+        "DELETE FROM published_versions",
+    ):
+        with (
+            pytest.raises(DBAPIError, match="permission denied"),
+            db.transaction(context) as session,
+        ):
+            session.execute(text(sql))
 
 
 # ---- review decisions are append-only ---------------------------------------------------------
