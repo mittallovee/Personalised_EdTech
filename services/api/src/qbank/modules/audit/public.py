@@ -1,9 +1,14 @@
-"""Public interface of the audit module: append an audit event inside the caller's transaction."""
+"""Public interface of the audit module: append an audit event inside the caller's transaction, and
+read back who did which of a few named things to one entity."""
 
+from collections.abc import Collection
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qbank.modules.audit.models import AuditEvent
@@ -48,3 +53,36 @@ def record_event(
         actor_user_id=str(actor_user_id) if actor_user_id else None,
         actor_is_platform=actor_is_platform,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class EntityAction:
+    """Who did one thing to an entity, and when. The event's before/after data is not included."""
+
+    id: UUID
+    action: str
+    actor_user_id: UUID | None
+    at: datetime
+
+
+def entity_actions(
+    session: Session,
+    *,
+    organization_id: UUID,
+    entity_type: str,
+    entity_id: UUID,
+    actions: Collection[str],
+) -> list[EntityAction]:
+    """The given kinds of event recorded for one entity of one coaching, oldest first. Whether the
+    caller may see them is the caller's decision: this is a plain read, not a page of the log."""
+    rows = session.execute(
+        select(AuditEvent.id, AuditEvent.action, AuditEvent.actor_user_id, AuditEvent.created_at)
+        .where(
+            AuditEvent.organization_id == organization_id,
+            AuditEvent.entity_type == entity_type,
+            AuditEvent.entity_id == entity_id,
+            AuditEvent.action.in_(list(actions)),
+        )
+        .order_by(AuditEvent.created_at, AuditEvent.id)
+    ).all()
+    return [EntityAction(row.id, row.action, row.actor_user_id, row.created_at) for row in rows]

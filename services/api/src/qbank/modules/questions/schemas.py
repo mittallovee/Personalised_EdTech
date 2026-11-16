@@ -87,6 +87,7 @@ class QuestionPage(BaseModel):
 
 
 class RevisionSummary(BaseModel):
+    id: UUID = Field(description="Names this saved text in the diff route.")
     number: int = Field(description="Counts up within the version.")
     working: bool = Field(description="The one being edited; the others are frozen checkpoints.")
     version_number: int
