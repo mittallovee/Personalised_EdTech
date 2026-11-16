@@ -1,16 +1,17 @@
 # Backup and restore
 
 > Requirement **K-03** (tooling and the restore drill), N-06 · Decision: [ADR-0017](../architecture/adr/0017-backups-and-restore.md)
-> **Not done yet:** real scheduled, off-machine backups and a restore of real data. That is requirement **K-16**,
-> due before the first real coaching uses the app (M4). Until then the tooling exists and is tested, but nothing
-> runs it for you.
+> **Off-machine, scheduled backups (K-16)** are set up with [offsite-backups.md](./offsite-backups.md)
+> ([ADR-0021](../architecture/adr/0021-offsite-backups-restic-to-cloudflare-r2.md)): daily, encrypted, to Cloudflare R2, including the
+> pictures. The tooling is built and tested; **it protects you only once you have done the one-time setup there and
+> a real restore has been tested**. This page covers the dump and restore tools it is built on.
 
 ## What is protected
 
 | What | By what | Status |
 |---|---|---|
 | The database: every coaching's data, accounts, sessions, audit log | `infra/scripts/backup-db.sh` | Tooling done and tested (K-03) |
-| Uploaded files (pictures from M3 PR 3g-1; documents later) | locally the Docker volume `assetdata` (mounted at `/data/storage` in the api container); a cloud bucket later. **`backup-db.sh` does not copy it**, so K-16 must back it up with the database | Planned with K-16 |
+| Uploaded files (pictures from M3 PR 3g-1; documents later) | locally the Docker volume `assetdata` (mounted at `/data/storage` in the api container); a cloud bucket later. **`backup-db.sh` does not copy it**; `backup-offsite.sh` (K-16) backs it up with the database | Tooling done and tested (K-16); owner setup pending |
 | Settings and secrets (`.env`, keys) | your password manager; never in Git | Yours to keep safe |
 | The code | Git | Done |
 
@@ -112,4 +113,4 @@ listed above, and the difference is the thing to understand.
 
 - A logical dump takes longer as the data grows; managed point-in-time recovery (M7) removes that limit.
 - Everything in the database comes back as it was in the backup, including sign-in sessions, one-time links (with their original expiry times) and the background job queue. After a restore, check the job list before you trust that queued work will run again.
-- Files and secrets are not in the dump (see the table at the top).
+- Files and secrets are not in the dump (see the table at the top). The scheduled off-machine backup adds the pictures; secrets stay in your password manager.

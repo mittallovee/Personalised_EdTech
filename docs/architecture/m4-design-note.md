@@ -386,7 +386,7 @@ M4 is when real questions may be typed. These do not need new product features, 
 
 | Item | State | Who |
 |---|---|---|
-| K-16 real scheduled backups, **including the `assetdata` picture volume**, and one real restore tested | Not started | **You choose the destination** (cloud bucket, cloud drive or an external disk kept elsewhere) |
+| K-16 real scheduled backups, **including the `assetdata` picture volume**, and one real restore tested | Tooling built and tested (restic to Cloudflare R2, [ADR-0021](./adr/0021-offsite-backups-restic-to-cloudflare-r2.md)); **not yet protecting you** | **You** create the R2 bucket and key, run the first backup, schedule it, and do one real restore ([guide](../operations/offsite-backups.md)) |
 | K-06 monitoring (errors, metrics, traces) | Built | Done |
 | K-07 migration safety linter (squawk) in CI | Planned, small PR | Claude |
 | K-08 k6 load scripts and the recorded 1-lakh timings | Inside M4 (§7.3) | Claude |

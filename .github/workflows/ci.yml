@@ -159,3 +159,14 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  offsite-backup:
+    # K-16 (ADR-0021): the whole off-machine backup chain against throwaway PostgreSQL, pictures and a
+    # local S3 server standing in for Cloudflare R2: back up, restore, compare. See offsite-drill.sh.
+    name: Off-site backup drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run the drill
+        run: bash infra/scripts/offsite-drill.sh
