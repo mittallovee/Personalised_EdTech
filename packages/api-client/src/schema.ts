@@ -1709,6 +1709,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bank/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The bank: questions with filters and a total (F-01, F-02)
+         * @description The most recently changed first. Each question shows the version everyone reads: the published one if there is one, else the newest. Filters combine with AND; give a filter several times to match any of its values. `total` counts every match, not only this page. A draft, or a returned question, is listed only to its author, admins and holders of the edit-others grant; to everyone else it does not exist. `archived=true` lists the archive.
+         */
+        get: operations["list_bank_api_v1_bank_questions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bank/questions/by-code/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One question of the bank, found by its code (F-02)
+         * @description Typed codes are forgiven: lower case, spaces and dashes are fine, and `O`, `I` and `L` read as `0`, `1` and `1`. Another coaching's code, a code that does not exist and a private draft that is not yours all answer 404.
+         */
+        get: operations["get_by_code_api_v1_bank_questions_by_code__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/review/queue": {
         parameters: {
             query?: never;
@@ -1922,6 +1962,112 @@ export interface components {
              * @description Google sign-in is set up on this server; show its button.
              */
             google: boolean;
+        };
+        /**
+         * BankItem
+         * @description One question as the bank shows it: the version everyone reads (the published one if there is
+         *     one), with its labels. Open the question itself for the text.
+         */
+        BankItem: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /**
+             * Author Id
+             * Format: uuid
+             * @description Whoever started the question.
+             */
+            author_id: string;
+            /**
+             * State
+             * @description The workflow state of the version shown.
+             */
+            state: string;
+            /**
+             * Version Number
+             * @description 2 or more once a correction has been published.
+             */
+            version_number: number;
+            /** Archived */
+            archived: boolean;
+            /**
+             * Has Published
+             * @description Whether a version has been published.
+             */
+            has_published: boolean;
+            /**
+             * Has Open Correction
+             * @description A correction of the published version is being worked on.
+             */
+            has_open_correction: boolean;
+            /** Question Type */
+            question_type: string | null;
+            /** Language */
+            language: string | null;
+            /** Class Id */
+            class_id: string | null;
+            /**
+             * Subject Id
+             * @description Look the name up in the coaching's syllabus.
+             */
+            subject_id: string | null;
+            /** Chapter Id */
+            chapter_id: string | null;
+            /** Topic Id */
+            topic_id: string | null;
+            /** Primary Concept Id */
+            primary_concept_id: string | null;
+            /**
+             * Concept Ids
+             * @description The main concept and the other concepts.
+             */
+            concept_ids: string[];
+            /**
+             * Difficulty
+             * @description 1 to 10.
+             */
+            difficulty: number | null;
+            /** Bloom Level */
+            bloom_level: string | null;
+            /**
+             * Is Pyq
+             * @description A past-year question.
+             */
+            is_pyq: boolean;
+            /** Exam Id */
+            exam_id: string | null;
+            /** Exam Year */
+            exam_year: number | null;
+            /** Has Solution */
+            has_solution: boolean;
+            /** Has Video */
+            has_video: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             * @description When the question last changed, as the bank shows it.
+             */
+            updated_at: string;
+        };
+        /** BankPage */
+        BankPage: {
+            /** Data */
+            data: components["schemas"]["BankItem"][];
+            page: components["schemas"]["PageInfo"];
+            /**
+             * Total
+             * @description How many questions match the filters, not only the ones on this page.
+             */
+            total: number;
         };
         /** BloomLevelOut */
         BloomLevelOut: {
@@ -10848,6 +10994,151 @@ export interface operations {
             };
             /** @description Not yours, or it does not exist (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_bank_api_v1_bank_questions_get: {
+        parameters: {
+            query?: {
+                class_id?: string[] | null;
+                subject_id?: string[] | null;
+                chapter_id?: string[] | null;
+                topic_id?: string[] | null;
+                /** @description The main concept or any of the other concepts. */
+                concept_id?: string[] | null;
+                difficulty?: number[] | null;
+                bloom_level?: string[] | null;
+                question_type?: string[] | null;
+                language?: string[] | null;
+                exam_id?: string[] | null;
+                exam_year?: number[] | null;
+                state?: string[] | null;
+                author_id?: string[] | null;
+                is_pyq?: boolean | null;
+                has_solution?: boolean | null;
+                has_video?: boolean | null;
+                /** @description List the archive instead. */
+                archived?: boolean;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankPage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description You may not use the bank (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_by_code_api_v1_bank_questions_by_code__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankItem"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description You may not use the bank (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a code (`INVALID_CODE`) */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
