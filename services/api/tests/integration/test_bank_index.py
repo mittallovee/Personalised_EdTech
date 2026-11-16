@@ -8,6 +8,8 @@ may see is decided in the query, so a private draft is never listed, counted or 
 
 import copy
 import itertools
+import threading
+import time
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID
@@ -22,6 +24,8 @@ from qbank.core.db import Database
 from qbank.core.ids import new_id
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
+from qbank.modules.questions.public import reindex_bank
+from qbank.modules.search import api as bank_api
 from tests.integration.conftest import (
     Member,
     MigratedDatabase,
@@ -813,3 +817,59 @@ def test_a_change_that_is_rolled_back_leaves_no_row_behind(
     assert stale.status_code == 412
     row = row_of(bank(client, team, "author"), question)
     assert row["language"] == question["content"]["language"]
+
+
+# ---- races -------------------------------------------------------------------------------------
+
+
+def test_the_rebuild_waits_for_a_change_in_progress_instead_of_overwriting_it(
+    client: TestClient, owner_db: Database, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    """Every writer locks the question first. A rebuild that read a question without that lock
+    could write back a row worked out before a change that commits meanwhile (a withdrawal making
+    the question private), and the bank would list it to people who may not read it."""
+    question = act(client, team, "author", start(client, team, ready_for(catalogue)), "submit")
+    org = team["owner"].org_id
+    finished = threading.Event()
+    failures: list[BaseException] = []
+
+    def rebuild() -> None:
+        try:
+            with owner_db.transaction(TenantContext(organization_id=org)) as session:
+                reindex_bank(session, org)
+        except BaseException as error:  # reported on the main thread
+            failures.append(error)
+        finally:
+            finished.set()
+
+    with owner_db.transaction(TenantContext(organization_id=org)) as writer:
+        writer.execute(
+            text("SELECT id FROM question_masters WHERE id = :id FOR UPDATE"),
+            {"id": question["id"]},
+        )
+        threading.Thread(target=rebuild, daemon=True).start()
+        time.sleep(1.5)
+        assert not finished.is_set(), "the rebuild did not wait for the question's lock"
+    assert finished.wait(30)
+    assert failures == []
+
+
+def test_the_list_and_its_total_are_read_from_one_snapshot(
+    client: TestClient,
+    team: dict[str, Member],
+    catalogue: Catalogue,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Otherwise a change committed between the count and the page could give a page with
+    ``total`` 0, which the exact-total contract forbids."""
+    start(client, team, ready_for(catalogue))
+    seen: list[str] = []
+    real = bank_api.service.list_bank
+
+    def spy(session: Any, *args: Any, **kwargs: Any) -> Any:
+        seen.append(str(session.scalar(text("SHOW transaction_isolation"))))
+        return real(session, *args, **kwargs)
+
+    monkeypatch.setattr(bank_api.service, "list_bank", spy)
+    bank(client, team, "author")
+    assert seen == ["repeatable read"]

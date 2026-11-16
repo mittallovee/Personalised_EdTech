@@ -109,6 +109,10 @@ def reindex_bank(
         .where(QuestionMaster.organization_id == organization_id)
         .order_by(QuestionMaster.id)
         .limit(BATCH)
+        # Every writer locks the question first, so a rebuild waits for a change in progress and
+        # reads what it committed; otherwise it could write back a row worked out before it.
+        # The locks last until the batch commits, which is a few seconds at most.
+        .with_for_update()
     )
     if after is not None:
         query = query.where(QuestionMaster.id > after)

@@ -118,7 +118,10 @@ def list_bank(
         archived=archived,
     )
     after = decode_cursor(cursor) if cursor is not None else None
-    with database.transaction(principal.tenant_context) as session:
+    # One snapshot for the count and the page, so `total` is the number of matches of these rows.
+    with database.transaction(
+        principal.tenant_context, isolation_level="REPEATABLE READ"
+    ) as session:
         found = service.list_bank(session, principal, filters, limit=limit, after=after)
         data = [_item(row) for row in found.rows]
     next_cursor = (
