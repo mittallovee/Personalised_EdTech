@@ -50,6 +50,8 @@ class Action(StrEnum):
     USE_ASSETS = "USE_ASSETS"
     # Read and change the answer limits of the coaching (M3, D-03).
     MANAGE_ANSWER_RULES = "MANAGE_ANSWER_RULES"
+    # Read and mark one's own in-app notifications (M4, I-01).
+    USE_NOTIFICATIONS = "USE_NOTIFICATIONS"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -69,6 +71,7 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.ARCHIVE_ANY_QUESTION: _ADMINS,
     Action.USE_ASSETS: _EVERYONE,
     Action.MANAGE_ANSWER_RULES: _ADMINS,
+    Action.USE_NOTIFICATIONS: _EVERYONE,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).

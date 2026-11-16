@@ -23,6 +23,7 @@ from qbank.modules.identity.api import router as identity_router
 from qbank.modules.identity.authenticator import SessionCookieAuthenticator
 from qbank.modules.identity.google import GoogleOidc
 from qbank.modules.identity.google_api import router as google_router
+from qbank.modules.notifications.api import router as notifications_router
 from qbank.modules.organizations.api import router as organizations_router
 from qbank.modules.organizations.members_api import router as members_router
 from qbank.modules.organizations.ownership_api import router as ownership_router
@@ -111,5 +112,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(passages_router)
     app.include_router(passage_revisions_router)
     app.include_router(settings_router)
+    app.include_router(notifications_router)
     install_openapi(app)
     return app
