@@ -1669,6 +1669,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/review/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The review queue, oldest first (E-05)
+         * @description What waits for QC, approval or publication, the longest-waiting first. For people who hold at least one of the QC, approve and publish grants, and for admins. A question that is still a draft, or that came back to someone else, is never shown. `state` picks one view; `CHANGES_REQUESTED` is the questions you sent in that came back, and it is yours alone. Left out, you get everything that waits. Each row is the newest version of its question; a correction shows as version 2 or more. The labels and language are those of the text the reviewers act on. `author_id` is whoever sent that version in.
+         */
+        get: operations["get_queue_api_v1_review_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/review/queue/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many wait at each step
+         * @description The size of each tab of the queue, not narrowed by any filter. For people who hold at least one of the QC, approve and publish grants, and for admins. A question that is still a draft, or that came back to someone else, is never shown.
+         */
+        get: operations["get_counts_api_v1_review_queue_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2992,6 +3032,81 @@ export interface components {
             updated_at: string;
             finding_counts: components["schemas"]["FindingCounts"];
         };
+        /** QueueCounts */
+        QueueCounts: {
+            /**
+             * Waiting For Qc
+             * @description In review, waiting for QC.
+             */
+            waiting_for_qc: number;
+            /**
+             * Waiting For Approval
+             * @description Passed QC, waiting for approval.
+             */
+            waiting_for_approval: number;
+            /**
+             * Waiting To Publish
+             * @description Approved, waiting to be published.
+             */
+            waiting_to_publish: number;
+            /**
+             * Returned To Me
+             * @description Questions you sent in that came back with reasons.
+             */
+            returned_to_me: number;
+        };
+        /** QueueItem */
+        QueueItem: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /** Question Type */
+            question_type: string | null;
+            /** Language */
+            language: string | null;
+            /**
+             * Subject Id
+             * @description Look the name up in the coaching's syllabus.
+             */
+            subject_id: string | null;
+            /** Chapter Id */
+            chapter_id: string | null;
+            state: components["schemas"]["QueueState"];
+            /**
+             * Version Number
+             * @description 2 or more for a correction of a published question.
+             */
+            version_number: number;
+            /**
+             * Submitted By
+             * Format: uuid
+             * @description Whoever sent this version in for review.
+             */
+            submitted_by: string;
+            /**
+             * Waiting Since
+             * Format: date-time
+             * @description When it entered its present state.
+             */
+            waiting_since: string;
+        };
+        /** QueuePage */
+        QueuePage: {
+            /** Data */
+            data: components["schemas"]["QueueItem"][];
+            page: components["schemas"]["PageInfo"];
+        };
+        /**
+         * QueueState
+         * @description The views of the queue. Nothing else is a queue state: drafts and published questions are
+         *     not waiting for anyone.
+         * @enum {string}
+         */
+        QueueState: "IN_REVIEW" | "QC_PASSED" | "APPROVED" | "CHANGES_REQUESTED";
         /** ReadyStatus */
         ReadyStatus: {
             /**
@@ -10438,6 +10553,120 @@ export interface operations {
             };
             /** @description Not yours, or it does not exist (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_queue_api_v1_review_queue_get: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["QueueState"] | null;
+                subject_id?: string | null;
+                chapter_id?: string | null;
+                author_id?: string | null;
+                /** @description A language code such as `en` or `hi`. */
+                language?: string | null;
+                /** @description Only what has waited at least this many days. */
+                older_than_days?: number | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueuePage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description You hold no review grant (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_counts_api_v1_review_queue_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueCounts"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description You hold no review grant (`PERMISSION_DENIED`) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

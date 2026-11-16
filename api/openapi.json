@@ -10360,6 +10360,268 @@
           }
         }
       }
+    },
+    "/api/v1/review/queue": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "The review queue, oldest first (E-05)",
+        "description": "What waits for QC, approval or publication, the longest-waiting first. For people who hold at least one of the QC, approve and publish grants, and for admins. A question that is still a draft, or that came back to someone else, is never shown. `state` picks one view; `CHANGES_REQUESTED` is the questions you sent in that came back, and it is yours alone. Left out, you get everything that waits. Each row is the newest version of its question; a correction shows as version 2 or more. The labels and language are those of the text the reviewers act on. `author_id` is whoever sent that version in.",
+        "operationId": "get_queue_api_v1_review_queue_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/QueueState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject Id"
+            }
+          },
+          {
+            "name": "chapter_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Chapter Id"
+            }
+          },
+          {
+            "name": "author_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Author Id"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20,
+                  "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A language code such as `en` or `hi`.",
+              "title": "Language"
+            },
+            "description": "A language code such as `en` or `hi`."
+          },
+          {
+            "name": "older_than_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 3650,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only what has waited at least this many days.",
+              "title": "Older Than Days"
+            },
+            "description": "Only what has waited at least this many days."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueuePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "You hold no review grant (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/review/queue/counts": {
+      "get": {
+        "tags": [
+          "review"
+        ],
+        "summary": "How many wait at each step",
+        "description": "The size of each tab of the queue, not narrowed by any filter. For people who hold at least one of the QC, approve and publish grants, and for admins. A question that is still a draft, or that came back to someone else, is never shown.",
+        "operationId": "get_counts_api_v1_review_queue_counts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueCounts"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "You hold no review grant (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -13030,6 +13292,167 @@
           "finding_counts"
         ],
         "title": "QuestionSummary"
+      },
+      "QueueCounts": {
+        "properties": {
+          "waiting_for_qc": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Waiting For Qc",
+            "description": "In review, waiting for QC."
+          },
+          "waiting_for_approval": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Waiting For Approval",
+            "description": "Passed QC, waiting for approval."
+          },
+          "waiting_to_publish": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Waiting To Publish",
+            "description": "Approved, waiting to be published."
+          },
+          "returned_to_me": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Returned To Me",
+            "description": "Questions you sent in that came back with reasons."
+          }
+        },
+        "type": "object",
+        "required": [
+          "waiting_for_qc",
+          "waiting_for_approval",
+          "waiting_to_publish",
+          "returned_to_me"
+        ],
+        "title": "QueueCounts"
+      },
+      "QueueItem": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "question_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Type"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id",
+            "description": "Look the name up in the coaching's syllabus."
+          },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
+          },
+          "state": {
+            "$ref": "#/components/schemas/QueueState"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number",
+            "description": "2 or more for a correction of a published question."
+          },
+          "submitted_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Submitted By",
+            "description": "Whoever sent this version in for review."
+          },
+          "waiting_since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Waiting Since",
+            "description": "When it entered its present state."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "code",
+          "question_type",
+          "language",
+          "subject_id",
+          "chapter_id",
+          "state",
+          "version_number",
+          "submitted_by",
+          "waiting_since"
+        ],
+        "title": "QueueItem"
+      },
+      "QueuePage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItem"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "page"
+        ],
+        "title": "QueuePage"
+      },
+      "QueueState": {
+        "type": "string",
+        "enum": [
+          "IN_REVIEW",
+          "QC_PASSED",
+          "APPROVED",
+          "CHANGES_REQUESTED"
+        ],
+        "title": "QueueState",
+        "description": "The views of the queue. Nothing else is a queue state: drafts and published questions are\nnot waiting for anyone."
       },
       "ReadyStatus": {
         "properties": {
