@@ -470,7 +470,14 @@ def checkpoint(
         actor_user_id=principal.user_id,
         actor_is_platform=principal.acting_organization_id is not None,
         request_id=request_id,
-        after={"code": master.code, "revision_number": revision.number},
+        # The ids tie the event to the frozen text for good: the history reads who took a
+        # checkpoint from here, because the revision rows' own author changes with every save.
+        after={
+            "code": master.code,
+            "revision_number": revision.number,
+            "revision_id": str(revision.id),
+            "version_number": version.number,
+        },
     )
     view = QuestionView(master, version, fresh, _findings(session, fresh.content, rules))
     return view, revision.number

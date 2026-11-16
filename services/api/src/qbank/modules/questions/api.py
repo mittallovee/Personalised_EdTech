@@ -87,6 +87,7 @@ def _out(view: service.QuestionView, principal: Principal) -> QuestionOut:
 
 def _revision_summary(version_number: int, revision: Any) -> RevisionSummary:
     return RevisionSummary(
+        id=revision.id,
         number=revision.number,
         working=revision.frozen_at is None,
         version_number=version_number,

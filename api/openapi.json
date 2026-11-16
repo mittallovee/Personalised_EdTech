@@ -9052,6 +9052,188 @@
         }
       }
     },
+    "/api/v1/questions/{question_id}/history": {
+      "get": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Who did what to a question, oldest first (E-09)",
+        "description": "The start of the question, each saved checkpoint, every review step (a return with its reasons and note), the start of a correction, and archive and restore. Only the versions you may read are included: the steps of a correction that is still a private draft are not listed to someone who may read only the published version.",
+        "operationId": "get_history_api_v1_questions__question_id__history_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question, or no such text of it, that you may read. A question or correction that is still someone else's draft is also 404 (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}/diff": {
+      "get": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "What changed between two saved texts of a question (E-08)",
+        "description": "`from` and `to` are revision ids (from the history or the revision list); both must belong to this question, and each is checked on its own against what you may read. Changed prose comes with word-level segments; an equation or picture counts as one item.",
+        "operationId": "get_diff_api_v1_questions__question_id__diff_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The older text.",
+              "title": "From"
+            },
+            "description": "The older text."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The newer text.",
+              "title": "To"
+            },
+            "description": "The newer text."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question, or no such text of it, that you may read. A question or correction that is still someone else's draft is also 404 (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/passages": {
       "post": {
         "tags": [
@@ -10986,6 +11168,57 @@
         ],
         "title": "BloomLevelOut"
       },
+      "ChangeOut": {
+        "properties": {
+          "op": {
+            "$ref": "#/components/schemas/Op"
+          },
+          "path": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Path",
+            "description": "Where in the content: object keys and list positions, e.g. `[\"options\", 2, \"content\", 0, \"text\"]`. Positions count as the changes are applied in the order listed."
+          },
+          "before": {
+            "title": "Before",
+            "description": "The old value (`remove` and `replace`)."
+          },
+          "after": {
+            "title": "After",
+            "description": "The new value (`add` and `replace`)."
+          },
+          "segments": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SegmentOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Segments",
+            "description": "For a changed text: its words, each `equal`, `insert` or `delete`. Show them as text with marks; never as HTML."
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "path"
+        ],
+        "title": "ChangeOut"
+      },
       "ChangeRole": {
         "properties": {
           "expected_role": {
@@ -11373,6 +11606,75 @@
         ],
         "title": "CreatedOrganization"
       },
+      "DiffOut": {
+        "properties": {
+          "from_revision": {
+            "$ref": "#/components/schemas/DiffRevision"
+          },
+          "to_revision": {
+            "$ref": "#/components/schemas/DiffRevision"
+          },
+          "identical": {
+            "type": "boolean",
+            "title": "Identical"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "type": "array",
+            "title": "Changes",
+            "description": "What turns the first text into the second. Equations, pictures, tables and lists count as single items: a changed one is replaced as a whole."
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_revision",
+          "to_revision",
+          "identical",
+          "changes"
+        ],
+        "title": "DiffOut"
+      },
+      "DiffRevision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number",
+            "description": "Counts up within the version."
+          },
+          "frozen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen At",
+            "description": "Empty for the text still being edited."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version_number",
+          "number",
+          "frozen_at"
+        ],
+        "title": "DiffRevision"
+      },
       "DifficultyLevelOut": {
         "properties": {
           "level": {
@@ -11759,6 +12061,123 @@
         ],
         "title": "Grant",
         "description": "Extra rights for faculty. Owner and admins hold all of them implicitly."
+      },
+      "HistoryEntry": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/HistoryKind",
+            "description": "What happened: the start of the question, a saved checkpoint, a review step, the start of a correction, archive or restore."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id",
+            "description": "Who did it."
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number",
+            "description": "The version it belongs to (1, or 2 and up for a correction); empty for archive and restore, which concern the whole question."
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id",
+            "description": "The saved text the entry is about; pass it to the diff route to compare it with another."
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "description": "For a return: the reason codes chosen."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "For a return: the reviewer's note."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "at",
+          "actor_id",
+          "version_number",
+          "revision_id",
+          "reasons",
+          "note"
+        ],
+        "title": "HistoryEntry"
+      },
+      "HistoryKind": {
+        "type": "string",
+        "enum": [
+          "CREATED",
+          "CHECKPOINT",
+          "SUBMIT",
+          "RETURN",
+          "PASS_QC",
+          "APPROVE",
+          "PUBLISH",
+          "WITHDRAW",
+          "START_CORRECTION",
+          "ARCHIVED",
+          "RESTORED"
+        ],
+        "title": "HistoryKind",
+        "description": "What happened. The first and the last two are not review steps; the rest are the ``Step``\nnames of the workflow, so a step added there is added here on purpose."
+      },
+      "HistoryOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntry"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "Oldest first."
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "HistoryOut"
       },
       "ImportCounts": {
         "properties": {
@@ -12543,6 +12962,15 @@
           "page"
         ],
         "title": "NotificationPage"
+      },
+      "Op": {
+        "type": "string",
+        "enum": [
+          "add",
+          "remove",
+          "replace"
+        ],
+        "title": "Op"
       },
       "OrganizationOut": {
         "properties": {
@@ -13590,6 +14018,12 @@
       },
       "RevisionOut": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Names this saved text in the diff route."
+          },
           "number": {
             "type": "integer",
             "title": "Number",
@@ -13660,6 +14094,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "number",
           "working",
           "version_number",
@@ -13675,6 +14110,12 @@
       },
       "RevisionSummary": {
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Names this saved text in the diff route."
+          },
           "number": {
             "type": "integer",
             "title": "Number",
@@ -13732,6 +14173,7 @@
         },
         "type": "object",
         "required": [
+          "id",
           "number",
           "working",
           "version_number",
@@ -13799,6 +14241,32 @@
           "content"
         ],
         "title": "SaveQuestion"
+      },
+      "SegmentKind": {
+        "type": "string",
+        "enum": [
+          "equal",
+          "insert",
+          "delete"
+        ],
+        "title": "SegmentKind"
+      },
+      "SegmentOut": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SegmentKind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "SegmentOut"
       },
       "SetGrants": {
         "properties": {

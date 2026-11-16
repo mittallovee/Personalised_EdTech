@@ -1421,6 +1421,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who did what to a question, oldest first (E-09)
+         * @description The start of the question, each saved checkpoint, every review step (a return with its reasons and note), the start of a correction, and archive and restore. Only the versions you may read are included: the steps of a correction that is still a private draft are not listed to someone who may read only the published version.
+         */
+        get: operations["get_history_api_v1_questions__question_id__history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What changed between two saved texts of a question (E-08)
+         * @description `from` and `to` are revision ids (from the history or the revision list); both must belong to this question, and each is checked on its own against what you may read. Changed prose comes with word-level segments; an equation or picture counts as one item.
+         */
+        get: operations["get_diff_api_v1_questions__question_id__diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passages": {
         parameters: {
             query?: never;
@@ -1893,6 +1933,30 @@ export interface components {
             /** Label */
             label: string;
         };
+        /** ChangeOut */
+        ChangeOut: {
+            op: components["schemas"]["Op"];
+            /**
+             * Path
+             * @description Where in the content: object keys and list positions, e.g. `["options", 2, "content", 0, "text"]`. Positions count as the changes are applied in the order listed.
+             */
+            path: (string | number)[];
+            /**
+             * Before
+             * @description The old value (`remove` and `replace`).
+             */
+            before?: unknown;
+            /**
+             * After
+             * @description The new value (`add` and `replace`).
+             */
+            after?: unknown;
+            /**
+             * Segments
+             * @description For a changed text: its words, each `equal`, `insert` or `delete`. Show them as text with marks; never as HTML.
+             */
+            segments?: components["schemas"]["SegmentOut"][] | null;
+        };
         /** ChangeRole */
         ChangeRole: {
             /**
@@ -2078,6 +2142,38 @@ export interface components {
             /** @description A new activation link for the Owner. Null only when a retried request finds that the Owner has already activated their account. */
             activation: components["schemas"]["ActivationLink"] | null;
         };
+        /** DiffOut */
+        DiffOut: {
+            from_revision: components["schemas"]["DiffRevision"];
+            to_revision: components["schemas"]["DiffRevision"];
+            /** Identical */
+            identical: boolean;
+            /**
+             * Changes
+             * @description What turns the first text into the second. Equations, pictures, tables and lists count as single items: a changed one is replaced as a whole.
+             */
+            changes: components["schemas"]["ChangeOut"][];
+        };
+        /** DiffRevision */
+        DiffRevision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Number
+             * @description Counts up within the version.
+             */
+            number: number;
+            /**
+             * Frozen At
+             * @description Empty for the text still being edited.
+             */
+            frozen_at: string | null;
+        };
         /** DifficultyLevelOut */
         DifficultyLevelOut: {
             /** Level */
@@ -2258,6 +2354,56 @@ export interface components {
          * @enum {string}
          */
         Grant: "QC" | "APPROVE" | "PUBLISH" | "EDIT_OTHERS" | "MANAGE_AI_PROMPTS";
+        /** HistoryEntry */
+        HistoryEntry: {
+            /** @description What happened: the start of the question, a saved checkpoint, a review step, the start of a correction, archive or restore. */
+            kind: components["schemas"]["HistoryKind"];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Actor Id
+             * @description Who did it.
+             */
+            actor_id: string | null;
+            /**
+             * Version Number
+             * @description The version it belongs to (1, or 2 and up for a correction); empty for archive and restore, which concern the whole question.
+             */
+            version_number: number | null;
+            /**
+             * Revision Id
+             * @description The saved text the entry is about; pass it to the diff route to compare it with another.
+             */
+            revision_id: string | null;
+            /**
+             * Reasons
+             * @description For a return: the reason codes chosen.
+             */
+            reasons: string[];
+            /**
+             * Note
+             * @description For a return: the reviewer's note.
+             */
+            note: string | null;
+        };
+        /**
+         * HistoryKind
+         * @description What happened. The first and the last two are not review steps; the rest are the ``Step``
+         *     names of the workflow, so a step added there is added here on purpose.
+         * @enum {string}
+         */
+        HistoryKind: "CREATED" | "CHECKPOINT" | "SUBMIT" | "RETURN" | "PASS_QC" | "APPROVE" | "PUBLISH" | "WITHDRAW" | "START_CORRECTION" | "ARCHIVED" | "RESTORED";
+        /** HistoryOut */
+        HistoryOut: {
+            /**
+             * Data
+             * @description Oldest first.
+             */
+            data: components["schemas"]["HistoryEntry"][];
+        };
         /** ImportCounts */
         ImportCounts: {
             /**
@@ -2634,6 +2780,11 @@ export interface components {
             data: components["schemas"]["NotificationOut"][];
             page: components["schemas"]["PageInfo"];
         };
+        /**
+         * Op
+         * @enum {string}
+         */
+        Op: "add" | "remove" | "replace";
         /** OrganizationOut */
         OrganizationOut: {
             /**
@@ -3178,6 +3329,12 @@ export interface components {
         /** RevisionOut */
         RevisionOut: {
             /**
+             * Id
+             * Format: uuid
+             * @description Names this saved text in the diff route.
+             */
+            id: string;
+            /**
              * Number
              * @description Counts up within the version.
              */
@@ -3224,6 +3381,12 @@ export interface components {
         };
         /** RevisionSummary */
         RevisionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             * @description Names this saved text in the diff route.
+             */
+            id: string;
             /**
              * Number
              * @description Counts up within the version.
@@ -3298,6 +3461,17 @@ export interface components {
             content: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * SegmentKind
+         * @enum {string}
+         */
+        SegmentKind: "equal" | "insert" | "delete";
+        /** SegmentOut */
+        SegmentOut: {
+            kind: components["schemas"]["SegmentKind"];
+            /** Text */
+            text: string;
         };
         /** SetGrants */
         SetGrants: {
@@ -9641,6 +9815,127 @@ export interface operations {
             };
             /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_history_api_v1_questions__question_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question, or no such text of it, that you may read. A question or correction that is still someone else's draft is also 404 (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_diff_api_v1_questions__question_id__diff_get: {
+        parameters: {
+            query: {
+                /** @description The older text. */
+                from: string;
+                /** @description The newer text. */
+                to: string;
+            };
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiffOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question, or no such text of it, that you may read. A question or correction that is still someone else's draft is also 404 (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

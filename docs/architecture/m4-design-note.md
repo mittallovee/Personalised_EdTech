@@ -50,7 +50,7 @@ on a question (D-18, P3), saved filters (F-05, P3), "find similar" by meaning (F
 | Module | Owns | Why separate |
 |---|---|---|
 | `questions` (extended) | The workflow state of a version, the pure state machine, the rule "a published version never changes", diff, the extraction of search facts from content | The state sits next to the revisions it protects, so the database trigger and the code agree on one rule |
-| `review` (new; the queue routes are **built in 4c**) | Who may do each step (grants), return reasons, the append-only `review_decisions`, the queue, the history timeline | Policy and queue are about *people and decisions*, not about content; it calls `questions.public` and never touches its tables. In practice the step rules, reasons and decisions stayed beside the state they protect in `questions` (4a); `review` holds the queue routes and, in 4d, the timeline |
+| `review` (new; the queue routes are **built in 4c**) | Who may do each step (grants), return reasons, the append-only `review_decisions`, the queue, the history timeline | Policy and queue are about *people and decisions*, not about content; it calls `questions.public` and never touches its tables. In practice the step rules, reasons and decisions stayed beside the state they protect in `questions` (4a); `review` holds the queue routes. The timeline (4d) stayed in `questions` too: it reads the version, decision and revision tables and applies the visibility rule per version, so a second module would only have forwarded to it |
 | `search` (new) | The bank index (`bank_index`), filters, counts, free-text and fuzzy search, duplicate candidates | A derived, rebuildable copy built for fast lookup (ADR-0008); never the source of truth |
 | `notifications` (new) | In-app notifications (a table, a list, mark as read) | Used by M4 for "returned" and "published" and by M5/M6 later; knows nothing about questions |
 
@@ -294,6 +294,37 @@ coaching, needed after a bug fix or a change to what is indexed).
   the caller may read the version it belongs to (so the steps of a private correction are not listed to
   people who can read only the published version); the coaching-wide audit log stays for admins (I-03).
 
+### 8.1 As built in 4d
+
+- **History** `GET /questions/{id}/history`, oldest first, no paging (a question has a few dozen entries: only
+  clicks create them). Each entry has `kind`, `at`, `actor_id`, `version_number`, `revision_id`, and for a return
+  `reasons` and `note`. Kinds: `CREATED`, `CHECKPOINT`, the steps `SUBMIT`, `RETURN`, `PASS_QC`, `APPROVE`,
+  `PUBLISH`, `WITHDRAW`, `START_CORRECTION`, and `ARCHIVED`, `RESTORED` (read through the audit module's public
+  reader, so the audit tables stay its own). A frozen revision that a step took into review is shown by that step,
+  not a second time as a checkpoint. A checkpoint's actor is read from the audit event written with it, which
+  names the frozen text (the revision row's own author changes with every save, so it cannot say who took the
+  checkpoint); a checkpoint taken before that event named its text has no known actor. Entries with the same instant keep a fixed order, so a request that writes several is stable.
+- **Who sees which entry:** each version is checked on its own with the rule of §5 (`may_read_version`); the
+  `CREATED` entry follows version 1, archive and restore follow the question. If no version is readable the answer is
+  404, so a draft's existence is not given away.
+- **Diff** `GET /questions/{id}/diff?from=<revision id>&to=<revision id>`. Revision ids come from the history
+  entries and, new in 4d, from `GET /questions/{id}/revisions` (each summary now carries `id`; an additive change).
+  Each text is checked on its own (`may_read_revision`): a revision of another question, of a version the caller
+  may not read, or **a working (unfrozen) text of someone else's draft is 404, even when the version it belongs to
+  is submitted**: the reviewers read the frozen text, and the author's unfinished copy is theirs.
+- **The comparison** (`domain/diff.py`, pure) returns `add` / `remove` / `replace` changes at a path inside the
+  content. Text gets word-level segments (`equal` / `insert` / `delete`); an equation, picture, table or list block
+  is one item and is replaced whole. Lists are matched by content, so an inserted option does not make later ones
+  look edited. Bounded: a very deep value, a list of more than about 250,000 item pairs, or a text of more than about
+  6 million word pairs is compared as one piece, so no stored content can make the route slow. The unit tests
+  (Hypothesis) check that equal texts give no changes, that replaying the changes on the old text gives the new one,
+  and that segments add back up to both texts.
+- Not built: the "published against the open correction" default pair. It is two ids the web can already get
+  (the `PUBLISH` entry's `revision_id`, and the correction's working revision from the revision list); 4k picks them.
+  `GET /questions/{id}/revisions` and `/revisions/{number}` (M3) are unchanged: they stay open only to the
+  question's author, admins and the edit-others grant, even after a submit. Anyone else gets revision ids from the
+  history.
+
 ## 9. Database (migrations 0026 onwards)
 
 All new tables carry `organization_id`, `FORCE ROW LEVEL SECURITY` with the tenant policy, composite foreign
@@ -314,7 +345,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 |---|---|
 | `POST /questions/{id}/submit` (`If-Match: "rev-N"`) · `/withdraw` · `/return` (`{reasons, note}`) · `/pass-qc` · `/approve` · `/publish` · `/start-correction` (these last six with `If-Match: "flow-N"`) | The steps; each answers with the question view, which now carries `state`, `flow_etag`, `allowed_steps`, `version_number`, `review_revision_id` |
 | `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
-| `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` | Timeline and before/after |
+| `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` (**built in 4d**, see §8.1) | Timeline and before/after |
 | `GET /bank/questions` (filters, `q`, `total`) · `GET /bank/questions/by-code/{code}` | The bank |
 | `GET /questions/{id}/duplicates` · `POST /questions/{id}/duplicates/decisions` | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
@@ -405,7 +436,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4a-4 | Publish, label snapshot, immutability trigger tests, start correction (version 2); T35 |
 | 4b | `notifications` module (migration, routes) and the two kinds from 4a-3/4a-4; T41 |
 | 4c | Review queue and counts (`review` module routes); visibility predicate; T37 part 1 |
-| 4d | History and diff (backend, unit tests); T40 |
+| 4d | **Built:** History and diff (backend, unit tests); T40 |
 | 4e | `search` module: `bank_index` (migration), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
 | 4f | Free text and typo search; the 100,000-question generator; k6 scripts; recorded timings (K-08); T38 |
 | 4g | Duplicate check (exact + near) and decisions; T39 |
