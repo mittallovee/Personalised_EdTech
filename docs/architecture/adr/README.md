@@ -25,4 +25,4 @@ Status values: `Proposed` → `Accepted` (owner approved) → `Superseded by ADR
 | [0017](./0017-backups-and-restore.md) | Backups: logical dumps with a tested restore now; managed point-in-time recovery from M7 | Proposed |
 | [0018](./0018-syllabus-import-parsing-stays-in-process.md) | The syllabus import is parsed inside the API request, with added limits; untrusted documents go to a worker | **Accepted** |
 | [0019](./0019-monitoring-stack-and-logging-rules.md) | Monitoring in practice: one log shape, never-log list, traces, metrics, opt-in local stack (extends 0010) | Proposed |
-| [0020](./0020-review-workflow-bound-to-a-frozen-revision.md) | The review workflow acts on one frozen revision; a published version never changes | Proposed |
+| [0020](./0020-review-workflow-bound-to-a-frozen-revision.md) | The review workflow acts on one frozen revision; a published version never changes | **Accepted** |

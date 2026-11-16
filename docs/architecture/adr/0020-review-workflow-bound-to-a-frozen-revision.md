@@ -1,5 +1,5 @@
 # ADR-0020: The review workflow acts on one frozen revision, and a published version never changes
-- Status: Proposed (M4 design note) · Date: 2026-11-15
+- Status: Accepted (owner approved 2026-11-16) · Date: 2026-11-15
 
 ## Context
 M4 adds submit, return, QC, approve and publish (E-01, E-04). The risk is a reviewer approving text that the
