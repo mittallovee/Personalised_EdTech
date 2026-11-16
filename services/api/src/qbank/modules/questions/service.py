@@ -33,6 +33,7 @@ from qbank.core.permissions import (
 from qbank.modules.assets.public import existing_image_ids
 from qbank.modules.audit.public import record_event
 from qbank.modules.notifications.public import notify
+from qbank.modules.questions.bank_sync import sync_bank
 from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalogue
 from qbank.modules.questions.context_checks import check_pin, passage_pin
 from qbank.modules.questions.domain.workflow import (
@@ -165,6 +166,7 @@ def create_question(
         session.add(row)
         session.flush()
     _record_pictures(session, revision)
+    sync_bank(session, master)
     question_type = content.get("question_type")
     record_event(
         session,
@@ -407,6 +409,7 @@ def save_working_revision(
     revision.updated_at = datetime.now(UTC)
     session.flush()
     _record_pictures(session, revision)
+    sync_bank(session, master)
     return QuestionView(master, version, revision, _findings(session, content, rules))
 
 
@@ -461,6 +464,7 @@ def checkpoint(
     master, version, revision = _lock_for_change(session, principal, question_id)
     require_if_match(if_match, revision.revision)
     fresh = _freeze_working(session, principal, master, version, revision)
+    sync_bank(session, master)  # the working copy is a new row, which the bank may show
     record_event(
         session,
         action="QUESTION_CHECKPOINTED",
@@ -581,6 +585,7 @@ def _move(
             **({"reasons": reasons} if reasons else {}),
         },
     )
+    sync_bank(session, master)
 
 
 def submit(
@@ -730,6 +735,7 @@ def set_archived(
         master.archived_at = datetime.now(UTC) if archived else None
         master.revision += 1
         session.flush()
+        sync_bank(session, master)
         record_event(
             session,
             action="QUESTION_ARCHIVED" if archived else "QUESTION_RESTORED",
@@ -998,7 +1004,7 @@ def publish(
     )
     session.flush()
     master.published_version_id = version.id
-    session.flush()
+    sync_bank(session, master)  # the move above ran before the master pointed at this version
     _tell_author(session, master, version, "QUESTION_PUBLISHED")
     return QuestionView(master, version, working, found, reviewed)
 
@@ -1080,6 +1086,7 @@ def start_correction(
         )
     )
     session.flush()
+    sync_bank(session, master)
     record_event(
         session,
         action="QUESTION_CORRECTION_STARTED",

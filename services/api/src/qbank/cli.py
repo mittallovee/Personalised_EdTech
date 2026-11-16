@@ -13,12 +13,16 @@ import getpass
 import os
 import sys
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import EmailStr, TypeAdapter, ValidationError
+from sqlalchemy import text
 
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
+from qbank.core.tenancy import TenantContext
 from qbank.modules.identity.service import create_platform_admin
+from qbank.modules.questions.public import reindex_bank
 
 MIN_PASSWORD_LENGTH = 12
 _email = TypeAdapter(EmailStr)
@@ -62,6 +66,45 @@ def _create_platform_admin(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reindex_bank(args: argparse.Namespace) -> int:
+    """Rebuild the bank index from the questions: after a fix or a change to what is indexed."""
+    owner_url = os.environ.get("MIGRATION_DATABASE_URL")
+    if not owner_url:
+        print("Set MIGRATION_DATABASE_URL (table-owner connection).", file=sys.stderr)
+        return 2
+    only: UUID | None = None
+    if args.organization:
+        try:
+            only = UUID(args.organization)
+        except ValueError:
+            print(f"Not a coaching id: {args.organization}", file=sys.stderr)
+            return 2
+    database = Database(owner_url)
+    try:
+        if only is not None:
+            organizations = [only]
+        else:
+            with database.transaction(TenantContext(is_platform=True)) as session:
+                organizations = list(
+                    session.scalars(text("SELECT id FROM organizations ORDER BY id"))
+                )
+        for organization_id in organizations:
+            rebuilt, after = 0, None
+            while True:
+                # One transaction per batch, so a long rebuild never holds one open.
+                with database.transaction(
+                    TenantContext(organization_id=organization_id)
+                ) as session:
+                    done, after = reindex_bank(session, organization_id, after=after)
+                rebuilt += done
+                if after is None:
+                    break
+            print(f"Coaching {organization_id}: {rebuilt} questions indexed")
+    finally:
+        database.dispose()
+    return 0
+
+
 def _export_openapi(args: argparse.Namespace) -> int:
     # Builds the whole app, so it is imported only when this command runs.
     from qbank.contract import OPENAPI_FILE, render_openapi
@@ -87,6 +130,12 @@ def main(argv: list[str] | None = None) -> int:
     admin.add_argument("--email", required=True)
     admin.add_argument("--name", help="Display name (asked if omitted)")
     admin.set_defaults(handler=_create_platform_admin)
+
+    reindex = commands.add_parser(
+        "reindex-bank", help="Rebuild the bank index (the question list) from the questions"
+    )
+    reindex.add_argument("--organization", help="Only this coaching (its id); default: all")
+    reindex.set_defaults(handler=_reindex_bank)
 
     openapi = commands.add_parser("export-openapi", help="Write the API contract (OpenAPI JSON)")
     openapi.add_argument("--output", help="Default: api/openapi.json in the repository")

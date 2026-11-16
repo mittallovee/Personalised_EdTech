@@ -277,6 +277,48 @@ coaching, needed after a bug fix or a change to what is indexed).
   question is never changed. (Attaching a *source* to the existing question is M6, when sources exist.)
 - Never searches another coaching, even when a code exists in both (the policy's first rule).
 
+### 7.5 As built in 4e (no text search yet)
+
+- **Table** `bank_index` (migration 0029): one row per master, primary key `(organization_id, master_id)` with a
+  composite foreign key to the master, `FORCE ROW LEVEL SECURITY` with the tenant policy, no delete (a question is
+  archived). It holds identity (`code`, author, created and updated time), the **bank version** (`version_number`,
+  `state`, `is_private`, `is_archived`, `has_published`, `has_open_correction`) and the filter columns (type,
+  language, class, subject, chapter, topic, main concept, all concepts as an array, difficulty, Bloom, `is_pyq`,
+  exam, year, `has_solution`, `has_video`). Not yet in it: `stem_text`, its `tsvector`, the trigram index and
+  `content_hash`. They come with 4f and 4g, and a `reindex-bank` run fills them. The starting indexes (code, listing
+  order, syllabus, concepts) are replaced by the ones the 100,000-question measurements ask for.
+- **Who writes it:** `questions/bank_sync.py` works one row out from the question's own tables (`bank_entry`) and
+  hands it to `search.public.save_entry`, an upsert that leaves a row alone when nothing in it changed. It is called
+  inside the same transaction as every create, autosave, checkpoint, workflow step (the one funnel `_move`),
+  archive, restore, publish and start of a correction, so a refused or rolled-back change leaves the index as it was.
+  `search` never imports `questions`: the questions module pushes rows in, so the two do not depend on each other.
+- **Which version a row shows:** the published version if there is one, else the newest. The text it reads is the
+  frozen revision under review or published, else the working copy. `updated_at` is worked out from the rows
+  (latest of: question created, state change of the shown version, shown revision saved, newest version created,
+  archived), never from the clock, so an incremental row and a rebuilt row are the same row.
+- **What the content may hold:** `questions/bank_fields.py` (pure, never raises) keeps a value only if it is valid
+  (a real id, a difficulty from 1 to 10, a Bloom level from the list, a year from 1950 to 2100, a language code) and
+  otherwise leaves the column empty, so nothing a draft holds can break a filter.
+- **Visibility is in the query** (`search/service.py`): a row is read if the person may create questions and either
+  the row is not private, or they wrote it, or they may open all drafts. This is `questions/visibility.py` written
+  over the row's own `is_private` and `created_by`; a test lists a question in every state for every kind of person
+  and checks that the bank lists exactly what opening the question lets through. The same condition is on the list,
+  the `total` and the lookup by code.
+- **Routes** (all under `/api/v1/bank`): `GET /questions` with filters (`class_id`, `subject_id`, `chapter_id`,
+  `topic_id`, `concept_id`, `difficulty`, `bloom_level`, `question_type`, `language`, `exam_id`, `exam_year`,
+  `state`, `author_id`, `is_pyq`, `has_solution`, `has_video`, `archived`), the most recently changed first, cursor
+  pages, and `total`. A filter given several times matches any of its values; different filters must all match.
+  `concept_id` matches the main concept or any other. A malformed value is `400`. `GET /questions/by-code/{code}`
+  forgives case, spaces, dashes and `O`/`I`/`L`, answers `422 INVALID_CODE` for a non-code, and `404` for a missing
+  code, another coaching's code and a private draft that is not yours; an archived question is still found by code.
+- **`qbank reindex-bank [--organization ID]`** rebuilds the rows from the revisions, in batches of 500 questions
+  (one transaction per batch), for one coaching or all. It needs the owner connection (`MIGRATION_DATABASE_URL`), as
+  `create-platform-admin` does. A test damages and deletes rows and checks the rebuild writes them back, and
+  that the rows written by every kind of change equal the rebuilt rows. The owner's runbook is
+  `docs/operations/bank-index.md`.
+- Not built: the list has no text preview (it needs `stem_text`, 4f), and no filter on `has_open_correction` or
+  `has_published` (the columns are there; the web will say when it needs them).
+
 ## 8. Diff and history (E-08, E-09)
 
 - **Diff** (`GET /questions/{id}/diff?from=<revision>&to=<revision>`): both revisions must belong to this
@@ -335,7 +377,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 |---|---|
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
 | Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
-| Bank index | `bank_index`, the `pg_trgm` extension, the indexes; backfilled by the reindex command, not by SQL |
+| Bank index (**built in 4e, migration 0029**) | `bank_index` with the label columns and a starting set of indexes; the `pg_trgm` extension, the text columns and their indexes come in 4f; rows are filled by the reindex command, not by SQL |
 | Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
 
@@ -346,7 +388,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | `POST /questions/{id}/submit` (`If-Match: "rev-N"`) · `/withdraw` · `/return` (`{reasons, note}`) · `/pass-qc` · `/approve` · `/publish` · `/start-correction` (these last six with `If-Match: "flow-N"`) | The steps; each answers with the question view, which now carries `state`, `flow_etag`, `allowed_steps`, `version_number`, `review_revision_id` |
 | `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
 | `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` (**built in 4d**, see §8.1) | Timeline and before/after |
-| `GET /bank/questions` (filters, `q`, `total`) · `GET /bank/questions/by-code/{code}` | The bank |
+| `GET /bank/questions` (filters, `total`; `q` comes in 4f) · `GET /bank/questions/by-code/{code}` (**built in 4e**, see §7.5) | The bank |
 | `GET /questions/{id}/duplicates` · `POST /questions/{id}/duplicates/decisions` | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
 
@@ -437,7 +479,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4b | `notifications` module (migration, routes) and the two kinds from 4a-3/4a-4; T41 |
 | 4c | Review queue and counts (`review` module routes); visibility predicate; T37 part 1 |
 | 4d | **Built:** History and diff (backend, unit tests); T40 |
-| 4e | `search` module: `bank_index` (migration), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
+| 4e | **Built:** `search` module: `bank_index` (migration 0029), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
 | 4f | Free text and typo search; the 100,000-question generator; k6 scripts; recorded timings (K-08); T38 |
 | 4g | Duplicate check (exact + near) and decisions; T39 |
 | 4h | Web: workflow action bar, read-only editor, return dialog, publication checklist wording; e2e part 1 |
