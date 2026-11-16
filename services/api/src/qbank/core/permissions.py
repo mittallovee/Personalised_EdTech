@@ -116,6 +116,14 @@ def has_grant(principal: Principal, grant: Grant) -> bool:
     return grant in principal.grants
 
 
+def may_see_review_queue(principal: Principal) -> bool:
+    """The shared review queue and its counts: anyone who holds at least one review grant, which
+    an admin, the Owner and a platform admin acting in the coaching hold implicitly (M4 §5)."""
+    if not is_allowed(principal, Action.CREATE_QUESTIONS):
+        return False
+    return any(has_grant(principal, grant) for grant in (Grant.QC, Grant.APPROVE, Grant.PUBLISH))
+
+
 def may_access_all_drafts(principal: Principal) -> bool:
     """Open drafts written by others: admins, and faculty with ``EDIT_OTHERS`` (M3 §6)."""
     return is_allowed(principal, Action.CREATE_QUESTIONS) and has_grant(

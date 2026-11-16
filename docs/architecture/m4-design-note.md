@@ -50,7 +50,7 @@ on a question (D-18, P3), saved filters (F-05, P3), "find similar" by meaning (F
 | Module | Owns | Why separate |
 |---|---|---|
 | `questions` (extended) | The workflow state of a version, the pure state machine, the rule "a published version never changes", diff, the extraction of search facts from content | The state sits next to the revisions it protects, so the database trigger and the code agree on one rule |
-| `review` (new) | Who may do each step (grants), return reasons, the append-only `review_decisions`, the queue, the history timeline | Policy and queue are about *people and decisions*, not about content; it calls `questions.public` and never touches its tables |
+| `review` (new; the queue routes are **built in 4c**) | Who may do each step (grants), return reasons, the append-only `review_decisions`, the queue, the history timeline | Policy and queue are about *people and decisions*, not about content; it calls `questions.public` and never touches its tables. In practice the step rules, reasons and decisions stayed beside the state they protect in `questions` (4a); `review` holds the queue routes and, in 4d, the timeline |
 | `search` (new) | The bank index (`bank_index`), filters, counts, free-text and fuzzy search, duplicate candidates | A derived, rebuildable copy built for fast lookup (ADR-0008); never the source of truth |
 | `notifications` (new) | In-app notifications (a table, a list, mark as read) | Used by M4 for "returned" and "published" and by M5/M6 later; knows nothing about questions |
 
@@ -313,11 +313,38 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | Method & path | Purpose |
 |---|---|
 | `POST /questions/{id}/submit` (`If-Match: "rev-N"`) · `/withdraw` · `/return` (`{reasons, note}`) · `/pass-qc` · `/approve` · `/publish` · `/start-correction` (these last six with `If-Match: "flow-N"`) | The steps; each answers with the question view, which now carries `state`, `flow_etag`, `allowed_steps`, `version_number`, `review_revision_id` |
-| `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` | The shared queue and the number waiting at each step |
+| `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
 | `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` | Timeline and before/after |
 | `GET /bank/questions` (filters, `q`, `total`) · `GET /bank/questions/by-code/{code}` | The bank |
 | `GET /questions/{id}/duplicates` · `POST /questions/{id}/duplicates/decisions` | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
+
+### 10.1 The review queue (built in 4c; no migration)
+
+- **Who:** anyone holding at least one of the QC, approve and publish grants, and admins (the Owner and a
+  platform admin acting in the coaching hold every grant). Everyone else gets `403 PERMISSION_DENIED`, from the
+  grants read on this request (B-10).
+- **What a row is:** the newest version of a question that is not archived. The default view is everything that
+  waits: `IN_REVIEW` (waiting for QC), `QC_PASSED` (waiting for approval) and `APPROVED` (waiting to publish).
+  `state=` picks one of these, or `CHANGES_REQUESTED`, the *Returned to me* tab. A question that is a draft, or
+  published, is never a row. A correction of a published question is a row of its own, `version_number` 2 or more,
+  once it is submitted.
+- **Returned is yours alone.** A returned question is its author's work in progress again (§5), so
+  `CHANGES_REQUESTED` lists only what the caller sent in; not even an admin sees another person's. One visibility
+  condition (`questions/visibility.py`) is applied to every list, so a hidden question is never listed or counted;
+  4e's bank list uses the same one.
+- **Author** (`author_id`, `submitted_by`) is whoever sent *that version* in: the actor of its latest submit, the
+  same person the return and publish notices go to (§6). For a correction started by an admin it is the admin.
+- **Order:** the longest wait first, by `waiting_since` (when the version entered its present state), then by id,
+  so a page boundary never repeats or skips a row. The cursor is that position.
+- **Filters** (`subject_id`, `chapter_id`, `language`) read the text the reviewers act on: the frozen review
+  revision (the author's working copy for a returned question). They are checked as typed values (a UUID, a
+  language code), bound as parameters, never joined into SQL. `older_than_days` keeps what has waited at least
+  that long. A malformed value is `400`, like every other list.
+- **Counts** (`/review/queue/counts`) are the size of each tab for the whole coaching: `waiting_for_qc`,
+  `waiting_for_approval`, `waiting_to_publish`, and `returned_to_me` (the caller's own). Filters do not narrow
+  them. The queue holds only what is submitted and not yet published, so these two reads scan a small set;
+  the 1-lakh timings (K-08) are about the bank, not the queue.
 
 New error codes (added to `error-codes.md` in the PR that introduces each): `WORKFLOW_STEP_INVALID` (409),
 `QUESTION_NOT_EDITABLE` (409), `QUESTION_HAS_ERRORS` (422, submit with `error` findings; added in 4a-2),

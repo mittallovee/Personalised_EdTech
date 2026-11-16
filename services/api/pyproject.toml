@@ -89,6 +89,7 @@ modules = [
     "qbank.modules.notifications",
     "qbank.modules.organizations",
     "qbank.modules.questions",
+    "qbank.modules.review",
     "qbank.modules.taxonomy",
 ]
 ignore_imports = [

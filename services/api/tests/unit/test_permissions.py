@@ -16,6 +16,7 @@ from qbank.core.permissions import (
     may_access_draft,
     may_archive_draft,
     may_manage_member,
+    may_see_review_queue,
     require,
     require_may_manage_member,
 )
@@ -100,6 +101,27 @@ def test_admins_owner_and_acting_platform_hold_every_grant(who: Principal) -> No
 
 def test_platform_admin_not_acting_in_a_coaching_holds_no_grant() -> None:
     assert not any(has_grant(PLATFORM, grant) for grant in Grant)
+
+
+@pytest.mark.parametrize("grant", ["QC", "APPROVE", "PUBLISH"])
+def test_one_review_grant_is_enough_to_see_the_review_queue(grant: str) -> None:
+    assert may_see_review_queue(principal("FACULTY", grants=frozenset({grant})))
+
+
+@pytest.mark.parametrize("grants", [frozenset(), frozenset({"EDIT_OTHERS", "MANAGE_AI_PROMPTS"})])
+def test_faculty_without_a_review_grant_cannot_see_the_review_queue(grants: frozenset[str]) -> None:
+    assert not may_see_review_queue(principal("FACULTY", grants=grants))
+
+
+@pytest.mark.parametrize("who", [ADMIN, OWNER, PLATFORM_ACTING])
+def test_admins_owner_and_acting_platform_see_the_review_queue(who: Principal) -> None:
+    assert may_see_review_queue(who)
+
+
+def test_nobody_outside_a_coaching_sees_the_queue_whatever_a_stale_record_lists() -> None:
+    removed = principal(None, grants=frozenset({"QC", "APPROVE", "PUBLISH"}))
+    assert not may_see_review_queue(removed)
+    assert not may_see_review_queue(PLATFORM)
 
 
 # Who may invite a member of each role, or make them a new link (design note §3).
