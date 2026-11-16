@@ -139,7 +139,7 @@ services:
   # Logs and traces are kept 7 days, metrics 15 days (ADR-0019).
   otel-collector:
     profiles: ["observability"]
-    image: otel/opentelemetry-collector-contrib:0.164.0-386
+    image: otel/opentelemetry-collector-contrib:0.165.0-386
     command: ["--config=/etc/otel-collector.yaml"]
     volumes:
       - ./infra/observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
@@ -163,7 +163,7 @@ services:
 
   prometheus:
     profiles: ["observability"]
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
