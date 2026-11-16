@@ -48,10 +48,12 @@ ping_monitor() {
     || echo "(could not reach the monitoring address)" >&2
 }
 
-stage="$root/backups/offsite-stage"
+# Each run stages its dump in a folder of its own (made below), so a second run, started by hand while
+# the scheduled one is working, can never delete or overwrite the first one's dump.
+stage=""
 finish() {
   local code=$?
-  rm -rf "$stage"   # the plain dump must not stay on disk
+  [ -z "$stage" ] || rm -rf "$stage"   # the plain dump must not stay on disk
   if [ "$code" -ne 0 ]; then
     echo "$(date -u +%FT%TZ) offsite backup FAILED (exit $code)" >&2
     ping_monitor /fail
@@ -77,8 +79,9 @@ docker volume inspect "$volume" > /dev/null || { echo "No Docker volume named $v
 restic_tool cat config > /dev/null \
   || { echo "Cannot open the backup store: wrong address, keys or password, or run --init once." >&2; exit 1; }
 
-rm -rf "$stage"
-mkdir -p "$stage"
+# Staging folders left by a run that was killed (power cut): they hold a plain dump, so remove them.
+find "$root/backups" -maxdepth 1 -name 'offsite-stage.*' -mmin +1440 -exec rm -rf {} + 2> /dev/null || true
+stage="$(mktemp -d "$root/backups/offsite-stage.XXXXXX")"
 export PGHOST="${PGHOST:-localhost}" PG_DOCKER_IMAGE="${PG_DOCKER_IMAGE:-postgres:17}"
 export PGUSER="${PGUSER:-${POSTGRES_USER:-}}" PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-}}"
 export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-}}"

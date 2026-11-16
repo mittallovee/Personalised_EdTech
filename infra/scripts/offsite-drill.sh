@@ -74,6 +74,11 @@ EOF
 export OFFSITE_ENV="$work/offsite.env" OFFSITE_LOG="$work/backup.log"
 export RESTIC_NETWORK="$net" PG_DOCKER_NETWORK="$net"
 
+# Another backup (a scheduled one, say) may be running while this one starts or fails. Its staging folder
+# must survive: this stands in for it, at the path an older version of the script shared between runs.
+mkdir -p "$root/backups/offsite-stage"
+echo "someone else's dump" > "$root/backups/offsite-stage/qbank.dump"
+
 echo "--- 1. a backup before the store exists is refused (and says what to do)"
 "$here/backup-offsite.sh" > /dev/null 2>&1 && fail "backup ran without a store"
 grep -q -- '--init' "$work/backup.log" || fail "the refusal did not mention --init"
@@ -83,7 +88,9 @@ echo "--- 2. create the store, back up twice"
 "$here/backup-offsite.sh" > /dev/null
 psql_owner -d qbank_dev -c "INSERT INTO notes VALUES (251, 'added between backups')"
 "$here/backup-offsite.sh" > /dev/null
-[ ! -d "$root/backups/offsite-stage" ] || fail "the plain dump was left on disk"
+[ -f "$root/backups/offsite-stage/qbank.dump" ] || fail "a failing or finished run deleted another run's staging folder"
+rm -rf "$root/backups/offsite-stage"
+[ -z "$(ls -d "$root"/backups/offsite-stage.* 2> /dev/null)" ] || fail "the plain dump was left on disk"
 
 echo "--- 3. a wrong password cannot read the store"
 (
