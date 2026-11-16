@@ -86,6 +86,7 @@ modules = [
     "qbank.modules.audit",
     "qbank.modules.health",
     "qbank.modules.identity",
+    "qbank.modules.notifications",
     "qbank.modules.organizations",
     "qbank.modules.questions",
     "qbank.modules.taxonomy",

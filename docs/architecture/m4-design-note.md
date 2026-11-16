@@ -181,7 +181,7 @@ submit of each child that should use it.
   the signed-in person may take on a question (`allowed_steps`), so the web holds no rules.
 - Every step writes an **audit event** and a `review_decisions` row. Autosaves still do not.
 
-## 6. Notifications (I-01)
+## 6. Notifications (I-01) (**built in 4b, migration 0028**)
 
 - Table `notifications` (user, kind, a small JSON `data` with the question code and ids, created, read time).
   A user reads only their own (a policy on the user, on top of the coaching's row-level security).
@@ -193,6 +193,14 @@ submit of each child that should use it.
   (no WebSockets in Phase 1). No emails (I-01).
 - Notifications are created in the **same transaction** as the step that caused them, so a return never loses
   its message and a rolled-back step never sends one.
+- **Who is "the author":** the person who submitted that version (the latest `SUBMIT` decision), so for a
+  correction it is whoever started and submitted version 2. Pass QC and approve send nothing.
+- **Who can see what:** the policies let a person read and mark only their own rows (`user_id` = the signed-in
+  user, inside the coaching's row-level security). Any member may *insert* a row for a colleague in the same
+  coaching, which is what a return does. The app role may change only `read_at` and never deletes. Because
+  a person may not read a colleague's row, the insert does not ask the database to send values back
+  (`created_at` is set in the code). `data` holds ids and short facts (question code, reasons, note); the
+  screen words the message and shows it as plain text.
 
 ## 7. The bank: index, filters, search, duplicates
 

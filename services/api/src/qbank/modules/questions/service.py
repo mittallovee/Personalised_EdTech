@@ -32,6 +32,7 @@ from qbank.core.permissions import (
 )
 from qbank.modules.assets.public import existing_image_ids
 from qbank.modules.audit.public import record_event
+from qbank.modules.notifications.public import notify
 from qbank.modules.questions.catalogue_checks import catalogue_ids, check_catalogue
 from qbank.modules.questions.context_checks import check_pin, passage_pin
 from qbank.modules.questions.domain.workflow import (
@@ -866,6 +867,41 @@ def _clean_reasons(reasons: list[ReturnReason], note: str) -> tuple[list[str], s
     return kept, text
 
 
+def _tell_author(
+    session: Session,
+    master: QuestionMaster,
+    version: QuestionVersion,
+    kind: str,
+    **facts: Any,
+) -> None:
+    """Send the author a notification in the same transaction as the step (I-01).
+
+    The author of a version is the person who submitted it, which for a correction is whoever
+    started it, not necessarily whoever wrote version 1. Ids and short facts only: the screen
+    words the message and shows it as text."""
+    author = session.scalar(
+        select(ReviewDecision.actor_id)
+        .where(
+            ReviewDecision.version_id == version.id,
+            ReviewDecision.step == Step.SUBMIT.value,
+        )
+        .order_by(ReviewDecision.flow_revision.desc())
+        .limit(1)
+    )
+    notify(
+        session,
+        organization_id=master.organization_id,
+        user_id=author or master.created_by,
+        kind=kind,
+        data={
+            "question_id": str(master.id),
+            "code": master.code,
+            "version_number": version.number,
+            **facts,
+        },
+    )
+
+
 def return_question(
     session: Session,
     principal: Principal,
@@ -901,6 +937,7 @@ def return_question(
         reasons=kept,
         note=text,
     )
+    _tell_author(session, master, version, "REVIEW_RETURNED", reasons=kept, note=text)
     found = _findings(session, reviewed.content, rules)
     return QuestionView(master, version, working, found, reviewed)
 
@@ -955,6 +992,7 @@ def publish(
     session.flush()
     master.published_version_id = version.id
     session.flush()
+    _tell_author(session, master, version, "QUESTION_PUBLISHED")
     return QuestionView(master, version, working, found, reviewed)
 
 
