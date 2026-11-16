@@ -1,5 +1,5 @@
 # ADR-0021: Off-machine backups with restic to a Cloudflare R2 bucket
-- Status: Proposed (destination and tool chosen by the owner 2026-11-16) · Date: 2026-11-16 · Requirements: K-16, N-06
+- Status: Accepted (owner approved 2026-11-16) · Date: 2026-11-16 · Requirements: K-16, N-06
 ## Context
 ADR-0017 gave us a tested dump and restore, but nothing runs them and the copies stay on the owner's PC. K-16
 requires, before real questions are typed (M4): a daily copy of the database **and the uploaded pictures** (the
