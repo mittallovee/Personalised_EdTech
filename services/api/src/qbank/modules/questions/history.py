@@ -59,6 +59,7 @@ _AUDIT_KIND = {
     "QUESTION_ARCHIVED": HistoryKind.ARCHIVED,
     "QUESTION_RESTORED": HistoryKind.RESTORED,
 }
+_CHECKPOINTED = "QUESTION_CHECKPOINTED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +124,6 @@ def question_history(
             QuestionRevision.id,
             QuestionRevision.version_id,
             QuestionRevision.number,
-            QuestionRevision.author_id,
             QuestionRevision.frozen_at,
         ).where(QuestionRevision.version_id.in_(number_of))
     ).all()
@@ -142,15 +142,31 @@ def question_history(
     # A revision is frozen by a checkpoint, or by a step that takes its text into review: those
     # steps show it themselves, so only the rest are checkpoints.
     taken_by_a_step = {decision.revision_id for decision in decisions}
-    saved_by = {(row.version_id, row.number): row.author_id for row in revisions}
+    events = entity_actions(
+        session,
+        organization_id=master.organization_id,
+        entity_type=ENTITY_TYPE,
+        entity_id=master.id,
+        actions=[*_AUDIT_KIND, _CHECKPOINTED],
+    )
+    # Who took each checkpoint, from the event written with it: a revision row's ``author_id`` is
+    # whoever saved it last, so reading it would credit a later edit's author with the checkpoint.
+    # A checkpoint with no such event (taken before the event named its text) has no known actor.
+    checkpointed_by = {
+        str(event.after["revision_id"]): event.actor_user_id
+        for event in events
+        if event.action == _CHECKPOINTED and event.after and "revision_id" in event.after
+    }
     for row in revisions:
         if row.frozen_at is None or row.id in taken_by_a_step:
             continue
-        # The next revision starts, as a copy, when this one is frozen, by whoever froze it.
-        who = saved_by.get((row.version_id, row.number + 1), row.author_id)
         add(
             HistoryItem(
-                HistoryKind.CHECKPOINT, row.frozen_at, who, number_of[row.version_id], row.id
+                HistoryKind.CHECKPOINT,
+                row.frozen_at,
+                checkpointed_by.get(str(row.id)),
+                number_of[row.version_id],
+                row.id,
             ),
             _RANK[HistoryKind.CHECKPOINT],
             row.id,
@@ -169,13 +185,9 @@ def question_history(
             2,
             decision.id,
         )
-    for event in entity_actions(
-        session,
-        organization_id=master.organization_id,
-        entity_type=ENTITY_TYPE,
-        entity_id=master.id,
-        actions=_AUDIT_KIND,
-    ):
+    for event in events:
+        if event.action not in _AUDIT_KIND:
+            continue
         kind = _AUDIT_KIND[event.action]
         add(HistoryItem(kind, event.at, event.actor_user_id, None, None), _RANK[kind], event.id)
     return [item for _, item in sorted(items, key=lambda pair: pair[0])]

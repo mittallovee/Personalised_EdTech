@@ -57,12 +57,14 @@ def record_event(
 
 @dataclass(frozen=True, slots=True)
 class EntityAction:
-    """Who did one thing to an entity, and when. The event's before/after data is not included."""
+    """Who did one thing to an entity, and when, with the event's ``after`` data (names and ids;
+    the caller asks only for kinds of event whose data it knows to be safe to use)."""
 
     id: UUID
     action: str
     actor_user_id: UUID | None
     at: datetime
+    after: dict[str, Any] | None
 
 
 def entity_actions(
@@ -76,7 +78,13 @@ def entity_actions(
     """The given kinds of event recorded for one entity of one coaching, oldest first. Whether the
     caller may see them is the caller's decision: this is a plain read, not a page of the log."""
     rows = session.execute(
-        select(AuditEvent.id, AuditEvent.action, AuditEvent.actor_user_id, AuditEvent.created_at)
+        select(
+            AuditEvent.id,
+            AuditEvent.action,
+            AuditEvent.actor_user_id,
+            AuditEvent.created_at,
+            AuditEvent.after,
+        )
         .where(
             AuditEvent.organization_id == organization_id,
             AuditEvent.entity_type == entity_type,
@@ -85,4 +93,7 @@ def entity_actions(
         )
         .order_by(AuditEvent.created_at, AuditEvent.id)
     ).all()
-    return [EntityAction(row.id, row.action, row.actor_user_id, row.created_at) for row in rows]
+    return [
+        EntityAction(row.id, row.action, row.actor_user_id, row.created_at, row.after)
+        for row in rows
+    ]

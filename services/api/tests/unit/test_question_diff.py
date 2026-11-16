@@ -155,6 +155,18 @@ def test_null_is_a_value_like_any_other() -> None:
     assert apply_changes({"a": None}, changes) == {"a": 0}
 
 
+@pytest.mark.parametrize("kind", [[], {}, {"a": 1}, [1, 2], None, 5, True, ["equation"]])
+def test_a_block_whose_kind_is_not_a_word_can_still_be_compared(kind: Any) -> None:
+    """A draft is saved even when a block's kind is junk (it is a finding, not a refusal), so the
+    comparison must never trip over it."""
+    old = {"stem": [{"kind": kind, "text": "old"}]}
+    new = {"stem": [{"kind": kind, "text": "new"}]}
+    changes = diff_content(old, new)
+    assert canonical(apply_changes(old, changes)) == canonical(new)
+    other = {"stem": [{"kind": "paragraph", "text": "new"}]}
+    assert canonical(apply_changes(old, diff_content(old, other))) == canonical(other)
+
+
 def test_true_and_one_are_different_values() -> None:
     assert diff_content({"a": True}, {"a": 1}) != []
 
@@ -203,7 +215,8 @@ SCALARS = st.none() | st.booleans() | st.integers(-3, 3) | LETTERS
 JSON_VALUES = st.recursive(
     SCALARS,
     lambda inner: (
-        st.lists(inner, max_size=5) | st.dictionaries(st.sampled_from("abcd"), inner, max_size=4)
+        st.lists(inner, max_size=5)
+        | st.dictionaries(st.sampled_from(["a", "b", "c", "kind"]), inner, max_size=4)
     ),
     max_leaves=25,
 )

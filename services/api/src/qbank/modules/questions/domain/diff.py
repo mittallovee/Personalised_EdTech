@@ -75,7 +75,12 @@ def _canonical(value: Any) -> str:
 
 
 def _is_atomic(value: Any) -> bool:
-    return isinstance(value, dict) and value.get("kind") in _ATOMIC_BLOCKS
+    """A block of a kind that is compared as one item. Saved drafts may hold any JSON, so a
+    ``kind`` that is not a word (a list, say) is simply not one of them."""
+    if not isinstance(value, dict):
+        return False
+    kind = value.get("kind")
+    return isinstance(kind, str) and kind in _ATOMIC_BLOCKS
 
 
 def word_segments(old: str, new: str) -> tuple[Segment, ...]:

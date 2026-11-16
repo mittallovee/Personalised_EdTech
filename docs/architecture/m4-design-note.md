@@ -301,8 +301,9 @@ coaching, needed after a bug fix or a change to what is indexed).
   `reasons` and `note`. Kinds: `CREATED`, `CHECKPOINT`, the steps `SUBMIT`, `RETURN`, `PASS_QC`, `APPROVE`,
   `PUBLISH`, `WITHDRAW`, `START_CORRECTION`, and `ARCHIVED`, `RESTORED` (read through the audit module's public
   reader, so the audit tables stay its own). A frozen revision that a step took into review is shown by that step,
-  not a second time as a checkpoint. A checkpoint's actor is whoever started the next working copy, which is
-  whoever froze it. Entries with the same instant keep a fixed order, so a request that writes several is stable.
+  not a second time as a checkpoint. A checkpoint's actor is read from the audit event written with it, which
+  names the frozen text (the revision row's own author changes with every save, so it cannot say who took the
+  checkpoint); a checkpoint taken before that event named its text has no known actor. Entries with the same instant keep a fixed order, so a request that writes several is stable.
 - **Who sees which entry:** each version is checked on its own with the rule of §5 (`may_read_version`); the
   `CREATED` entry follows version 1, archive and restore follow the question. If no version is readable the answer is
   404, so a draft's existence is not given away.

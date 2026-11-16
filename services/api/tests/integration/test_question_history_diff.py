@@ -237,6 +237,27 @@ def test_a_checkpoint_taken_between_steps_sits_between_them(
     ]
 
 
+def test_a_checkpoint_stays_attributed_to_who_took_it_after_someone_else_edits(
+    client: TestClient, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    question = start(client, team, catalogue)
+    checkpoint(client, team, question)
+    current = read(client, team, "author", question["id"])
+    headers = {**as_(client, team, "editor"), "If-Match": f'"rev-{current["revision"]}"'}
+    ok(
+        client.put(
+            f"{PATH}/{question['id']}/working-revision",
+            json={"content": current["content"]},
+            headers=headers,
+        )
+    )  # saving makes the editor the author of the working copy, as it always has
+
+    [created, taken] = entries(client, team, "author", question["id"])
+    assert taken["kind"] == "CHECKPOINT"
+    assert taken["actor_id"] == str(team["author"].user_id)
+    assert created["actor_id"] == str(team["author"].user_id)
+
+
 def test_a_step_names_the_text_it_was_taken_on_and_a_checkpoint_the_text_it_froze(
     client: TestClient, team: dict[str, Member], catalogue: Catalogue
 ) -> None:
