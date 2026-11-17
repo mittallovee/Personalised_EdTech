@@ -8,13 +8,16 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
+import { ConfirmPanel } from "@/components/confirm-panel";
 import { FindingsPanel } from "@/components/findings-panel";
 import { ItemsField } from "@/components/items-field";
 import { MatchingField } from "@/components/matching-field";
 import { MetadataField } from "@/components/metadata-field";
 import { OptionsField } from "@/components/options-field";
 import { PassagePanel } from "@/components/passage-panel";
+import { ReturnForm } from "@/components/return-form";
 import { TypedAnswerField } from "@/components/typed-answer-field";
+import { StateBadge, WorkflowBar } from "@/components/workflow-bar";
 import { api, errorMessage, ifMatch } from "@/lib/api";
 import { moveToCheckpoint, pinOf } from "@/lib/passage-pin";
 import { blocksOf, formatLabel, savedLabel, withField } from "@/lib/question-content";
@@ -22,8 +25,68 @@ import { useAutosave, type SaveState } from "@/lib/use-autosave";
 import { NETWORK } from "@/lib/use-catalogue";
 import { useMe } from "@/lib/use-me";
 import { usePinnedPassage } from "@/lib/use-pinned-passage";
+import {
+  CONFIRM,
+  STEP_DONE,
+  findingsTitle,
+  isEditable,
+  stepIfMatch,
+  type ReturnReason,
+  type Step,
+} from "@/lib/workflow";
 
 type Question = components["schemas"]["QuestionOut"];
+type Answer = { data?: Question; error?: unknown; response: Response };
+
+/**
+ * Send one review step. One call per route, so each request is checked against the API contract.
+ * Submit carries the text's ETag and every other step the workflow's (`stepIfMatch`).
+ */
+function sendStep(
+  step: Step,
+  id: string,
+  etag: string,
+  back?: { reasons: ReturnReason[]; note: string },
+): Promise<Answer> {
+  const params = { path: { question_id: id }, header: { "If-Match": etag } };
+  switch (step) {
+    case "SUBMIT":
+      return api().POST("/api/v1/questions/{question_id}/submit", { params });
+    case "PASS_QC":
+      return api().POST("/api/v1/questions/{question_id}/pass-qc", { params });
+    case "APPROVE":
+      return api().POST("/api/v1/questions/{question_id}/approve", { params });
+    case "PUBLISH":
+      return api().POST("/api/v1/questions/{question_id}/publish", { params });
+    case "START_CORRECTION":
+      return api().POST("/api/v1/questions/{question_id}/start-correction", { params });
+    case "WITHDRAW":
+      return api().POST("/api/v1/questions/{question_id}/withdraw", { params });
+    case "RETURN":
+      return api().POST("/api/v1/questions/{question_id}/return", {
+        params,
+        body: { reasons: back?.reasons ?? [], note: back?.note ?? "" },
+      });
+  }
+}
+
+/** The step is no longer one the question can take: another screen moved it on. */
+function outOfStep(error: unknown): boolean {
+  const code = (error as { error?: { code?: string } } | undefined)?.error?.code;
+  return code === "WORKFLOW_STEP_INVALID";
+}
+
+/** Where the question stands in the review workflow, as the API last said. */
+type Flow = Pick<Question, "state" | "flow_etag" | "allowed_steps" | "review_revision_id">;
+
+function flowOf(question: Question): Flow {
+  return {
+    state: question.state,
+    flow_etag: question.flow_etag,
+    allowed_steps: question.allowed_steps,
+    review_revision_id: question.review_revision_id,
+  };
+}
 
 const ALERT =
   "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300";
@@ -158,7 +221,11 @@ function Editor({ initial }: { initial: Question }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState({ number: initial.version_number, id: initial.id });
+  const [flow, setFlow] = useState<Flow>(flowOf(initial));
+  // A step waiting for "are you sure" (publish, start a correction) or for the return form.
+  const [asking, setAsking] = useState<Step | null>(null);
   const archived = save.state === "archived";
+  const editable = isEditable(flow.state);
   const type = save.content.question_type;
   // These formats list four options written as content; matching's options are mappings instead.
   const hasOptions = ["SCQ", "MULTI_CORRECT", "ASSERTION_REASON", "MULTIPLE_STATEMENT"].includes(
@@ -167,7 +234,7 @@ function Editor({ initial }: { initial: Question }) {
   const typed = ["INTEGER", "SINGLE_DIGIT", "NUMERICAL"].includes(
     String(save.content.question_type),
   );
-  const locked = archived || save.state === "conflict";
+  const locked = archived || save.state === "conflict" || !editable;
 
   /**
    * Run one of the buttons: only one at a time, and the text cannot be edited meanwhile, so
@@ -193,8 +260,10 @@ function Editor({ initial }: { initial: Question }) {
         if (data) {
           save.adopt(data, keepEdits);
           setVersion((v) => ({ ...v, number: data.version_number }));
-        } else if (response.status === 412) {
-          // The screen is out of date: stop saving and offer to reload, as a refused save does.
+          setFlow(flowOf(data));
+        } else if (response.status === 412 || outOfStep(error)) {
+          // The screen is out of date (someone saved, or took a step, meanwhile): stop saving and
+          // offer to reload, as a refused save does.
           save.markConflict();
         } else {
           setProblem(errorMessage(error as never, response.status));
@@ -235,12 +304,31 @@ function Editor({ initial }: { initial: Question }) {
     if (done) setNotice(archive ? "Archived. It is hidden from the list." : "Restored.");
   }
 
+  async function takeStep(step: Step, back?: { reasons: ReturnReason[]; note: string }) {
+    const done = await act(() =>
+      sendStep(step, initial.id, stepIfMatch(step, save.revision.current, flow.flow_etag), back),
+    );
+    if (done) {
+      setAsking(null);
+      setNotice(STEP_DONE[step]);
+    }
+  }
+
+  function chooseStep(step: Step) {
+    setProblem(null);
+    if (step === "RETURN" || CONFIRM[step]) setAsking(step);
+    else void takeStep(step);
+  }
+
   async function reload() {
     const result = await api().GET("/api/v1/questions/{question_id}", {
       params: { path: { question_id: initial.id } },
     });
     if (result.data) {
       save.adopt(result.data);
+      setFlow(flowOf(result.data));
+      setVersion((v) => ({ ...v, number: result.data.version_number }));
+      setAsking(null);
       setProblem(null);
     } else {
       setProblem(errorMessage(result.error as never, result.response.status));
@@ -272,21 +360,26 @@ function Editor({ initial }: { initial: Question }) {
           Back to questions
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">
-            Question <span className="font-mono">{initial.code}</span>{" "}
-            <span className="text-base font-normal text-zinc-600 dark:text-zinc-400">
-              {formatLabel(save.content.question_type)}
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-semibold">
+            <span>
+              Question <span className="font-mono">{initial.code}</span>{" "}
+              <span className="text-base font-normal text-zinc-600 dark:text-zinc-400">
+                {formatLabel(save.content.question_type)}
+              </span>
             </span>
+            <StateBadge state={flow.state} />
           </h1>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={PRIMARY}
-              disabled={busy || locked}
-              onClick={() => void checkpoint()}
-            >
-              Save checkpoint
-            </button>
+            {editable && (
+              <button
+                type="button"
+                className={PRIMARY}
+                disabled={busy || locked}
+                onClick={() => void checkpoint()}
+              >
+                Save checkpoint
+              </button>
+            )}
             <button
               type="button"
               className={BUTTON}
@@ -304,6 +397,39 @@ function Editor({ initial }: { initial: Question }) {
         >
           {status} · version {version.number}
         </p>
+        <div className="mt-3">
+          <WorkflowBar
+            allowed={flow.allowed_steps}
+            disabled={busy || asking !== null || save.state === "conflict"}
+            onStep={chooseStep}
+          />
+        </div>
+        {asking === "RETURN" && (
+          <div className="mt-3">
+            <ReturnForm
+              busy={busy}
+              onSend={(reasons, note) => void takeStep("RETURN", { reasons, note })}
+              onCancel={() => setAsking(null)}
+            />
+          </div>
+        )}
+        {asking !== null && asking !== "RETURN" && CONFIRM[asking] && (
+          <ConfirmPanel
+            question={CONFIRM[asking].question}
+            detail={CONFIRM[asking].detail}
+            confirmLabel={asking === "PUBLISH" ? "Publish" : "Start the correction"}
+            busy={busy}
+            onConfirm={() => void takeStep(asking)}
+            onCancel={() => setAsking(null)}
+          />
+        )}
+        {!editable && !archived && (
+          <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            {flow.state === "PUBLISHED"
+              ? "A published question never changes. To fix something, start a correction."
+              : "This text is under review and cannot be edited. Withdraw it to make changes."}
+          </p>
+        )}
       </div>
 
       {(save.message || problem) && (
@@ -458,7 +584,7 @@ function Editor({ initial }: { initial: Question }) {
             </div>
           )}
         </div>
-        <FindingsPanel findings={save.findings} />
+        <FindingsPanel findings={save.findings} title={findingsTitle(flow.review_revision_id)} />
       </div>
     </div>
   );

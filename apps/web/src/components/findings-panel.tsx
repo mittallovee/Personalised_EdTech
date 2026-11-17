@@ -28,13 +28,19 @@ const LEVELS: { level: Finding["level"]; title: string; hint: string; style: str
  * A draft with findings can still be saved; review and publishing will wait for the first two
  * groups to be empty.
  */
-export function FindingsPanel({ findings }: { findings: Finding[] }) {
+export function FindingsPanel({
+  findings,
+  title = "Findings",
+}: {
+  findings: Finding[];
+  title?: string;
+}) {
   return (
     <section
-      aria-label="Findings"
+      aria-label={title}
       className="rounded-md border border-zinc-200 p-4 dark:border-zinc-800"
     >
-      <h2 className="text-base font-semibold">Findings</h2>
+      <h2 className="text-base font-semibold">{title}</h2>
       {findings.length === 0 ? (
         <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-300">Nothing left to fix.</p>
       ) : (
