@@ -1470,11 +1470,31 @@ export interface paths {
         };
         /**
          * Possible duplicates of a question (D-16)
-         * @description Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open. A person decides whether they are duplicates; nothing is merged or changed.
+         * @description Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open, with the newest decision about each. A person decides whether they are duplicates; nothing is merged or changed.
          */
         get: operations["get_duplicates_api_v1_questions__question_id__duplicates_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/duplicates/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record whether a question is a duplicate of another (D-16)
+         * @description For the text as it is now: an edit that changes the question needs a new decision, and a newer decision replaces an older one (both are kept). The author, admins, edit-others holders and quality control may decide. An exact match with no `NOT_DUPLICATE` decision, or a `DUPLICATE_OF`, blocks Pass QC (`QC_BLOCKED_DUPLICATE`). Nothing is merged or deleted.
+         */
+        post: operations["decide_duplicate_api_v1_questions__question_id__duplicates_decisions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2100,6 +2120,16 @@ export interface components {
              */
             truncated: boolean;
         };
+        /** Blocker */
+        Blocker: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+        };
         /** BloomLevelOut */
         BloomLevelOut: {
             /**
@@ -2319,6 +2349,50 @@ export interface components {
             /** @description A new activation link for the Owner. Null only when a retried request finds that the Owner has already activated their account. */
             activation: components["schemas"]["ActivationLink"] | null;
         };
+        /** DecideDuplicate */
+        DecideDuplicate: {
+            /**
+             * Other Question Id
+             * Format: uuid
+             */
+            other_question_id: string;
+            /**
+             * Decision
+             * @description `DUPLICATE_OF`: this question copies the other one (archive this one; nothing is merged). `NOT_DUPLICATE`: they only look alike.
+             * @enum {string}
+             */
+            decision: "NOT_DUPLICATE" | "DUPLICATE_OF";
+            /**
+             * Note
+             * @description Why, in a few words.
+             */
+            note: string;
+        };
+        /** DecisionOut */
+        DecisionOut: {
+            /**
+             * Other Question Id
+             * Format: uuid
+             */
+            other_question_id: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "NOT_DUPLICATE" | "DUPLICATE_OF";
+            /** Note */
+            note: string;
+            /**
+             * Decided By
+             * Format: uuid
+             */
+            decided_by: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
         /** DiffOut */
         DiffOut: {
             from_revision: components["schemas"]["DiffRevision"];
@@ -2388,6 +2462,8 @@ export interface components {
              * @description The beginning of the other question's stem (plain text).
              */
             preview: string;
+            /** @description The newest decision about this pair, for the text as it is now. */
+            decision: components["schemas"]["DecisionOut"] | null;
         };
         /** DuplicatesOut */
         DuplicatesOut: {
@@ -2404,6 +2480,11 @@ export interface components {
              * @description Exact matches first, then near ones, closest first.
              */
             data: components["schemas"]["DuplicateOut"][];
+            /**
+             * Qc Blocked By
+             * @description What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of.
+             */
+            qc_blocked_by: components["schemas"]["Blocker"][];
         };
         /** ErrorField */
         ErrorField: {
@@ -10236,6 +10317,86 @@ export interface operations {
             };
             /** @description The check took too long and was stopped (`SEARCH_TIMED_OUT`) */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    decide_duplicate_api_v1_questions__question_id__duplicates_decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideDuplicate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description You may not decide this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question, or other question, that you may open */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question is published (`DUPLICATE_DECISION_CLOSED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The same question, an empty question, or no note */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

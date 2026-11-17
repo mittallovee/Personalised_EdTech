@@ -5,11 +5,11 @@ least one review grant. Work in progress (drafts, returned questions) is never s
 its author, and the "returned" tab is the caller's own.
 """
 
+import itertools
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID, uuid4
 
-import itertools
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
