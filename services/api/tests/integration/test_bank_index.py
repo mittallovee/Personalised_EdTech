@@ -209,6 +209,7 @@ def test_a_new_question_is_in_the_bank_with_its_labels(
         "exam_year": None,
         "has_solution": row["has_solution"],
         "has_video": False,
+        "preview": "What is 2 + 3?",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }

@@ -10896,6 +10896,26 @@
             "description": "List the archive instead."
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Words to search for in the stem, options and solution. Quotes match a phrase, `-word` leaves a word out. Results are ranked, exact words first, then close words (typos); there is no next page, so give `limit` up to 100 and narrow with filters. Cannot be combined with `cursor`.",
+              "title": "Q"
+            },
+            "description": "Words to search for in the stem, options and solution. Quotes match a phrase, `-word` leaves a word out. Results are ranked, exact words first, then close words (typos); there is no next page, so give `limit` up to 100 and narrow with filters. Cannot be combined with `cursor`."
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -10966,8 +10986,37 @@
               }
             }
           },
+          "429": {
+            "description": "Too many searches (`RATE_LIMITED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
           "500": {
             "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The search took too long and was stopped (`SEARCH_TIMED_OUT`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -11864,6 +11913,11 @@
             "type": "boolean",
             "title": "Has Video"
           },
+          "preview": {
+            "type": "string",
+            "title": "Preview",
+            "description": "The beginning of the question's text (about 200 characters, plain text, with equations as their LaTeX). Empty until `qbank reindex-bank` has run once after 4f."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -11901,6 +11955,7 @@
           "exam_year",
           "has_solution",
           "has_video",
+          "preview",
           "created_at",
           "updated_at"
         ],
@@ -11923,7 +11978,13 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Total",
-            "description": "How many questions match the filters, not only the ones on this page."
+            "description": "How many questions match the filters, not only the ones on this page. For a search (`q`) it is how many results are shown."
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "description": "A search (`q`) matched more questions than it shows: narrow it with a more specific word or a filter. Always false for the plain list, which has pages.",
+            "default": false
           }
         },
         "type": "object",

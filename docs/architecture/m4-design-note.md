@@ -316,8 +316,44 @@ coaching, needed after a bug fix or a change to what is indexed).
   `create-platform-admin` does. A test damages and deletes rows and checks the rebuild writes them back, and
   that the rows written by every kind of change equal the rebuilt rows. The owner's runbook is
   `docs/operations/bank-index.md`.
-- Not built: the list has no text preview (it needs `stem_text`, 4f), and no filter on `has_open_correction` or
-  `has_published` (the columns are there; the web will say when it needs them).
+- Not built: no filter on `has_open_correction` or `has_published` (the columns are there; the web will say when it
+  needs them). The text preview and search came in 4f (§7.6).
+
+### 7.6 As built in 4f: free text and typo search (F-03)
+
+- **Table** (migration 0030): `bank_index` gains `stem_text` (the plain text: stem, then assertion, reason,
+  statements and columns, then each option, then the solution; equations as the LaTeX written; pictures as their
+  caption and description; one line, Unicode composed form, at most 20,000 characters), `preview` (the first 200
+  characters of the stem) and `search_vector`, a **generated column** (`to_tsvector('simple', stem_text)`), so
+  PostgreSQL keeps it in step and no writer can forget it. Two GIN indexes: on `search_vector` and a trigram index on
+  `stem_text` (`pg_trgm`, a standard "trusted" extension that the table owner may create). Existing rows have empty
+  text until `qbank reindex-bank` is run once (`docs/operations/bank-index.md`).
+- **Reading the text** is `questions/bank_text.py` (pure, never raises, bounded work: at most 20,000 characters and
+  5,000 blocks looked at per question), written through the same `bank_entry` as the labels, so an incremental row
+  and a rebuilt row are the same row (the 4e equality test covers the new columns).
+- **`GET /bank/questions?q=…`** is the same route with the same filters and the same visibility, so a private draft
+  is never a hit, exactly as it is never listed or counted. Exact words come first (`websearch_to_tsquery` on the
+  `simple` configuration, ranked with `ts_rank`; a quoted phrase and `-word` work; nothing typed can become query
+  syntax), then, when fewer than 10 questions matched exactly, **close words** (`word_similarity` of at least 0.5 over
+  the trigram index, closest first). A quoted phrase or a left-out word asks for exactness, so they get no close
+  words. At most `limit` (never more than 100) come back and **there is no next page**: `truncated: true` says more
+  matched and the person narrows the search; `cursor` with `q` is a `400`. `total` is the number shown.
+- **Protection:** `q` is at most 200 characters; one person may search 60 times a minute (`429` with `Retry-After`;
+  settings `searches_per_user`, `search_window_seconds`); the database stops one search after 5 seconds
+  (`search_timeout_ms`) and the answer is `503 SEARCH_TIMED_OUT` with a plain message. The limit counts per API
+  process, like the other limiters (the proxy enforces it across processes in M7).
+- **The list shows `preview`** (plain text; the web must show it as text, never as HTML).
+- **The threshold, measured:** typos of *acceleration*, *velocity*, *gravity*, *momentum* and *pendulum* score 0.56 to
+  0.75; 0.5 catches them. A similar shorter word (*forest* for *force*) scores 0.5 too, so it can appear *after* the
+  exact matches when few match; the ranking puts it last. This is a first value from a handful of words, not a measured
+  accuracy. 4g builds a small labelled sample for the duplicate threshold, and this one can be checked against it.
+- **Not in this PR (it is the next one, 4f-2, K-08):** the 100,000-question generator, the k6 scripts, the recorded
+  timings and the final choice of indexes. Until those numbers exist the two indexes are the starting set and the
+  5-second limit is a safety net, not a target. Every autosave that changes the text now also updates both indexes;
+  the measurements say what that costs.
+- **Limits of what `simple` finds:** whole words only (no stemming: *forces* does not find *force*, though the close-word
+  step often does), in every language the same; Hindi words are matched as written and typed alike after Unicode
+  composition. There is no semantic ("find similar") search (F-04 is P2).
 
 ## 8. Diff and history (E-08, E-09)
 
@@ -377,7 +413,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 |---|---|
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
 | Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
-| Bank index (**built in 4e, migration 0029**) | `bank_index` with the label columns and a starting set of indexes; the `pg_trgm` extension, the text columns and their indexes come in 4f; rows are filled by the reindex command, not by SQL |
+| Bank index (**built in 4e, migration 0029; text in 4f, migration 0030**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; rows are filled by the reindex command, not by SQL |
 | Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
 
@@ -388,7 +424,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | `POST /questions/{id}/submit` (`If-Match: "rev-N"`) · `/withdraw` · `/return` (`{reasons, note}`) · `/pass-qc` · `/approve` · `/publish` · `/start-correction` (these last six with `If-Match: "flow-N"`) | The steps; each answers with the question view, which now carries `state`, `flow_etag`, `allowed_steps`, `version_number`, `review_revision_id` |
 | `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
 | `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` (**built in 4d**, see §8.1) | Timeline and before/after |
-| `GET /bank/questions` (filters, `total`; `q` comes in 4f) · `GET /bank/questions/by-code/{code}` (**built in 4e**, see §7.5) | The bank |
+| `GET /bank/questions` (filters, `total`, `q` for search) · `GET /bank/questions/by-code/{code}` (**built in 4e and 4f**, see §7.5 and §7.6) | The bank |
 | `GET /questions/{id}/duplicates` · `POST /questions/{id}/duplicates/decisions` | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
 
@@ -480,7 +516,8 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4c | Review queue and counts (`review` module routes); visibility predicate; T37 part 1 |
 | 4d | **Built:** History and diff (backend, unit tests); T40 |
 | 4e | **Built:** `search` module: `bank_index` (migration 0029), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
-| 4f | Free text and typo search; the 100,000-question generator; k6 scripts; recorded timings (K-08); T38 |
+| 4f | **Built:** free text and typo search (F-03): migration 0030, `bank_text.py`, `q` on the bank list, limits; T38 part 2 |
+| 4f-2 | The 100,000-question generator; k6 scripts; recorded timings and the final choice of indexes (K-08); T38 part 3. Split from 4f so each pull request has one requirement |
 | 4g | Duplicate check (exact + near) and decisions; T39 |
 | 4h | Web: workflow action bar, read-only editor, return dialog, publication checklist wording; e2e part 1 |
 | 4i | Web: review queue and notifications bell and page |
