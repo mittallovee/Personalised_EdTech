@@ -117,14 +117,29 @@ grows with the bank), a filtered total 16 ms, a ranked search for "the" 49 ms. T
 is the Python process (checking the session, building the rows). Running more API processes is part of
 M7 (hosting), and this test is the one to repeat then.
 
+### The duplicate check (4g-1, migration 0032)
+
+Measured in PostgreSQL on the same 100,000 questions, after `qbank reindex-bank` filled the new columns
+(834 s, a little longer than before because each row now also gets its duplicate key and match text):
+
+| Query | Time |
+|---|---|
+| Exact duplicates (same key, through `bank_index_duplicate_key`) | 0.06 ms |
+| Near duplicates of an English question (trigram similarity 0.75 or more, through `bank_index_match_trgm`) | 270 ms |
+| Near duplicates of a Hindi question | 58 ms |
+
+The near check runs only when someone opens Possible duplicates, so a quarter of a second is fine; it is
+under the same 5-second limit as search. The synthetic bank has 48 pairs of exact duplicates (random
+combinations that happened to repeat), which the check finds.
+
 ### Indexes kept
 
 The starting indexes of migration 0029 are the ones the database uses and are kept: the listing order
 (`bank_index_listing`, the page in 0.2 ms), the syllabus (`bank_index_syllabus`, filtered totals),
 the concepts (GIN), the code (unique). Search uses the word index on `search_vector` (0030), and typo
 search uses the trigram index on `bank_words` (0031). The trigram index on the full text
-(`bank_index_stem_trgm`, 49 MB here) is no longer used by search; it stays for the near-duplicate check
-in 4g, which compares whole texts, and 4g decides whether it is kept.
+(`bank_index_stem_trgm`, 49 MB here) is no longer used by search; 4g-1 (migration 0032) replaced it
+with one on `match_text`, the text without the solution, which the near-duplicate check compares (48 MB).
 
 Sizes on this bank: `bank_index` 214 MB with its indexes (the full-text trigram index 49 MB, the word
 index 15 MB); `question_revisions` 405 MB.
