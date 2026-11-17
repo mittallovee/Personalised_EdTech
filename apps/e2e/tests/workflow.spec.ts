@@ -1,54 +1,10 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { expect, test, type Page } from "@playwright/test";
 
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-
-import { csrfOf, expectNoSeriousA11yViolations, signedInOwner, unique } from "./helpers";
+import { expectNoSeriousA11yViolations, finishedQuestion, signedInOwner, unique } from "./helpers";
 
 // M4 PR 4h (E-01, E-04, E-06, E-07): the review steps on the question page, in a real browser. The
 // Owner holds every grant, so one person can take each step (E-02). The page shows exactly the steps
 // the API allows; the editor is read-only once submitted; a return needs a reason and a note.
-
-type Content = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-
-const READY = (
-  JSON.parse(
-    readFileSync(
-      path.resolve(__dirname, "../../../services/api/tests/fixtures/spec_v1_questions.json"),
-      "utf-8",
-    ),
-  ) as Record<string, { ready: Content }>
-).SCQ!.ready;
-
-/** A finished single-correct question with real labels, started through the API; returns its id. */
-async function finishedQuestion(context: BrowserContext, origin: string): Promise<string> {
-  const headers = { Origin: origin, "X-CSRF-Token": await csrfOf(context) };
-  const id = async (url: string, data: object) => {
-    const res = await context.request.post(url, { headers, data });
-    expect(res.status(), url).toBe(201);
-    return ((await res.json()) as { id: string }).id;
-  };
-  const node = (kind: string, parent_id: string | null, name: string) =>
-    id("/api/v1/taxonomy/nodes", { kind, parent_id, name, sort_order: 1 });
-  const klass = await node("CLASS", null, "Class 11");
-  const subject = await node("SUBJECT", klass, "Physics");
-  const chapter = await node("CHAPTER", subject, "Kinematics");
-  const topic = await node("TOPIC", chapter, "Motion in a line");
-  const concept = await id("/api/v1/taxonomy/concepts", {
-    subject_id: subject,
-    name: "Velocity",
-    aliases: [],
-  });
-  const content = structuredClone(READY);
-  Object.assign(content.metadata, {
-    class_id: klass,
-    subject_id: subject,
-    chapter_id: chapter,
-    topic_id: topic,
-    primary_concept_id: concept,
-  });
-  return id("/api/v1/questions", { content });
-}
 
 async function step(page: Page, name: string) {
   await page.getByRole("group", { name: "Review steps" }).getByRole("button", { name }).click();

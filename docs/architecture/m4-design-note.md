@@ -537,6 +537,21 @@ The browser holds no rules: allowed steps, findings, visibility and counts all c
   with a reason, resubmit, QC, approve, publish, correct as version 2) with accessibility checks, and two tabs racing
   on one step.
 
+### 11.2 As built in 4i: the review queue and the notifications
+
+- **Review** (`/review`, in the menu for people with a review grant, admins, the Owner and an acting platform admin;
+  the API refuses everyone else and the page says so): tabs *Waiting for QC · Waiting for approval · Waiting to
+  publish · Returned to me* with the counts from `/review/queue/counts`, filters for subject, chapter (of that
+  subject), language and waiting time, the oldest first, 50 at a time with Show more. Each row shows the code (a link
+  to the question), format, subject, language, how long it has waited, and "correction, version N" for a correction.
+- **Notifications**: a header link with the unread count, read when a page opens, every minute and when the tab is
+  focused again (`/notifications/unread-count`). `/notifications` lists them newest first in plain text: "Question
+  X was returned to you" with the reasons in the appendix wording and the note, or "Question X was published"
+  (with the version for a correction). Opening one marks it read and goes to the question; **Mark all as read**.
+- `apps/web/src/lib/review.ts` only names the tabs and turns a notification's facts into a sentence, ignoring
+  facts it does not expect. Browser test `apps/e2e/tests/review-queue.spec.ts`: a submitted question in the queue,
+  the filters and tabs, opening it, then a return reaching the author's bell and notifications page.
+
 ## 12. Tests that prove M4
 
 | # | Test | Type |
@@ -585,7 +600,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4g-1 | **Built:** duplicate key, near match, `GET /questions/{id}/duplicates` (migration 0032); T39 part 1 |
 | 4g-2 | Duplicate decisions (`duplicate_decisions`), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
 | 4h | **Built:** web workflow action bar, read-only editor, return form, publication checklist wording; e2e part 1 (see §11.1) |
-| 4i | Web: review queue and notifications bell and page |
+| 4i | **Built:** web review queue and notifications bell and page (see §11.2) |
 | 4j | Web: bank screen (filters, count, search, code box) |
 | 4k | Web: compare, history and duplicates panel |
 | 5 | M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey, timings table |
