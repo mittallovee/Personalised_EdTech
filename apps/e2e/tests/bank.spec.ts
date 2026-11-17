@@ -64,10 +64,10 @@ test("the bank lists, counts, filters and searches questions, and opens one by i
   await expect(count).toHaveText("2 questions");
 
   // A filter narrows the list and the count.
-  await bank.getByLabel("State").selectOption("IN_REVIEW");
+  await bank.getByLabel("State", { exact: true }).selectOption("IN_REVIEW");
   await expect(count).toHaveText("1 question");
   await expect(bank.getByRole("link", { name: opened.code })).toBeVisible();
-  await bank.getByLabel("State").selectOption("PUBLISHED");
+  await bank.getByLabel("State", { exact: true }).selectOption("PUBLISHED");
   await expect(count).toHaveText("0 questions");
   await expect(bank.getByText("Nothing matches. Try fewer filters.")).toBeVisible();
   await bank.getByRole("button", { name: "Clear" }).click();

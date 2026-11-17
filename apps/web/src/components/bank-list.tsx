@@ -3,7 +3,7 @@
 import type { components } from "@qbank/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { StateBadge } from "@/components/workflow-bar";
 import { api, errorMessage } from "@/lib/api";
@@ -394,10 +394,13 @@ function Select({
   choices: { value: string; label: string }[];
   disabled?: boolean;
 }) {
+  // Named by its label alone, not by the label and every option's text run together.
+  const id = useId();
   return (
     <label className="grid gap-1">
-      {label}
+      <span id={id}>{label}</span>
       <select
+        aria-labelledby={id}
         className={FIELD}
         value={value}
         disabled={disabled}
