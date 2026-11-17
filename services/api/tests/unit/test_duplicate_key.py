@@ -102,6 +102,35 @@ def test_a_picture_counts_by_the_stored_picture() -> None:
     assert duplicate_key(with_picture("p1")) != duplicate_key(with_picture("p2"))
 
 
+def test_the_same_child_question_under_another_passage_is_another_question() -> None:
+    under_one = changed(context={"passage_revision_id": "11111111-1111-4111-8111-111111111111"})
+    under_two = changed(context={"passage_revision_id": "22222222-2222-4222-8222-222222222222"})
+    assert duplicate_key(under_one) != duplicate_key(under_two)
+    assert duplicate_key(under_one) != KEY  # and a child is not the same as a lone question
+    assert duplicate_key(under_one) == duplicate_key(copy.deepcopy(under_one))
+
+
+def test_the_order_of_the_correct_options_does_not_matter() -> None:
+    first = changed(question_type="MULTI_CORRECT", answer={"option_ids": ["A", "C"]})
+    second = changed(question_type="MULTI_CORRECT", answer={"option_ids": ["C", "A"]})
+    assert duplicate_key(first) == duplicate_key(second)
+    assert duplicate_key(first) != duplicate_key(
+        changed(question_type="MULTI_CORRECT", answer={"option_ids": ["A", "B"]})
+    )
+
+
+def test_the_order_inside_a_matching_option_does_not_matter() -> None:
+    def matching(mapping: dict[str, list[str]]) -> dict[str, Any]:
+        content = question()
+        content["question_type"] = "MATCHING"
+        content["options"] = [{"id": "A", "mapping": mapping}]
+        return content
+
+    assert duplicate_key(matching({"L1": ["R1", "R3"], "L2": ["R2"]})) == duplicate_key(
+        matching({"L2": ["R2"], "L1": ["R3", "R1"]})
+    )
+
+
 def test_an_empty_stem_has_no_key() -> None:
     assert duplicate_key({"stem": []}) is None
     assert duplicate_key({"stem": [{"kind": "paragraph", "text": "   "}]}) is None

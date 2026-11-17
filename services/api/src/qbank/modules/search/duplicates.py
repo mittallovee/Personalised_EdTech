@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from psycopg.errors import QueryCanceled
-from sqlalchemy import Integer, cast, func, literal, select, text
+from sqlalchemy import Integer, cast, func, literal, or_, select, text, true
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -84,7 +84,11 @@ def find_duplicates(
                     .where(
                         *where,
                         BankRow.match_text.bool_op("%")(literal(text_to_match)),
-                        BankRow.master_id.not_in([row.master_id for row, _ in exact]),
+                        # Every exact copy, not only the ones shown: past the limit they are still
+                        # exact, never "near".
+                        or_(BankRow.duplicate_key.is_(None), BankRow.duplicate_key != key)
+                        if key is not None
+                        else true(),
                     )
                     .order_by(similarity.desc(), BankRow.master_id)
                     .limit(MAX_CANDIDATES)
