@@ -18,6 +18,7 @@ from sqlalchemy import text
 from qbank.core.db import Database
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
+from qbank.modules.search import duplicates as search_duplicates
 from qbank.modules.search.public import NEAR_SIMILARITY
 from tests.integration.conftest import (
     Member,
@@ -189,6 +190,25 @@ def test_an_empty_draft_has_no_duplicates(
     empty = start(client, team, {"schema_version": 1, "question_type": "SCQ", "stem": []})
     start(client, team, {"schema_version": 1, "question_type": "SCQ", "stem": []})
     assert duplicates(client, team, "author", empty)["data"] == []
+
+
+def test_exact_copies_beyond_the_exact_limit_are_never_shown_as_near(
+    client: TestClient,
+    team: dict[str, Member],
+    catalogue: Catalogue,
+    published: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    second = publish_as(
+        client, team, start(client, team, block_question(catalogue), "other"), "other"
+    )
+    draft = start(client, team, block_question(catalogue))
+    monkeypatch.setattr(search_duplicates, "MAX_CANDIDATES", 1)  # only one exact match is shown
+
+    found = duplicates(client, team, "author", draft)
+
+    assert [row["match"] for row in found["data"]] == ["EXACT"]
+    assert found["data"][0]["code"] in (published["code"], second["code"])
 
 
 # ---- which text, and whose questions -----------------------------------------------------------

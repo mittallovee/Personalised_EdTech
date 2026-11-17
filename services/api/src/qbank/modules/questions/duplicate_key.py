@@ -3,7 +3,9 @@
 Two questions are exact duplicates when they ask the same thing with the same options and answer:
 the key is a hash of the format, the stem (with the assertion, reason, statements and columns), the
 options and the answer. The worked solution, the video and the labels are not part of it (the same
-question with a better solution or another chapter is still the same question).
+question with a better solution or another chapter is still the same question). A question under a
+passage includes the passage checkpoint it is pinned to: the same child text under another passage
+asks about another scenario.
 
 Before hashing, prose is put in one form: Unicode composed, spaces collapsed, letter case folded.
 **Equations are compared as written** (only their spacing is collapsed): in LaTeX a changed letter,
@@ -22,6 +24,7 @@ import unicodedata
 from typing import Any
 
 from qbank.modules.questions.blocks import as_dict, has_content
+from qbank.modules.questions.context_checks import passage_pin
 
 _INLINE_EQUATION = re.compile(r"(\\\(.*?\\\))", re.DOTALL)
 _MAX_DEPTH = 3
@@ -88,6 +91,30 @@ def _blocks(value: object, depth: int = 0) -> list[Any]:
     return out
 
 
+def _answer(value: object) -> object:
+    """The answer with selections that have no order put in one order: ``["C", "A"]`` is the same
+    set of correct options as ``["A", "C"]``."""
+    obj = as_dict(value)
+    if obj is None:
+        return value
+    ids = obj.get("option_ids")
+    if isinstance(ids, list) and all(isinstance(i, str) for i in ids):
+        return {**obj, "option_ids": sorted(set(ids))}
+    return value
+
+
+def _mapping(value: object) -> object:
+    """A matching option: which right items go with each left item, in one order."""
+    obj = as_dict(value)
+    if obj is None:
+        return value
+    return {
+        str(left): sorted(set(rights)) if all(isinstance(r, str) for r in rights) else rights
+        for left, rights in obj.items()
+        if isinstance(rights, list)
+    }
+
+
 def _items(value: object) -> list[Any]:
     out: list[Any] = []
     for item in value if isinstance(value, list) else []:
@@ -96,7 +123,7 @@ def _items(value: object) -> list[Any]:
             continue
         entry: list[Any] = [str(obj.get("id")), _blocks(obj.get("content"))]
         if "mapping" in obj:  # a matching option: which left goes with which right
-            entry.append(obj.get("mapping"))
+            entry.append(_mapping(obj.get("mapping")))
         out.append(entry)
     return out
 
@@ -110,7 +137,8 @@ def duplicate_key(content: object) -> str | None:
         "type": obj.get("question_type"),
         **{field: _blocks(obj.get(field)) for field in _BLOCK_FIELDS},
         **{field: _items(obj.get(field)) for field in _ITEM_FIELDS},
-        "answer": obj.get("answer"),
+        "answer": _answer(obj.get("answer")),
+        "passage": str(passage_pin(obj)) if passage_pin(obj) is not None else None,
     }
     try:
         canonical = json.dumps(meaning, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
