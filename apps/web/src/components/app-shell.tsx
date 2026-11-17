@@ -3,8 +3,11 @@ import type { ReactNode } from "react";
 
 import type { Me } from "@qbank/api-client";
 
-// Modules arrive in later milestones (M3 authoring, M4 review, M5 AI, more admin screens).
-const UPCOMING = ["Review", "AI & prompts"];
+import { NotificationBell } from "@/components/notification-bell";
+import { showsNotifications, showsReview } from "@/lib/review";
+
+// Modules arrive in later milestones (M5 AI, more admin screens).
+const UPCOMING = ["AI & prompts"];
 
 /**
  * Whether to show the Users & grants link. Only a hint for the menu: the API refuses everyone
@@ -42,6 +45,8 @@ export type Page =
   | "coachings"
   | "audit"
   | "questions"
+  | "review"
+  | "notifications"
   | "passages"
   | "syllabus"
   | "concepts"
@@ -90,6 +95,7 @@ export function AppShell({
       <header className="flex items-center justify-between border-b border-zinc-200 px-6 py-3 dark:border-zinc-800">
         <span className="font-semibold">{me.organization?.display_name ?? "Question Bank"}</span>
         <div className="flex items-center gap-4 text-sm">
+          {showsNotifications(me) && <NotificationBell />}
           <span>{me.display_name}</span>
           <button
             type="button"
@@ -134,6 +140,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "questions" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Questions
+                </Link>
+              </li>
+            )}
+            {showsReview(me) && (
+              <li>
+                <Link
+                  href="/review"
+                  aria-current={current === "review" ? "page" : undefined}
+                  className={`${ITEM} ${current === "review" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Review
                 </Link>
               </li>
             )}
