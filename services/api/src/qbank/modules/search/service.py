@@ -34,7 +34,7 @@ from qbank.core.auth import Principal
 from qbank.core.codes import normalize_code
 from qbank.core.errors import AppError, MalformedRequest, NotFound
 from qbank.core.permissions import Action, is_allowed, may_access_all_drafts, require
-from qbank.modules.search.models import BankRow
+from qbank.modules.search.models import BankRow, BankWord
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,10 +169,14 @@ def find_by_code(session: Session, principal: Principal, typed_code: str) -> Ban
 
 SEARCH_MAX = 100  # a ranked list has no deep pages: at most this many results
 FALLBACK_BELOW = 10  # fewer exact-word matches than this and the close matches are added
-# How close a word must be to count as the same word with a typo (0 to 1). Measured on typos of
-# "acceleration", "velocity", "gravity", "momentum" and "pendulum" (0.56 to 0.75); a shorter
-# similar word ("forest" for "force") also passes, which is why close words come after exact ones.
-SIMILARITY = "0.5"
+# How close a word of the bank must be to a typed word to count as that word with a typo (0 to 1,
+# trigram similarity of the two words). Measured (docs/operations/load-tests.md): typos of
+# acceleration, velocity, pendulum, frequency, gravity and momentum score 0.50 to 0.67, a plural
+# ("forces" for "force") 0.63, and different words (forest/force, block/black, mass/pass) 0.25 to
+# 0.33.
+SIMILARITY = "0.45"
+CLOSE_WORDS = 3  # bank words tried in place of each typed word, closest first
+MAX_TYPED_WORDS = 8  # words of a search looked at for typos; the rest must match exactly
 _REGCONFIG: ColumnElement[Any] = literal_column("'simple'::regconfig")
 
 
@@ -194,8 +198,8 @@ def search_bank(
     """The questions that match the words typed, best match first, narrowed by the filters.
 
     Exact words come first, ranked by how well they match. When fewer than ``FALLBACK_BELOW`` match
-    exactly, questions with a close word (a typo, "acceleratoin") follow, closest first, unless the
-    search is a quoted phrase or leaves a word out, which ask for exactness. The same
+    exactly, questions with a close word (a typo, "acceleratoin") follow, best match first, unless
+    the search is a quoted phrase or leaves a word out, which ask for exactness. The same
     visibility and filters as the list apply to both, so a private draft is never a search hit. At
     most ``limit`` (and never more than ``SEARCH_MAX``) come back and ``truncated`` says whether
     more matched; a ranked list has no next page. The database stops a search after ``timeout_ms``.
@@ -210,14 +214,14 @@ def search_bank(
     session.execute(
         text(
             "SELECT set_config('statement_timeout', :timeout, true),"
-            " set_config('pg_trgm.word_similarity_threshold', :similarity, true)"
+            " set_config('pg_trgm.similarity_threshold', :similarity, true)"
         ),
         {"timeout": str(timeout_ms), "similarity": SIMILARITY},
     )
     try:
         found = _exact_matches(session, where, words, shown + 1)
         if len(found) < FALLBACK_BELOW and not _asks_for_precision(words):
-            found += _close_matches(session, where, words, shown + 1 - len(found), found)
+            found += _close_matches(session, principal, where, words, shown + 1 - len(found), found)
     except OperationalError as error:
         if isinstance(error.orig, QueryCanceled):
             raise SearchTimedOut(
@@ -256,26 +260,77 @@ def _exact_matches(
 
 def _close_matches(
     session: Session,
+    principal: Principal,
     where: list[ColumnElement[bool]],
     words: str,
     count: int,
     already: list[BankRow],
 ) -> list[BankRow]:
-    # ``<%`` means "the words are similar to some stretch of the text", which the trigram index
-    # answers.
+    """Questions that match when each typed word may also be a close word of this coaching's bank.
+
+    A typo is matched against the coaching's list of words (``bank_words``, a few thousand), not
+    against the text of every question, which took seconds on 100,000 questions; the words found
+    are then searched with the word index like any other search."""
+    query = _close_query(session, principal.tenant_context.organization_id, words)
+    if query is None:
+        return []
     return list(
         session.scalars(
             select(BankRow)
             .where(
                 *where,
-                literal(words).bool_op("<%")(BankRow.stem_text),
+                BankRow.search_vector.bool_op("@@")(query),
                 BankRow.master_id.not_in([row.master_id for row in already]),
             )
             .order_by(
-                func.word_similarity(words, BankRow.stem_text).desc(),
+                func.ts_rank(BankRow.search_vector, query).desc(),
                 BankRow.updated_at.desc(),
                 BankRow.master_id.desc(),
             )
             .limit(count)
         )
     )
+
+
+def _close_query(
+    session: Session, organization_id: UUID | None, words: str
+) -> ColumnElement[Any] | None:
+    """Every typed word, or one of its close words, must be there: ``(w1 | a | b) & (w2 | c)``.
+    ``None`` when no typed word has a close word (the exact search already said everything)."""
+    typed = list(
+        session.scalars(
+            text("SELECT lexeme FROM unnest(to_tsvector('simple', :words))"), {"words": words}
+        )
+    )[:MAX_TYPED_WORDS]
+    query: ColumnElement[Any] | None = None
+    widened = False
+    for word in typed:
+        either = _word(word)
+        for close in _close_words(session, organization_id, word):
+            either = either.op("||")(_word(close))
+            widened = True
+        query = either if query is None else query.op("&&")(either)
+    return query if widened else None
+
+
+def _close_words(session: Session, organization_id: UUID | None, word: str) -> list[str]:
+    if len(word) < 3:  # too short to tell a typo from another word
+        return []
+    # ``%`` is "similar enough" (pg_trgm.similarity_threshold), which the trigram index answers.
+    return list(
+        session.scalars(
+            select(BankWord.word)
+            .where(
+                BankWord.organization_id == organization_id,  # row-level security says so too
+                BankWord.word.bool_op("%")(word),
+                BankWord.word != word,
+            )
+            .order_by(func.similarity(BankWord.word, word).desc(), BankWord.word)
+            .limit(CLOSE_WORDS)
+        )
+    )
+
+
+def _word(word: str) -> ColumnElement[Any]:
+    # One word as a query, from a bound value: never query syntax.
+    return func.plainto_tsquery(_REGCONFIG, literal(word))

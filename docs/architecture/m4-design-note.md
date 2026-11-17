@@ -334,8 +334,11 @@ coaching, needed after a bug fix or a change to what is indexed).
 - **`GET /bank/questions?q=…`** is the same route with the same filters and the same visibility, so a private draft
   is never a hit, exactly as it is never listed or counted. Exact words come first (`websearch_to_tsquery` on the
   `simple` configuration, ranked with `ts_rank`; a quoted phrase and `-word` work; nothing typed can become query
-  syntax), then, when fewer than 10 questions matched exactly, **close words** (`word_similarity` of at least 0.5 over
-  the trigram index, closest first). A quoted phrase or a left-out word asks for exactness, so they get no close
+  syntax), then, when fewer than 10 questions matched exactly, **close words**: each typed word may also be one of
+  up to 3 words of the coaching's word list (`bank_words`, migration 0031, kept by a trigger) with a trigram
+  similarity of at least 0.45, and that widened query is run on the word index, best match first. (4f first matched
+  typos against the whole text with `word_similarity`; the 100,000-question test showed that takes about 4 seconds,
+  see §7.7.) A quoted phrase or a left-out word asks for exactness, so they get no close
   words. At most `limit` (never more than 100) come back and **there is no next page**: `truncated: true` says more
   matched and the person narrows the search; `cursor` with `q` is a `400`. `total` is the number shown.
 - **Protection:** `q` is at most 200 characters; one person may search 60 times a minute (`429` with `Retry-After`;
@@ -343,17 +346,37 @@ coaching, needed after a bug fix or a change to what is indexed).
   (`search_timeout_ms`) and the answer is `503 SEARCH_TIMED_OUT` with a plain message. The limit counts per API
   process, like the other limiters (the proxy enforces it across processes in M7).
 - **The list shows `preview`** (plain text; the web must show it as text, never as HTML).
-- **The threshold, measured:** typos of *acceleration*, *velocity*, *gravity*, *momentum* and *pendulum* score 0.56 to
-  0.75; 0.5 catches them. A similar shorter word (*forest* for *force*) scores 0.5 too, so it can appear *after* the
-  exact matches when few match; the ranking puts it last. This is a first value from a handful of words, not a measured
-  accuracy. 4g builds a small labelled sample for the duplicate threshold, and this one can be checked against it.
-- **Not in this PR (it is the next one, 4f-2, K-08):** the 100,000-question generator, the k6 scripts, the recorded
-  timings and the final choice of indexes. Until those numbers exist the two indexes are the starting set and the
-  5-second limit is a safety net, not a target. Every autosave that changes the text now also updates both indexes;
-  the measurements say what that costs.
+- **The threshold, measured** (word to word): typos of *acceleration*, *velocity*, *pendulum*, *frequency*, *gravity*
+  and *momentum* score 0.50 to 0.67 and a plural (*forces*) 0.63; different words (*forest*/*force*, *block*/*black*,
+  *mass*/*pass*) 0.25 to 0.33. 0.45 separates them. A typo of a very short word (*forse*, 0.33) is not caught. This
+  is a first value from a handful of words, not a measured accuracy; 4g builds a small labelled sample for the
+  duplicate threshold, and this one can be checked against it.
+- **Measured in 4f-2 (K-08, §7.7):** every target is met on 100,000 questions.
 - **Limits of what `simple` finds:** whole words only (no stemming: *forces* does not find *force*, though the close-word
   step often does), in every language the same; Hindi words are matched as written and typed alike after Unicode
   composition. There is no semantic ("find similar") search (F-04 is P2).
+
+### 7.7 As built in 4f-2: the 100,000-question load test (K-08)
+
+- **Generator** (`services/api/tests/load/`, test-support code, never shipped): `synthetic.py` makes physics-like
+  questions from word lists and a seed (one in ten in Hindi, equations, solutions; nothing real), and
+  `seed_bank.py` creates a load-test coaching with eight members and inserts the questions with plain SQL in batches
+  of 1,000, walking each through the real workflow states so the database triggers check every row, then rebuilds the
+  bank index with `reindex_bank`. It refuses any database whose name does not end in `_load`. Tests check that every
+  generated question is valid and that a seeded bank equals its own rebuild and is read by the API.
+- **k6 script** `infra/load/bank.js` and runner `infra/load/serve-load-api.sh`: 5 people (by default) doing list,
+  filter + count, code lookup and search (common words, phrases, typos, Hindi, LaTeX), with the targets as pass/fail
+  thresholds. How to run it and every number: `docs/operations/load-tests.md`.
+- **Result, 5 people:** p95 list 131 ms, filter + count 119 ms, code 81 ms (target 300), search 235 ms (target 800).
+  With 10 people all are still under target (list 278 ms); throughput stays at about 45 requests a second, so the limit
+  is the one API process, not the database (a page takes 0.2 ms in PostgreSQL, the full total 38 ms).
+- **What the measurements changed:** typo search against the whole text took about 4 s, so typos are now matched
+  against the coaching's word list (`bank_words`, migration 0031: one row per distinct word, FORCE row-level security,
+  filled by a trigger on `bank_index`, never deleted) and the close words are searched with the word index. The
+  starting indexes are kept; the full-text trigram index is no longer used by search and 4g decides whether
+  near-duplicate checking keeps it.
+- **Rebuild time:** `reindex-bank` takes about 12 minutes per 100,000 questions (135 a second); acceptable for a rare
+  admin job, recorded in the runbook.
 
 ## 8. Diff and history (E-08, E-09)
 
@@ -413,7 +436,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 |---|---|
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
 | Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
-| Bank index (**built in 4e, migration 0029; text in 4f, migration 0030**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; rows are filled by the reindex command, not by SQL |
+| Bank index (**built in 4e, migration 0029; text in 4f, migration 0030; words in 4f-2, migration 0031**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; 0031 adds `bank_words` (each coaching's distinct words, kept by a trigger) for typo search; rows are filled by the reindex command, not by SQL |
 | Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
 
@@ -517,7 +540,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4d | **Built:** History and diff (backend, unit tests); T40 |
 | 4e | **Built:** `search` module: `bank_index` (migration 0029), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
 | 4f | **Built:** free text and typo search (F-03): migration 0030, `bank_text.py`, `q` on the bank list, limits; T38 part 2 |
-| 4f-2 | The 100,000-question generator; k6 scripts; recorded timings and the final choice of indexes (K-08); T38 part 3. Split from 4f so each pull request has one requirement |
+| 4f-2 | **Built:** the 100,000-question generator, k6 script, recorded timings (all targets met) and the index decision; typo search moved to a word list (migration 0031) because the first run missed the search target (K-08); T38 part 3 |
 | 4g | Duplicate check (exact + near) and decisions; T39 |
 | 4h | Web: workflow action bar, read-only editor, return dialog, publication checklist wording; e2e part 1 |
 | 4i | Web: review queue and notifications bell and page |

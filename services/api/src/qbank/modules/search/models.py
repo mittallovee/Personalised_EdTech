@@ -52,3 +52,13 @@ class BankRow(Base):
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('simple', stem_text)", persisted=True), deferred=True
     )
+
+
+class BankWord(Base):
+    """A distinct word of a coaching's bank (migration 0031), for typo search. Written by a
+    database trigger on ``bank_index``; never by the app."""
+
+    __tablename__ = "bank_words"
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    word: Mapped[str] = mapped_column(primary_key=True)
