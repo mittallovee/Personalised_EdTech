@@ -46,6 +46,9 @@ export default function SyllabusImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // Only one check runs at a time, whether of a file or of a built-in syllabus: a second answer
+  // arriving later would replace the preview being read or applied.
+  const [starterBusy, setStarterBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Import | null>(null);
   const [inputKey, setInputKey] = useState(0);
@@ -54,7 +57,7 @@ export default function SyllabusImportPage() {
 
   async function upload(event: React.FormEvent) {
     event.preventDefault();
-    if (!file || uploading) return;
+    if (!file || uploading || starterBusy) return;
     const fingerprint = `${file.name}|${file.size}|${file.lastModified}`;
     if (uploadKey.current?.fingerprint !== fingerprint) {
       uploadKey.current = { key: crypto.randomUUID(), fingerprint };
@@ -139,7 +142,7 @@ export default function SyllabusImportPage() {
 
       {canManage && !preview && (
         <div className="mt-6 max-w-2xl space-y-6">
-          <StarterSyllabuses onPreview={setPreview} />
+          <StarterSyllabuses disabled={uploading} onBusy={setStarterBusy} onPreview={setPreview} />
           <section aria-labelledby="template-heading" className="space-y-2">
             <h2 id="template-heading" className="text-lg font-medium">
               1. Get the template
@@ -182,7 +185,7 @@ export default function SyllabusImportPage() {
                 {uploadError}
               </p>
             )}
-            <button type="submit" disabled={!file || uploading} className={PRIMARY}>
+            <button type="submit" disabled={!file || uploading || starterBusy} className={PRIMARY}>
               {uploading ? "Checking the file…" : "Check the file"}
             </button>
             {uploading && (
@@ -208,9 +211,18 @@ export default function SyllabusImportPage() {
 
 /**
  * The built-in syllabuses (C-14). "Preview" asks the API for the same preview an upload of that
- * file would give; nothing changes until it is applied.
+ * file would give; nothing changes until it is applied. `disabled` is true while a file is being
+ * checked, and `onBusy` tells the page while one of these is, so the two never run together.
  */
-function StarterSyllabuses({ onPreview }: { onPreview: (preview: Import) => void }) {
+function StarterSyllabuses({
+  disabled,
+  onBusy,
+  onPreview,
+}: {
+  disabled: boolean;
+  onBusy: (busy: boolean) => void;
+  onPreview: (preview: Import) => void;
+}) {
   const [starters, setStarters] = useState<Starter[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -235,10 +247,11 @@ function StarterSyllabuses({ onPreview }: { onPreview: (preview: Import) => void
   }, []);
 
   async function preview(starter: Starter) {
-    if (busyKey) return;
+    if (busyKey || disabled) return;
     const key = retryKeys.current.get(starter.key) ?? crypto.randomUUID();
     retryKeys.current.set(starter.key, key);
     setBusyKey(starter.key);
+    onBusy(true);
     setError(null);
     try {
       const { data, error, response } = await api().POST(
@@ -255,6 +268,7 @@ function StarterSyllabuses({ onPreview }: { onPreview: (preview: Import) => void
       setError(NETWORK);
     } finally {
       setBusyKey(null);
+      onBusy(false);
     }
   }
 
@@ -283,7 +297,7 @@ function StarterSyllabuses({ onPreview }: { onPreview: (preview: Import) => void
             <button
               type="button"
               onClick={() => preview(starter)}
-              disabled={busyKey !== null}
+              disabled={busyKey !== null || disabled}
               aria-label={`Preview ${starter.title}`}
               className={`${BUTTON} disabled:opacity-60`}
             >
