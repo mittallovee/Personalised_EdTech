@@ -519,6 +519,24 @@ New error codes (added to `error-codes.md` in the PR that introduces each): `WOR
 
 The browser holds no rules: allowed steps, findings, visibility and counts all come from the API.
 
+### 11.1 As built in 4h: the review steps on the question page
+
+- **State badge** beside the title, and a **Review steps** bar with exactly the API's `allowed_steps`, in a fixed
+  order (the step that moves the question on first): Submit for review, Pass QC, Approve, Publish, Start a
+  correction, Return to the author, Withdraw to edit. `apps/web/src/lib/workflow.ts` only names states and steps and
+  says where each step is sent; it decides nothing.
+- **Submit** is sent with the text's ETag (`"rev-N"`), every later step with the workflow ETag (`"flow-N"`), so a step
+  from an out-of-date screen is refused. A refused step (412, or `WORKFLOW_STEP_INVALID` because another screen moved
+  the question on) stops the screen and offers **Reload**, as a refused save already did.
+- **Read-only** outside DRAFT and CHANGES_REQUESTED: every field is disabled, Save checkpoint is hidden, and a line
+  says how to change it (withdraw it, or start a correction once published). The API refuses such saves anyway.
+- **Return** opens a form with the nine reasons (appendix wording) and a note; Send waits for at least one reason and
+  ten characters, and the API checks the same again. **Publish** and **Start a correction** ask first.
+- The findings panel is titled **Publication checklist** once the question has been submitted (E-07).
+- Browser test `apps/e2e/tests/workflow.spec.ts`: the whole path for one person holding every grant (submit, return
+  with a reason, resubmit, QC, approve, publish, correct as version 2) with accessibility checks, and two tabs racing
+  on one step.
+
 ## 12. Tests that prove M4
 
 | # | Test | Type |
@@ -566,7 +584,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4f-2 | **Built:** the 100,000-question generator, k6 script, recorded timings (all targets met) and the index decision; typo search moved to a word list (migration 0031) because the first run missed the search target (K-08); T38 part 3 |
 | 4g-1 | **Built:** duplicate key, near match, `GET /questions/{id}/duplicates` (migration 0032); T39 part 1 |
 | 4g-2 | Duplicate decisions (`duplicate_decisions`), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
-| 4h | Web: workflow action bar, read-only editor, return dialog, publication checklist wording; e2e part 1 |
+| 4h | **Built:** web workflow action bar, read-only editor, return form, publication checklist wording; e2e part 1 (see §11.1) |
 | 4i | Web: review queue and notifications bell and page |
 | 4j | Web: bank screen (filters, count, search, code box) |
 | 4k | Web: compare, history and duplicates panel |
