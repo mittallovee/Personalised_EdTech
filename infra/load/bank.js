@@ -116,6 +116,10 @@ export default function (data) {
       tags: { name: "search" },
     });
   }
-  // A private draft found by code is 404 for faculty; anything else must be a 200.
-  check(response, { "answered": (r) => r.status === 200 || r.status === 404 });
+  // Only a lookup by code may be 404 (a code of someone else's private draft); everything else must
+  // be a 200, so fast error answers can never pass for a measurement.
+  const lookup = response.request.url.includes("/by-code/");
+  check(response, {
+    answered: (r) => r.status === 200 || (lookup && r.status === 404),
+  });
 }

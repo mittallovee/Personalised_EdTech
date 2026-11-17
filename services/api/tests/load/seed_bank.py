@@ -42,7 +42,7 @@ from qbank.modules.questions.service import content_hash
 from tests.load.synthetic import Syllabus, make_syllabus, synthetic_question
 
 BATCH = 1_000
-MIN_PASSWORD = 12
+SHORTEST_SECRET = 12  # characters
 PLATFORM = TenantContext(is_platform=True)
 
 # Share of each state in the synthetic bank (the rest are drafts), and of archived questions.
@@ -83,9 +83,10 @@ def _state(rng: random.Random) -> str:
     return "DRAFT"
 
 
-def create_coaching(database: Database, password: str, seed: int) -> tuple[UUID, list[LoadMember]]:
+def create_coaching(
+    database: Database, password_hash: str, seed: int
+) -> tuple[UUID, list[LoadMember]]:
     org_id = new_id()
-    hashed = hash_password(password)
     members: list[LoadMember] = []
     with database.transaction(PLATFORM) as session:
         session.add(Organization(id=org_id, display_name=f"Load test coaching {seed}"))
@@ -94,7 +95,9 @@ def create_coaching(database: Database, password: str, seed: int) -> tuple[UUID,
             email = f"load-{seed}-{name}@example.com"
             session.add(User(id=user_id, display_name=f"Load {name}"))
             session.flush()
-            session.add(PasswordCredential(user_id=user_id, email=email, password_hash=hashed))
+            session.add(
+                PasswordCredential(user_id=user_id, email=email, password_hash=password_hash)
+            )
             session.execute(
                 text("INSERT INTO account_emails (email, user_id) VALUES (:email, :user_id)"),
                 {"email": email, "user_id": user_id},
@@ -275,9 +278,10 @@ def _insert_batch(
         )
 
 
-def seed(database: Database, *, questions: int, seed: int, password: str) -> dict[str, Any]:
+def seed(database: Database, *, questions: int, seed: int, password_hash: str) -> dict[str, Any]:
+    """Seed the bank. The members' password arrives already hashed, so nothing here can print it."""
     rng = random.Random(seed)  # noqa: S311 - made-up data that must repeat, not a secret
-    org, members = create_coaching(database, password, seed)
+    org, members = create_coaching(database, password_hash, seed)
     authors = [m.user_id for m in members]
     publisher = members[0].user_id
     syllabus = make_syllabus(rng)
@@ -328,15 +332,19 @@ def main(argv: list[str] | None = None) -> int:
     if not name.endswith("_load"):
         print(f"Refusing: the database '{name}' does not end in _load.", file=sys.stderr)
         return 2
-    if len(password) < MIN_PASSWORD:
-        print(f"Set LOAD_TEST_PASSWORD (at least {MIN_PASSWORD} characters).", file=sys.stderr)
+    if len(password) < SHORTEST_SECRET:
+        print("Set LOAD_TEST_PASSWORD (at least 12 characters).", file=sys.stderr)
         return 2
+    password_hash = hash_password(password)
+    del password
     if args.questions < 1:
         print("--questions must be at least 1.", file=sys.stderr)
         return 2
     database = Database(url)
     try:
-        summary = seed(database, questions=args.questions, seed=args.seed, password=password)
+        summary = seed(
+            database, questions=args.questions, seed=args.seed, password_hash=password_hash
+        )
     finally:
         database.dispose()
     args.users_out.write_text(json.dumps(summary, indent=2), encoding="utf-8")

@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from qbank.core.config import AppEnv, Settings
 from qbank.core.db import Database
+from qbank.core.security import hash_password
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.questions.public import reindex_bank
@@ -27,7 +28,7 @@ PASSWORD = "load test password 1"
 def test_a_seeded_bank_is_a_real_bank(
     owner_db: Database, migrated_database: MigratedDatabase
 ) -> None:
-    summary = seed_bank.seed(owner_db, questions=400, seed=5, password=PASSWORD)
+    summary = seed_bank.seed(owner_db, questions=400, seed=5, password_hash=hash_password(PASSWORD))
     org = UUID(summary["organization_id"])
     assert (summary["questions"], summary["indexed"]) == (400, 400)
 

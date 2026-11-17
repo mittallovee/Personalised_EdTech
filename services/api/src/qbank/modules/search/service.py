@@ -176,7 +176,7 @@ FALLBACK_BELOW = 10  # fewer exact-word matches than this and the close matches 
 # 0.33.
 SIMILARITY = "0.45"
 CLOSE_WORDS = 3  # bank words tried in place of each typed word, closest first
-MAX_TYPED_WORDS = 8  # words of a search looked at for typos; the rest must match exactly
+MAX_TYPED_WORDS = 8  # words of a search given close alternatives; the rest must match exactly
 _REGCONFIG: ColumnElement[Any] = literal_column("'simple'::regconfig")
 
 
@@ -301,12 +301,16 @@ def _close_query(
         session.scalars(
             text("SELECT lexeme FROM unnest(to_tsvector('simple', :words))"), {"words": words}
         )
-    )[:MAX_TYPED_WORDS]
+    )
     query: ColumnElement[Any] | None = None
     widened = False
-    for word in typed:
+    for position, word in enumerate(typed):
         either = _word(word)
-        for close in _close_words(session, organization_id, word):
+        # Every word stays required; only the first few are looked up, so the work is bounded.
+        alternatives = (
+            _close_words(session, organization_id, word) if position < MAX_TYPED_WORDS else []
+        )
+        for close in alternatives:
             either = either.op("||")(_word(close))
             widened = True
         query = either if query is None else query.op("&&")(either)
