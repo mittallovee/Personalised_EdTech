@@ -19,7 +19,8 @@ Normally never. Run the rebuild after:
 - a bug fix in how a row is worked out (the fix does not change rows that already exist);
 - an upgrade that adds something to the index (the release notes will say so). **After the upgrade that adds free-text
   search (migration 0030) run it once**: until then every question has empty text, so a search finds nothing and
-  the list shows no preview;
+  the list shows no preview. **The same after the duplicate check (migration 0032)**: until then existing questions
+  are not found as duplicates;
 - restoring a backup taken before the index existed.
 
 ```bash

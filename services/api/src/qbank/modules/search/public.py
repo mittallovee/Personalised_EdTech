@@ -8,7 +8,22 @@ from sqlalchemy import or_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from qbank.modules.search.duplicates import (
+    MAX_CANDIDATES,
+    NEAR_SIMILARITY,
+    DuplicateCandidate,
+    find_duplicates,
+)
 from qbank.modules.search.models import BankRow
+
+__all__ = [
+    "MAX_CANDIDATES",
+    "NEAR_SIMILARITY",
+    "BankEntry",
+    "DuplicateCandidate",
+    "find_duplicates",
+    "save_entry",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +62,8 @@ class BankEntry:
     exam_year: int | None = None
     stem_text: str = ""  # everything a search reads, as one line of plain text (F-03)
     preview: str = ""  # the beginning of the stem, for the list
+    duplicate_key: str | None = None  # the same for two exact duplicates (D-16)
+    match_text: str = ""  # what a near-duplicate check compares: stem and options, no solution
 
 
 _KEYS = ("organization_id", "master_id")
