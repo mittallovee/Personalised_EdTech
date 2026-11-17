@@ -35,6 +35,10 @@ class BankItem(BaseModel):
     exam_year: int | None
     has_solution: bool
     has_video: bool
+    preview: str = Field(
+        description="The beginning of the question's text (about 200 characters, plain text, with"
+        " equations as their LaTeX). Empty until `qbank reindex-bank` has run once after 4f."
+    )
     created_at: datetime
     updated_at: datetime = Field(
         description="When the question last changed, as the bank shows it."
@@ -45,5 +49,12 @@ class BankPage(BaseModel):
     data: list[BankItem]
     page: PageInfo
     total: int = Field(
-        ge=0, description="How many questions match the filters, not only the ones on this page."
+        ge=0,
+        description="How many questions match the filters, not only the ones on this page. For a"
+        " search (`q`) it is how many results are shown.",
+    )
+    truncated: bool = Field(
+        default=False,
+        description="A search (`q`) matched more questions than it shows: narrow it with a more"
+        " specific word or a filter. Always false for the plain list, which has pages.",
     )

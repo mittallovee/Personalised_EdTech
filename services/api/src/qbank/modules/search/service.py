@@ -1,4 +1,5 @@
-"""Reading the bank: the list with its filters and total, and one question by its code (F-01, F-02).
+"""Reading the bank: the list with its filters and total, one question by its code, and a search of
+the words in the questions (F-01, F-02, F-03).
 
 What a person may see is decided in the query, once, by ``_readable``: work in progress (a draft, a
 returned question) is read by its author, admins and edit-others holders, and to anyone else it does
@@ -7,17 +8,31 @@ not exist, so it is never listed, counted or found by its code. The rule is the 
 test checks that the two agree for every state and role.
 """
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, false, func, or_, select, true, tuple_
+from psycopg.errors import QueryCanceled
+from sqlalchemy import (
+    ColumnElement,
+    false,
+    func,
+    literal,
+    literal_column,
+    or_,
+    select,
+    text,
+    true,
+    tuple_,
+)
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
 from qbank.core.codes import normalize_code
-from qbank.core.errors import NotFound
+from qbank.core.errors import AppError, MalformedRequest, NotFound
 from qbank.core.permissions import Action, is_allowed, may_access_all_drafts, require
 from qbank.modules.search.models import BankRow
 
@@ -51,6 +66,14 @@ class BankPage:
     rows: list[BankRow]
     has_more: bool
     total: int
+    truncated: bool = False  # a search matched more than it shows: narrow it
+
+
+class SearchTimedOut(AppError):
+    """A search ran past its time limit; the database stopped it."""
+
+    status_code = 503
+    code = "SEARCH_TIMED_OUT"
 
 
 def _readable(principal: Principal) -> ColumnElement[bool]:
@@ -140,3 +163,119 @@ def find_by_code(session: Session, principal: Principal, typed_code: str) -> Ban
     if row is None:
         raise NotFound("No such question.")
     return row
+
+
+# ---- free-text search (F-03) --------------------------------------------------------------------
+
+SEARCH_MAX = 100  # a ranked list has no deep pages: at most this many results
+FALLBACK_BELOW = 10  # fewer exact-word matches than this and the close matches are added
+# How close a word must be to count as the same word with a typo (0 to 1). Measured on typos of
+# "acceleration", "velocity", "gravity", "momentum" and "pendulum" (0.56 to 0.75); a shorter
+# similar word ("forest" for "force") also passes, which is why close words come after exact ones.
+SIMILARITY = "0.5"
+_REGCONFIG: ColumnElement[Any] = literal_column("'simple'::regconfig")
+
+
+def clean_words(typed: str) -> str:
+    """What was typed, as one line in Unicode's composed form, so the same Hindi word typed on two
+    keyboards is the same word. A NUL character (which text cannot hold) is a space."""
+    return " ".join(unicodedata.normalize("NFC", typed).replace("\x00", " ").split())
+
+
+def search_bank(
+    session: Session,
+    principal: Principal,
+    filters: BankFilters,
+    typed: str,
+    *,
+    limit: int,
+    timeout_ms: int,
+) -> BankPage:
+    """The questions that match the words typed, best match first, narrowed by the filters.
+
+    Exact words come first, ranked by how well they match. When fewer than ``FALLBACK_BELOW`` match
+    exactly, questions with a close word (a typo, "acceleratoin") follow, closest first, unless the
+    search is a quoted phrase or leaves a word out, which ask for exactness. The same
+    visibility and filters as the list apply to both, so a private draft is never a search hit. At
+    most ``limit`` (and never more than ``SEARCH_MAX``) come back and ``truncated`` says whether
+    more matched; a ranked list has no next page. The database stops a search after ``timeout_ms``.
+    """
+    require(principal, Action.CREATE_QUESTIONS)
+    words = clean_words(typed)
+    if not words:
+        raise MalformedRequest("Type a word or two to search for.")
+    shown = min(limit, SEARCH_MAX)
+    where = _conditions(principal, filters)
+    # Both settings last until the transaction ends. A bound value, never text built into the query.
+    session.execute(
+        text(
+            "SELECT set_config('statement_timeout', :timeout, true),"
+            " set_config('pg_trgm.word_similarity_threshold', :similarity, true)"
+        ),
+        {"timeout": str(timeout_ms), "similarity": SIMILARITY},
+    )
+    try:
+        found = _exact_matches(session, where, words, shown + 1)
+        if len(found) < FALLBACK_BELOW and not _asks_for_precision(words):
+            found += _close_matches(session, where, words, shown + 1 - len(found), found)
+    except OperationalError as error:
+        if isinstance(error.orig, QueryCanceled):
+            raise SearchTimedOut(
+                "That search took too long. Add a filter or a more specific word."
+            ) from error
+        raise
+    rows = found[:shown]
+    return BankPage(rows=rows, has_more=False, total=len(rows), truncated=len(found) > shown)
+
+
+def _asks_for_precision(words: str) -> bool:
+    """A quoted phrase or a word left out (``-word``) says exactly what is wanted: a close word
+    would ignore it, so those searches match exactly or not at all."""
+    return '"' in words or any(word.startswith("-") for word in words.split())
+
+
+def _exact_matches(
+    session: Session, where: list[ColumnElement[bool]], words: str, count: int
+) -> list[BankRow]:
+    # ``websearch_to_tsquery`` reads what a person types ("quoted phrase", -not, or) and never fails
+    # on it: nothing typed can become query syntax.
+    query = func.websearch_to_tsquery(_REGCONFIG, words)
+    return list(
+        session.scalars(
+            select(BankRow)
+            .where(*where, BankRow.search_vector.bool_op("@@")(query))
+            .order_by(
+                func.ts_rank(BankRow.search_vector, query).desc(),
+                BankRow.updated_at.desc(),
+                BankRow.master_id.desc(),
+            )
+            .limit(count)
+        )
+    )
+
+
+def _close_matches(
+    session: Session,
+    where: list[ColumnElement[bool]],
+    words: str,
+    count: int,
+    already: list[BankRow],
+) -> list[BankRow]:
+    # ``<%`` means "the words are similar to some stretch of the text", which the trigram index
+    # answers.
+    return list(
+        session.scalars(
+            select(BankRow)
+            .where(
+                *where,
+                literal(words).bool_op("<%")(BankRow.stem_text),
+                BankRow.master_id.not_in([row.master_id for row in already]),
+            )
+            .order_by(
+                func.word_similarity(words, BankRow.stem_text).desc(),
+                BankRow.updated_at.desc(),
+                BankRow.master_id.desc(),
+            )
+            .limit(count)
+        )
+    )

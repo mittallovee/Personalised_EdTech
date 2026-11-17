@@ -84,6 +84,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.asset_uploads_per_user, settings.asset_upload_window_seconds
     )
     app.state.image_decode_gate = ConcurrencyGate(settings.image_decodes_at_once)
+    app.state.search_limiter = SlidingWindowLimiter(
+        settings.searches_per_user, settings.search_window_seconds
+    )
 
     # Google sign-in is available only when its client ID and secret are configured (B-02).
     app.state.google = (

@@ -45,6 +45,8 @@ class BankEntry:
     bloom_level: str | None = None
     exam_id: UUID | None = None
     exam_year: int | None = None
+    stem_text: str = ""  # everything a search reads, as one line of plain text (F-03)
+    preview: str = ""  # the beginning of the stem, for the list
 
 
 _KEYS = ("organization_id", "master_id")

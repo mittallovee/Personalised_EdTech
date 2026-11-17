@@ -2047,6 +2047,11 @@ export interface components {
             /** Has Video */
             has_video: boolean;
             /**
+             * Preview
+             * @description The beginning of the question's text (about 200 characters, plain text, with equations as their LaTeX). Empty until `qbank reindex-bank` has run once after 4f.
+             */
+            preview: string;
+            /**
              * Created At
              * Format: date-time
              */
@@ -2065,9 +2070,15 @@ export interface components {
             page: components["schemas"]["PageInfo"];
             /**
              * Total
-             * @description How many questions match the filters, not only the ones on this page.
+             * @description How many questions match the filters, not only the ones on this page. For a search (`q`) it is how many results are shown.
              */
             total: number;
+            /**
+             * Truncated
+             * @description A search (`q`) matched more questions than it shows: narrow it with a more specific word or a filter. Always false for the plain list, which has pages.
+             * @default false
+             */
+            truncated: boolean;
         };
         /** BloomLevelOut */
         BloomLevelOut: {
@@ -11034,6 +11045,8 @@ export interface operations {
                 has_video?: boolean | null;
                 /** @description List the archive instead. */
                 archived?: boolean;
+                /** @description Words to search for in the stem, options and solution. Quotes match a phrase, `-word` leaves a word out. Results are ranked, exact words first, then close words (typos); there is no next page, so give `limit` up to 100 and narrow with filters. Cannot be combined with `cursor`. */
+                q?: string | null;
                 limit?: number;
                 cursor?: string | null;
             };
@@ -11079,8 +11092,28 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Too many searches (`RATE_LIMITED`) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The search took too long and was stopped (`SEARCH_TIMED_OUT`) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
