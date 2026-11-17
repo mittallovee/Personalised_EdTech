@@ -248,6 +248,20 @@ def test_the_better_match_comes_first_not_the_most_recent(
     assert codes(search(client, team, "other", "heron")) == [many, once]
 
 
+def test_every_word_of_a_long_search_must_still_match_when_typos_are_forgiven(
+    client: TestClient, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    # Only the first words get close alternatives; the others must still be there exactly.
+    words = "acceleration block cart disc energy force gravity mass"
+    without = published(client, team, content_of(catalogue, f"Words: {words}."))
+    with_it = published(client, team, content_of(catalogue, f"Words: {words} zebra."))
+
+    found = codes(search(client, team, "other", f"acceleratoin {words[13:]} zebra"))
+
+    assert with_it in found
+    assert without not in found
+
+
 def test_an_unrelated_word_is_not_a_typo(
     client: TestClient, team: dict[str, Member], catalogue: Catalogue
 ) -> None:
@@ -530,3 +544,33 @@ def test_the_reindex_fills_the_text_of_rows_that_have_none(
 
     found = search(client, team, "other", "badger")
     assert codes(found) == [code] and found["data"][0]["preview"] == "A badger digs."
+
+
+def test_the_words_of_the_bank_are_kept_per_coaching_by_the_database(
+    client: TestClient, owner_db: Database, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    # Typos are matched against the coaching's own list of words, which a trigger keeps.
+    start(client, team, content_of(catalogue, "A quokka smiles."))
+    stranger = make_member(owner_db, "OWNER")
+    stranger_catalogue = seed_catalogue(owner_db, stranger.org_id)
+    headers = sign_in(client, stranger.email)
+    ok(
+        client.post(
+            QUESTIONS,
+            json={"content": content_of(stranger_catalogue, "A wombat digs.")},
+            headers=headers,
+        )
+    )
+
+    def words_of(org: UUID) -> set[str]:
+        with owner_db.transaction(TenantContext(organization_id=org)) as session:
+            return set(
+                session.scalars(
+                    text("SELECT word FROM bank_words WHERE organization_id = :org"), {"org": org}
+                )
+            )
+
+    mine, theirs = words_of(team["owner"].org_id), words_of(stranger.org_id)
+    assert "quokka" in mine and "quokka" not in theirs
+    assert "wombat" in theirs and "wombat" not in mine
+    assert all(3 <= len(word) <= 40 for word in mine | theirs)

@@ -27,7 +27,8 @@ docker compose run --rm migrate qbank reindex-bank                       # every
 docker compose run --rm migrate qbank reindex-bank --organization <id>   # one coaching
 ```
 
-It prints one line per coaching (`Coaching <id>: N questions indexed`). It is safe to run while the app is in use
+It prints one line per coaching (`Coaching <id>: N questions indexed`). It takes about **12 minutes per 100,000
+questions** (measured, `docs/operations/load-tests.md`). It is safe to run while the app is in use
 and safe to repeat: it recomputes each row from the questions and writes it only if it changed. It works in
 batches of 500 questions, one transaction per batch, so it never holds one open for long. It needs the table-owner
 connection (`MIGRATION_DATABASE_URL`), like `create-platform-admin`, which the `migrate` service already has.
