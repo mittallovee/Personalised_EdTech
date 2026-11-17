@@ -248,6 +248,20 @@ def test_the_better_match_comes_first_not_the_most_recent(
     assert codes(search(client, team, "other", "heron")) == [many, once]
 
 
+def test_every_word_of_a_long_search_must_still_match_when_typos_are_forgiven(
+    client: TestClient, team: dict[str, Member], catalogue: Catalogue
+) -> None:
+    # Only the first words get close alternatives; the others must still be there exactly.
+    words = "acceleration block cart disc energy force gravity mass"
+    without = published(client, team, content_of(catalogue, f"Words: {words}."))
+    with_it = published(client, team, content_of(catalogue, f"Words: {words} zebra."))
+
+    found = codes(search(client, team, "other", f"acceleratoin {words[13:]} zebra"))
+
+    assert with_it in found
+    assert without not in found
+
+
 def test_an_unrelated_word_is_not_a_typo(
     client: TestClient, team: dict[str, Member], catalogue: Catalogue
 ) -> None:
