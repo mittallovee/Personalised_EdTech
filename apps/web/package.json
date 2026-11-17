@@ -16,7 +16,7 @@
     "@qbank/api-client": "workspace:*",
     "@qbank/content-renderer": "workspace:*",
     "mathlive": "0.111.1",
-    "next": "16.4.3",
+    "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
@@ -26,7 +26,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^10",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.5",
     "prettier": "^3.9.10",
     "tailwindcss": "^4",
     "typescript": "^5",
