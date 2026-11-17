@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
@@ -34,6 +34,7 @@ from qbank.modules.questions.models import (
 from qbank.modules.search.public import (
     DuplicateCandidate,
     find_duplicates,
+    shared_codes,
     shared_exact_duplicates,
 )
 
@@ -132,7 +133,8 @@ def qc_blockers(
     session: Session, master: QuestionMaster, version: QuestionVersion, key: str | None
 ) -> list[tuple[UUID, str]]:
     """The other questions that stop this text passing QC: each exact match in the shared bank that
-    nobody has decided is not a duplicate, and each question someone said this one duplicates."""
+    nobody has decided is not a duplicate, and each question of the shared bank someone said this
+    one duplicates. A private draft or an archived question never blocks (design note §7.9)."""
     if key is None:
         return []
     decisions = newest_decisions(session, version.id, key)
@@ -143,10 +145,13 @@ def qc_blockers(
         if other not in decisions or decisions[other].decision != "NOT_DUPLICATE"
     ]
     blocked = {other for other, _ in blockers}
-    for other, decision in decisions.items():
-        if decision.decision == "DUPLICATE_OF" and other not in blocked:
-            code = session.scalar(select(QuestionMaster.code).where(QuestionMaster.id == other))
-            blockers.append((other, code or ""))
+    confirmed = [
+        other
+        for other, decision in decisions.items()
+        if decision.decision == "DUPLICATE_OF" and other not in blocked
+    ]
+    shared = shared_codes(session, master.organization_id, confirmed)
+    blockers += [(other, shared[other]) for other in confirmed if other in shared]
     return blockers
 
 
@@ -224,6 +229,9 @@ def decide(
         decision=decision,
         note=clean_note,
         actor_id=principal.user_id,
+        # The clock now, after the question is locked, not when the transaction began: of two
+        # decisions about the same question, the one recorded last is the newest (Codex, #137).
+        created_at=func.clock_timestamp(),
     )
     session.add(row)
     session.flush()

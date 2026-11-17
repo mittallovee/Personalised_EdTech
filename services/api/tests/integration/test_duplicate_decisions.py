@@ -6,17 +6,21 @@ block. Decisions are about one text, append-only, audited, and only the author, 
 control make them.
 """
 
+import time
 from collections.abc import Iterator
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from qbank.core.auth import Principal
 from qbank.core.db import Database
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
+from qbank.modules.questions import duplicates as decisions
 from tests.integration.conftest import Member, MigratedDatabase, make_member, sign_in
 from tests.integration.question_support import Catalogue, seed_catalogue
 from tests.integration.test_bank_search import QUESTIONS, act, as_, make_settings, ok, start
@@ -194,6 +198,70 @@ def test_a_private_draft_or_an_archived_copy_never_blocks(
     mine = act(client, team, "author", start(client, team, block_question(catalogue)), "submit")
 
     assert pass_qc(client, team, mine).status_code == 200
+
+
+def test_a_duplicate_of_aimed_at_a_private_draft_or_an_archived_question_never_blocks(
+    client: TestClient,
+    team: dict[str, Member],
+    catalogue: Catalogue,
+    original: dict[str, Any],
+    copy_in_review: dict[str, Any],
+) -> None:
+    secret = start(client, team, block_question(catalogue, stem=STEM + " Take g = 10."), "other")
+    assert decide(client, team, "admin", copy_in_review, secret, "DUPLICATE_OF").status_code == 201
+    assert decide(client, team, "qc", copy_in_review, original, "DUPLICATE_OF").status_code == 201
+    ok(client.post(f"{QUESTIONS}/{original['id']}/archive", headers=as_(client, team, "owner")))
+
+    # Neither is in the shared bank: they block nothing, and QC never sees the private draft's code.
+    check = duplicates(client, team, "qc", copy_in_review)
+    assert check["qc_blocked_by"] == []
+    assert pass_qc(client, team, copy_in_review).status_code == 200
+
+
+def test_the_decision_recorded_last_counts_even_when_its_transaction_began_first(
+    migrated_database: MigratedDatabase,
+    team: dict[str, Member],
+    original: dict[str, Any],
+    copy_in_review: dict[str, Any],
+    client: TestClient,
+) -> None:
+    qc = Principal(
+        user_id=team["qc"].user_id,
+        display_name="QC",
+        is_platform_admin=False,
+        organization_id=team["owner"].org_id,
+        role="FACULTY",
+        grants=frozenset({"QC"}),
+    )
+    question, other = UUID(copy_in_review["id"]), UUID(original["id"])
+    database = Database(migrated_database.app_url)
+    try:
+        with database.transaction(qc.tenant_context) as late:  # begins first
+            late.execute(text("SELECT 1"))
+            time.sleep(0.05)
+            with database.transaction(qc.tenant_context) as early:  # begins later, records first
+                decisions.decide(
+                    early,
+                    qc,
+                    question,
+                    other_question_id=other,
+                    decision="DUPLICATE_OF",
+                    note="Looked like a copy.",
+                    request_id=None,
+                )
+            decisions.decide(
+                late,
+                qc,
+                question,
+                other_question_id=other,
+                decision="NOT_DUPLICATE",
+                note="Checked again: different.",
+                request_id=None,
+            )
+    finally:
+        database.dispose()
+
+    assert pass_qc(client, team, copy_in_review).status_code == 200  # the later decision counts
 
 
 # ---- who may decide, about what -----------------------------------------------------------------

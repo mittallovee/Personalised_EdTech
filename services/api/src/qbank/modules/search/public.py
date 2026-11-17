@@ -13,6 +13,7 @@ from qbank.modules.search.duplicates import (
     NEAR_SIMILARITY,
     DuplicateCandidate,
     find_duplicates,
+    shared_codes,
     shared_exact_duplicates,
 )
 from qbank.modules.search.models import BankRow
@@ -24,6 +25,7 @@ __all__ = [
     "DuplicateCandidate",
     "find_duplicates",
     "save_entry",
+    "shared_codes",
     "shared_exact_duplicates",
 ]
 

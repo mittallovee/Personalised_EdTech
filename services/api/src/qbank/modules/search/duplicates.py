@@ -135,3 +135,22 @@ def shared_exact_duplicates(
         .order_by(BankRow.code)
     )
     return [(row.master_id, row.code) for row in rows]
+
+
+def shared_codes(
+    session: Session, organization_id: UUID, master_ids: list[UUID]
+) -> dict[UUID, str]:
+    """The codes of those questions that are in the shared bank (submitted, not archived). The
+    rest (a private draft, an archived question) are left out, so they never block anyone and are
+    never named to someone who may not open them."""
+    if not master_ids:
+        return {}
+    rows = session.execute(
+        select(BankRow.master_id, BankRow.code).where(
+            BankRow.organization_id == organization_id,
+            BankRow.is_private.is_(False),
+            BankRow.is_archived.is_(False),
+            BankRow.master_id.in_(master_ids),
+        )
+    )
+    return {row.master_id: row.code for row in rows}
