@@ -206,3 +206,34 @@ test("while an import is being applied, another file cannot be started", async (
   await expect(page.getByRole("status")).toContainText("1 added");
   await expect(page.getByRole("button", { name: "Import another file" })).toBeEnabled();
 });
+
+// C-14: a built-in syllabus is previewed and applied like a file, without uploading one.
+test("the Owner loads a built-in syllabus, and loading it again adds nothing", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Starter ${unique()}`);
+  const page = await context.newPage();
+  await openImport(page);
+  const starters = page.getByRole("list", { name: "Built-in syllabuses" });
+  await expect(starters.getByRole("listitem")).toHaveCount(3);
+  await expectNoSeriousA11yViolations(page);
+
+  const physics = page.getByRole("button", { name: "Preview JEE Physics (Class 11 and 12)" });
+  await physics.click();
+  await expect(
+    page.getByRole("heading", { name: /Check the preview: Built-in: JEE Physics/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("table")).toContainText("Class 11 > Physics");
+
+  await page.getByRole("button", { name: "Apply the import" }).click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("added");
+  await page.getByRole("link", { name: "Syllabus" }).click();
+  await expect(page.getByRole("list", { name: "Syllabus items" })).toContainText("Class 11");
+
+  await openImport(page);
+  await physics.click();
+  await expect(page.getByText("Everything in this file is already in the syllabus.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply the import" })).toHaveCount(0);
+});

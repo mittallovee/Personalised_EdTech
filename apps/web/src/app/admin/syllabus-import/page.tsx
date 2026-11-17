@@ -1,7 +1,7 @@
 "use client";
 
 import type { components } from "@qbank/api-client";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { ConfirmPanel } from "@/components/confirm-panel";
@@ -15,6 +15,7 @@ type Import = components["schemas"]["ImportOut"];
 type ImportRow = components["schemas"]["ImportRowOut"];
 type RowStatus = ImportRow["status"];
 type Row = ImportRow & { id: string };
+type Starter = components["schemas"]["StarterSyllabusOut"];
 
 const ALERT =
   "rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300";
@@ -36,9 +37,9 @@ const STATUS_LABEL: Record<RowStatus, string> = {
 
 /**
  * Import a syllabus from Excel or CSV (C-03): download the template, upload a filled-in file, read
- * the preview (every row new, changed, unchanged or an error), then apply it. Nothing in the
- * syllabus changes until "Apply". Owner and admins only; the API decides, this page only hides the
- * controls.
+ * the preview (every row new, changed, unchanged or an error), then apply it. A built-in syllabus
+ * (C-14) is previewed and applied the same way, without a file. Nothing in the syllabus changes
+ * until "Apply". Owner and admins only; the API decides, this page only hides the controls.
  */
 export default function SyllabusImportPage() {
   const { me, loadError, shellError, retry, signOut, stopActing } = useMe();
@@ -138,6 +139,7 @@ export default function SyllabusImportPage() {
 
       {canManage && !preview && (
         <div className="mt-6 max-w-2xl space-y-6">
+          <StarterSyllabuses onPreview={setPreview} />
           <section aria-labelledby="template-heading" className="space-y-2">
             <h2 id="template-heading" className="text-lg font-medium">
               1. Get the template
@@ -201,6 +203,104 @@ export default function SyllabusImportPage() {
         />
       )}
     </AppShell>
+  );
+}
+
+/**
+ * The built-in syllabuses (C-14). "Preview" asks the API for the same preview an upload of that
+ * file would give; nothing changes until it is applied.
+ */
+function StarterSyllabuses({ onPreview }: { onPreview: (preview: Import) => void }) {
+  const [starters, setStarters] = useState<Starter[]>([]);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // A retry of the same starter reuses its Idempotency-Key, so a lost answer never means two previews.
+  const retryKeys = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const { data } = await api().GET("/api/v1/taxonomy/starter-syllabuses");
+        // Without the list the section stays hidden; uploading a file still works.
+        if (data && !cancelled) setStarters(data);
+      } catch {
+        // Same: the page works without this section.
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function preview(starter: Starter) {
+    if (busyKey) return;
+    const key = retryKeys.current.get(starter.key) ?? crypto.randomUUID();
+    retryKeys.current.set(starter.key, key);
+    setBusyKey(starter.key);
+    setError(null);
+    try {
+      const { data, error, response } = await api().POST(
+        "/api/v1/taxonomy/starter-syllabuses/{key}/imports",
+        { params: { path: { key: starter.key }, header: { "Idempotency-Key": key } } },
+      );
+      if (data) {
+        retryKeys.current.delete(starter.key);
+        onPreview(data);
+      } else {
+        setError(errorMessage(error, response.status));
+      }
+    } catch {
+      setError(NETWORK);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  if (starters.length === 0) return null;
+  return (
+    <section aria-labelledby="starter-heading" className="space-y-2">
+      <h2 id="starter-heading" className="text-lg font-medium">
+        Start from a built-in syllabus
+      </h2>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Ready-made chapters, topics, subtopics and concepts. You see the preview first; items your
+        syllabus already has are left as they are, and you can change anything afterwards.
+      </p>
+      <ul aria-label="Built-in syllabuses" className="space-y-2">
+        {starters.map((starter) => (
+          <li
+            key={starter.key}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+          >
+            <div>
+              <p className="font-medium">{starter.title}</p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {starter.description} {starter.rows.toLocaleString("en-IN")} items.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => preview(starter)}
+              disabled={busyKey !== null}
+              aria-label={`Preview ${starter.title}`}
+              className={`${BUTTON} disabled:opacity-60`}
+            >
+              {busyKey === starter.key ? "Checking…" : "Preview"}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p role="alert" className={ALERT}>
+          {error}
+        </p>
+      )}
+      <p className="pt-2 text-sm text-zinc-600 dark:text-zinc-400">
+        Or import your own file in two steps:
+      </p>
+    </section>
   );
 }
 
