@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from typing import Any
 from uuid import UUID, uuid4
 
+import itertools
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -124,6 +125,9 @@ def advance(
     return question
 
 
+_NUMBERS = itertools.count(1)
+
+
 def waiting(
     client: TestClient,
     team: dict[str, Member],
@@ -135,7 +139,9 @@ def waiting(
 ) -> dict[str, Any]:
     """A new question, submitted by ``who`` and then taken through ``through`` (or left in review).
     ``changes`` replaces top-level fields of the content, such as ``language``."""
-    content = {**ready_for(catalogue), **changes}
+    # A stem of its own: identical questions would correctly wait at Pass QC as duplicates (D-16).
+    own = [{"kind": "paragraph", "text": f"What is 2 + {next(_NUMBERS)}?"}]
+    content = {**ready_for(catalogue), "stem": own, **changes}
     question = submit(client, team, start(client, team, content, who), who)
     return advance(client, team, question, through) if through else question
 
