@@ -107,6 +107,30 @@ class PublishedVersion(Base):
     labels: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
 
+class DuplicateDecision(Base):
+    """A person's decision about a possible duplicate (migration 0033, D-16), for one text of a
+    version (its ``duplicate_key``). Append-only: a newer decision replaces an older one."""
+
+    __tablename__ = "duplicate_decisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "version_id"],
+            ["question_versions.organization_id", "question_versions.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    version_id: Mapped[UUID]
+    revision_id: Mapped[UUID]  # the text the decision was made on
+    duplicate_key: Mapped[str] = mapped_column(String(64))
+    other_master_id: Mapped[UUID]
+    decision: Mapped[str] = mapped_column(String(20))  # NOT_DUPLICATE or DUPLICATE_OF
+    note: Mapped[str]
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class QuestionRevision(Base):
     """A saved snapshot of the content. The one with no ``frozen_at`` is the working revision."""
 

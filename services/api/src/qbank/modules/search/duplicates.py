@@ -111,3 +111,23 @@ def find_duplicates(
         for rows, is_exact in ((exact, True), (near, False))
         for row, percent in rows
     ]
+
+
+def shared_exact_duplicates(
+    session: Session, organization_id: UUID, *, master_id: UUID, key: str
+) -> list[tuple[UUID, str]]:
+    """The questions of the shared bank (submitted, not archived) with this exact key, other than
+    ``master_id``: what Pass QC must see decided. A private draft is not in the shared bank yet,
+    so it never blocks anyone (and nobody learns of it this way)."""
+    rows = session.execute(
+        select(BankRow.master_id, BankRow.code)
+        .where(
+            BankRow.organization_id == organization_id,
+            BankRow.is_private.is_(False),
+            BankRow.is_archived.is_(False),
+            BankRow.duplicate_key == key,
+            BankRow.master_id != master_id,
+        )
+        .order_by(BankRow.code)
+    )
+    return [(row.master_id, row.code) for row in rows]
