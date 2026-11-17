@@ -3,7 +3,7 @@
 import type { components } from "@qbank/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StateBadge } from "@/components/workflow-bar";
 import { api, errorMessage } from "@/lib/api";
@@ -117,6 +117,9 @@ export function BankList({ myId }: { myId: string }) {
   const [next, setNext] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
+  // Each load takes a ticket; a late answer to an older one (other filters, older words, a "Show
+  // more" for the list that was there before) is dropped, so it never replaces the newer list.
+  const ticket = useRef(0);
 
   // The search words follow the box after a pause, so typing sends one search, not one per key.
   useEffect(() => {
@@ -142,10 +145,12 @@ export function BankList({ myId }: { myId: string }) {
 
   const load = useCallback(
     async (cursor: string | null) => {
+      const mine = ++ticket.current;
       try {
         const result = await api().GET("/api/v1/bank/questions", {
           params: { query: bankQuery(filters, myId, cursor) },
         });
+        if (mine !== ticket.current) return;
         if (result.response.status === 403) {
           setDenied(true);
           return;
@@ -161,7 +166,7 @@ export function BankList({ myId }: { myId: string }) {
         setNext(page.page.next_cursor ?? null);
         setProblem(null);
       } catch {
-        setProblem(NETWORK);
+        if (mine === ticket.current) setProblem(NETWORK);
       }
     },
     [filters, myId],

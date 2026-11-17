@@ -70,6 +70,7 @@ describe("countLine", () => {
     expect(countLine(1, false, false)).toBe("1 question");
     expect(countLine(1234, false, false)).toBe("1234 questions");
     expect(countLine(3, true, false)).toBe("3 questions match");
+    expect(countLine(1, true, false)).toBe("1 question matches");
     expect(countLine(100, true, true)).toMatch(/^The best 100 matches are shown/);
   });
 });

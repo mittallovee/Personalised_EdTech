@@ -537,6 +537,22 @@ The browser holds no rules: allowed steps, findings, visibility and counts all c
   with a reason, resubmit, QC, approve, publish, correct as version 2) with accessibility checks, and two tabs racing
   on one step.
 
+### 11.3 As built in 4j: the bank screen
+
+- The **Questions** page keeps *Start a new question* and replaces the old "my questions" list with the **bank**
+  (`components/bank-list.tsx`, `GET /bank/questions`): every question the person may open, the most recently changed
+  first, 50 at a time with Show more, each row with its code (a link), state badge, format, "correction in progress",
+  the stem preview (plain text) and its subject, chapter, difficulty, past-year year and when it changed.
+- **Search** box (stem, options and solution; phrases and `-word` work; typos forgiven by the API). It waits for a
+  0.4-second pause in typing before it asks, because searches are limited per person; a search shows the best
+  matches with no Show more, and says "The best N matches are shown" when the API reports `truncated`.
+- **Filters**: subject, chapter (of that subject), topic (of that chapter), format, difficulty, Bloom level, language,
+  state, past-year, has a solution, has a video, **Only mine** (the signed-in person as author) and **Archived**, and
+  Clear. The live count above the rows is the API's `total`.
+- **Code box**: opens a question by its code, forgiving case, spaces and dashes; an unknown code says so.
+- `lib/bank.ts` only turns the chosen filters into the API's query and words the count. A late answer to an older
+  query is dropped, so it never replaces a newer list. Browser test `apps/e2e/tests/bank.spec.ts`.
+
 ### 11.2 As built in 4i: the review queue and the notifications
 
 - **Review** (`/review`, in the menu for people with a review grant, admins, the Owner and an acting platform admin;
@@ -601,7 +617,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4g-2 | Duplicate decisions (`duplicate_decisions`), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
 | 4h | **Built:** web workflow action bar, read-only editor, return form, publication checklist wording; e2e part 1 (see §11.1) |
 | 4i | **Built:** web review queue and notifications bell and page (see §11.2) |
-| 4j | Web: bank screen (filters, count, search, code box) |
+| 4j | **Built:** web bank screen (filters, count, search, code box; see §11.3) |
 | 4k | Web: compare, history and duplicates panel |
 | 5 | M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey, timings table |
 

@@ -90,5 +90,5 @@ export function countLine(total: number, searching: boolean, truncated: boolean)
   const noun = total === 1 ? "question" : "questions";
   if (!searching) return `${total} ${noun}`;
   if (truncated) return `The best ${total} matches are shown. Add a word or a filter to narrow it.`;
-  return `${total} ${noun} match`;
+  return total === 1 ? "1 question matches" : `${total} questions match`;
 }
