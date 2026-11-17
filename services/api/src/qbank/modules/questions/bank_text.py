@@ -4,7 +4,9 @@ Pure, and never raising: a content is whatever the author saved, so anything tha
 left out. The text is the stem, then the assertion, reason, statements and the left and right
 columns, then each option, then the solution. Equations are kept as the LaTeX the author wrote,
 because a search for ``\\frac`` or ``v^2`` should find them. Pictures add their caption and
-description. The text is capped and the work is bounded, so one huge or hostile draft cannot make a
+description. ``match_text`` is the same without the solution: it is what the near-duplicate check
+compares (D-16), since the same question with another worked solution is still the same question.
+The text is capped and the work is bounded, so one huge or hostile draft cannot make a
 huge index row or take long to read.
 """
 
@@ -29,6 +31,7 @@ _ITEM_FIELDS = ("statements", "left", "right", "options")
 class BankText:
     stem_text: str  # everything searchable, one line
     preview: str  # the beginning of the stem, for the list
+    match_text: str  # what a near-duplicate check compares: the same without the solution
 
 
 @dataclass(slots=True)
@@ -107,8 +110,10 @@ def bank_text(content: object) -> BankText:
             item_obj = as_dict(item)
             if item_obj is not None:
                 rest.blocks(item_obj.get("content"))
+    match_text = _clean(" ".join(rest.parts))[:MAX_TEXT]
     rest.blocks(obj.get("solution"))
     return BankText(
         stem_text=_clean(" ".join(rest.parts))[:MAX_TEXT],
         preview=_clean(" ".join(stem.parts))[:PREVIEW_LENGTH],
+        match_text=match_text,
     )

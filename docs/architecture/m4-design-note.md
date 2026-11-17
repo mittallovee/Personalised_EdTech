@@ -378,6 +378,29 @@ coaching, needed after a bug fix or a change to what is indexed).
 - **Rebuild time:** `reindex-bank` takes about 12 minutes per 100,000 questions (135 a second); acceptable for a rare
   admin job, recorded in the runbook.
 
+### 7.8 As built in 4g-1: finding possible duplicates (D-16)
+
+- **Exact** (`questions/duplicate_key.py`, pure, never raises): a SHA-256 of the format, stem, assertion, reason,
+  statements, columns, options (with their ids and, for matching, the mapping) and the answer. Prose is Unicode
+  composed, spaces collapsed and case folded; **equations are kept as written** (only spacing collapsed), in equation
+  blocks and between `\(` and `\)` alike, so `x^2` and `X^2` differ. A picture counts by its stored picture. The
+  solution, the video, the language and the labels are not part of it. An empty stem has no key.
+- **Near**: trigram similarity of `match_text` (the question's text without the solution, so a different worked
+  solution does not hide a copy) of at least **0.75**, through a trigram index. The value comes from a labelled sample
+  of made-up pairs (`services/api/tests/fixtures/duplicate_sample.json`): the same question with a small change scored
+  0.83 to 1.00, a different question on the same topic 0.35 to 0.65. A test checks the threshold still separates them.
+  The template-sharing synthetic questions of the load test score about 0.70, below it.
+- **Table** (migration 0032): `bank_index` gains `duplicate_key` (indexed with the coaching) and `match_text` (a
+  trigram index). The full-text trigram index of 0030 is dropped: since 0031 nothing reads it. Run `qbank
+  reindex-bank` once after the upgrade, as for 0030.
+- **`GET /api/v1/questions/{id}/duplicates`** (`questions/duplicates.py`, `duplicates_api.py`): checks the text the
+  person sees (the revision under review or published; else the working copy of a draft, for those who may open it)
+  against the bank index through `search.public.find_duplicates`, with the bank's visibility rule: at most 20 exact
+  matches (newest first) then 20 near ones (closest first), with code, state, similarity in percent and a preview.
+  Never the question itself, an archived question, another coaching's, or a private draft the reader may not open; a
+  question the reader may not open is 404. Under the same 5-second limit as search (`503 SEARCH_TIMED_OUT`).
+- Not yet (4g-2): recording a decision, and an exact match blocking Pass QC until one is recorded.
+
 ## 8. Diff and history (E-08, E-09)
 
 - **Diff** (`GET /questions/{id}/diff?from=<revision>&to=<revision>`): both revisions must belong to this
@@ -436,7 +459,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 |---|---|
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
 | Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
-| Bank index (**built in 4e, migration 0029; text in 4f, migration 0030; words in 4f-2, migration 0031**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; 0031 adds `bank_words` (each coaching's distinct words, kept by a trigger) for typo search; rows are filled by the reindex command, not by SQL |
+| Bank index (**built in 4e, migration 0029; text in 4f, migration 0030; words in 4f-2, migration 0031; duplicate key and match text in 4g-1, migration 0032**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; 0031 adds `bank_words` (each coaching's distinct words, kept by a trigger) for typo search; rows are filled by the reindex command, not by SQL |
 | Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
 
@@ -448,7 +471,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
 | `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` (**built in 4d**, see §8.1) | Timeline and before/after |
 | `GET /bank/questions` (filters, `total`, `q` for search) · `GET /bank/questions/by-code/{code}` (**built in 4e and 4f**, see §7.5 and §7.6) | The bank |
-| `GET /questions/{id}/duplicates` · `POST /questions/{id}/duplicates/decisions` | Duplicate check |
+| `GET /questions/{id}/duplicates` (**built in 4g-1**, see §7.8) · `POST /questions/{id}/duplicates/decisions` (4g-2) | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
 
 ### 10.1 The review queue (built in 4c; no migration)
@@ -541,7 +564,8 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4e | **Built:** `search` module: `bank_index` (migration 0029), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
 | 4f | **Built:** free text and typo search (F-03): migration 0030, `bank_text.py`, `q` on the bank list, limits; T38 part 2 |
 | 4f-2 | **Built:** the 100,000-question generator, k6 script, recorded timings (all targets met) and the index decision; typo search moved to a word list (migration 0031) because the first run missed the search target (K-08); T38 part 3 |
-| 4g | Duplicate check (exact + near) and decisions; T39 |
+| 4g-1 | **Built:** duplicate key, near match, `GET /questions/{id}/duplicates` (migration 0032); T39 part 1 |
+| 4g-2 | Duplicate decisions (`duplicate_decisions`), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
 | 4h | Web: workflow action bar, read-only editor, return dialog, publication checklist wording; e2e part 1 |
 | 4i | Web: review queue and notifications bell and page |
 | 4j | Web: bank screen (filters, count, search, code box) |

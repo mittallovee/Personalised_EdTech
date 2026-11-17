@@ -9234,6 +9234,95 @@
         }
       }
     },
+    "/api/v1/questions/{question_id}/duplicates": {
+      "get": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Possible duplicates of a question (D-16)",
+        "description": "Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open. A person decides whether they are duplicates; nothing is merged or changed.",
+        "operationId": "get_duplicates_api_v1_questions__question_id__duplicates_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicatesOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question that you may open (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The check took too long and was stopped (`SEARCH_TIMED_OUT`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/passages": {
       "post": {
         "tags": [
@@ -12542,6 +12631,84 @@
           "meaning"
         ],
         "title": "DifficultyLevelOut"
+      },
+      "DuplicateOut": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "description": "The workflow state of the version the bank shows."
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "EXACT",
+              "NEAR"
+            ],
+            "title": "Match",
+            "description": "`EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text."
+          },
+          "similarity_percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Similarity Percent",
+            "description": "How alike the two texts are."
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview",
+            "description": "The beginning of the other question's stem (plain text)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "code",
+          "state",
+          "match",
+          "similarity_percent",
+          "preview"
+        ],
+        "title": "DuplicateOut"
+      },
+      "DuplicatesOut": {
+        "properties": {
+          "checked_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checked Revision Id",
+            "description": "The text that was checked: the one under review or published, else the working copy of a draft."
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateOut"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "Exact matches first, then near ones, closest first."
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked_revision_id",
+          "version_number",
+          "data"
+        ],
+        "title": "DuplicatesOut"
       },
       "ErrorField": {
         "properties": {

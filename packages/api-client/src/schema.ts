@@ -1461,6 +1461,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question_id}/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Possible duplicates of a question (D-16)
+         * @description Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open. A person decides whether they are duplicates; nothing is merged or changed.
+         */
+        get: operations["get_duplicates_api_v1_questions__question_id__duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passages": {
         parameters: {
             query?: never;
@@ -2337,6 +2357,53 @@ export interface components {
             level: number;
             /** Meaning */
             meaning: string;
+        };
+        /** DuplicateOut */
+        DuplicateOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /**
+             * State
+             * @description The workflow state of the version the bank shows.
+             */
+            state: string;
+            /**
+             * Match
+             * @description `EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text.
+             * @enum {string}
+             */
+            match: "EXACT" | "NEAR";
+            /**
+             * Similarity Percent
+             * @description How alike the two texts are.
+             */
+            similarity_percent: number;
+            /**
+             * Preview
+             * @description The beginning of the other question's stem (plain text).
+             */
+            preview: string;
+        };
+        /** DuplicatesOut */
+        DuplicatesOut: {
+            /**
+             * Checked Revision Id
+             * Format: uuid
+             * @description The text that was checked: the one under review or published, else the working copy of a draft.
+             */
+            checked_revision_id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Data
+             * @description Exact matches first, then near ones, closest first.
+             */
+            data: components["schemas"]["DuplicateOut"][];
         };
         /** ErrorField */
         ErrorField: {
@@ -10102,6 +10169,73 @@ export interface operations {
             };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_duplicates_api_v1_questions__question_id__duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicatesOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The check took too long and was stopped (`SEARCH_TIMED_OUT`) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

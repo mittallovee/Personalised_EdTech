@@ -65,6 +65,16 @@ def test_the_preview_is_the_beginning_of_the_stem_only() -> None:
     assert "hidden answer" in result.stem_text and "hidden answer" not in result.preview
 
 
+def test_the_text_a_duplicate_check_compares_leaves_out_the_solution() -> None:
+    content = {
+        "stem": [para("A block slides.")],
+        "options": [{"id": "A", "content": [para("2 m")]}],
+        "solution": [para("Worked solution.")],
+    }
+    assert bank_text(content).match_text == "A block slides. 2 m"
+    assert bank_text(content).stem_text == "A block slides. 2 m Worked solution."
+
+
 def test_whitespace_is_one_space_and_text_is_in_composed_form() -> None:
     decomposed = unicodedata.normalize("NFD", "café")
     result = bank_text({"stem": [para(f"  a\n\n b\t{decomposed}  "), para("")]})

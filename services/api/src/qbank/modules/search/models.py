@@ -52,6 +52,9 @@ class BankRow(Base):
     search_vector: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('simple', stem_text)", persisted=True), deferred=True
     )
+    # What the duplicate check compares (migration 0032, D-16).
+    duplicate_key: Mapped[str | None]
+    match_text: Mapped[str] = mapped_column(deferred=True)
 
 
 class BankWord(Base):
