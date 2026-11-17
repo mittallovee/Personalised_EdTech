@@ -1,5 +1,6 @@
-"""Routes for the syllabus import: download the template, upload a file to preview it, read the
-preview. Previewing changes nothing in the syllabus (M3 design note §4.4, C-03)."""
+"""Routes for the syllabus import: download the template, upload a file (or pick a built-in
+starter syllabus, C-14) to preview it, read the preview. Previewing changes nothing in the
+syllabus (M3 design note §4.4, C-03)."""
 
 import base64
 import binascii
@@ -7,7 +8,7 @@ import math
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from starlette.concurrency import run_in_threadpool
 
 from qbank.core.auth import CurrentPrincipal
@@ -18,7 +19,7 @@ from qbank.core.metrics import IMPORT_EVENTS, RATE_LIMITED, org_label
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo
 from qbank.core.permissions import Action, require
 from qbank.core.ratelimit import ConcurrencyGate, SlidingWindowLimiter
-from qbank.modules.taxonomy import import_apply, import_plan
+from qbank.modules.taxonomy import import_apply, import_plan, starter_syllabus
 from qbank.modules.taxonomy import import_service as service
 from qbank.modules.taxonomy.import_file import MAX_FILE_BYTES, ImportFileInvalid
 from qbank.modules.taxonomy.import_plan import COLUMNS
@@ -30,6 +31,7 @@ from qbank.modules.taxonomy.schemas import (
     ImportRowPage,
     ImportStatus,
     OneLine,
+    StarterSyllabusOut,
 )
 
 router = APIRouter(prefix="/api/v1/taxonomy", tags=["syllabus import"])
@@ -176,17 +178,36 @@ async def create_import(
     idempotency_key: Annotated[str | None, IdempotencyKeyHeader] = None,
 ) -> ImportOut:
     require(principal, Action.MANAGE_CATALOGUES)  # before the file is read
+    _count_upload(request, principal)  # before the body is read: a refusal costs nothing
+    data = await _read_body(request)
+    return await _preview(request, response, principal, database, file_name, data, idempotency_key)
+
+
+def _count_upload(request: Request, principal: CurrentPrincipal) -> None:
+    """Refuse (429) a user who has asked for several previews in a short time (K-10a)."""
     limiter: SlidingWindowLimiter = request.app.state.import_upload_limiter
-    wait = limiter.hit(str(principal.user_id))  # before the body is read: a refusal costs nothing
-    org = org_label(principal.tenant_context.organization_id)
+    wait = limiter.hit(str(principal.user_id))
     if wait > 0:
+        org = org_label(principal.tenant_context.organization_id)
         IMPORT_EVENTS.labels(org, "rejected_rate_limited").inc()
         RATE_LIMITED.labels("import_upload").inc()
         raise TooManyRequests(
             "You have uploaded several files in a short time. Please wait and try again.",
             retry_after_seconds=math.ceil(wait),
         )
-    data = await _read_body(request)
+
+
+async def _preview(
+    request: Request,
+    response: Response,
+    principal: CurrentPrincipal,
+    database: Database,
+    file_name: str,
+    data: bytes,
+    idempotency_key: str | None,
+) -> ImportOut:
+    """Read ``data`` and store what it would do, with at most a few files read at once."""
+    org = org_label(principal.tenant_context.organization_id)
     gate: ConcurrencyGate = request.app.state.import_parse_gate
 
     def preview() -> ImportOut:
@@ -213,6 +234,62 @@ async def create_import(
     result = await run_in_threadpool(preview)
     response.headers["Location"] = f"/api/v1/taxonomy/imports/{result.id}"
     return result
+
+
+@router.get(
+    "/starter-syllabuses",
+    summary="The built-in syllabuses a coaching can start from",
+    description="Owner and admins. Each one is a ready-made file in the import format; preview it"
+    " with `POST /taxonomy/starter-syllabuses/{key}/imports`.",
+    responses=_DENIED,
+)
+def list_starter_syllabuses(principal: CurrentPrincipal) -> list[StarterSyllabusOut]:
+    require(principal, Action.MANAGE_CATALOGUES)
+    return [
+        StarterSyllabusOut(
+            key=starter.key,
+            title=starter.title,
+            description=starter.description,
+            rows=starter_syllabus.row_count(starter),
+        )
+        for starter in starter_syllabus.STARTERS
+    ]
+
+
+@router.post(
+    "/starter-syllabuses/{key}/imports",
+    status_code=status.HTTP_201_CREATED,
+    summary="See what a built-in syllabus would do",
+    description=(
+        "Owner and admins. Makes the same preview as uploading the built-in file yourself:"
+        " **nothing in the syllabus changes** until the preview is applied, and items the coaching"
+        " already has are listed as unchanged. Counts towards the same upload limits (`429`,"
+        " `RATE_LIMITED`). Send an `Idempotency-Key` so a retry returns the same preview."
+    ),
+    responses={
+        **_DENIED,
+        **_TOO_MANY,
+        404: {"description": "No such starter syllabus (`NOT_FOUND`)"},
+        409: {
+            "description": "The Idempotency-Key was used for a different file"
+            " (`IDEMPOTENCY_KEY_REUSED`)"
+        },
+    },
+)
+async def create_starter_import(
+    key: Annotated[str, Path(pattern="^[a-z0-9-]{1,40}$")],
+    request: Request,
+    response: Response,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+    idempotency_key: Annotated[str | None, IdempotencyKeyHeader] = None,
+) -> ImportOut:
+    require(principal, Action.MANAGE_CATALOGUES)
+    starter = starter_syllabus.find(key)  # an unknown key is a 404 and uses up no upload
+    _count_upload(request, principal)
+    data = starter_syllabus.read(starter)
+    file_name = f"Built-in: {starter.title}"
+    return await _preview(request, response, principal, database, file_name, data, idempotency_key)
 
 
 @router.get(

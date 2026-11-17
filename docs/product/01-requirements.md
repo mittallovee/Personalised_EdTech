@@ -84,6 +84,7 @@ Admins/Owner hold all grants implicitly.
 | C-11 | **Exam catalogue**: exam (JEE Main, JEE Advanced, NEET, CBSE…), year, session, date, shift, paper code — managed by admin | P1 | R — gap: spec references exam IDs but no owner |
 | C-12 | **Bloom level** fixed catalogue (Remember … Create) and a written **difficulty 1–10 rubric** shown in the editor | P1 | R — gap: undefined scale → inconsistent tagging |
 | C-13 | **Source catalogue** (book, module, test series, PYQ paper) for attribution of manually entered questions | P1 | R |
+| C-14 | **Starter syllabus**: a built-in JEE Physics, Chemistry and Mathematics syllabus (classes 11 and 12: chapters, topics, subtopics, concepts) that an Owner or admin loads into their coaching through the import preview; the coaching then owns and edits its copy ([ADR-0022](../architecture/adr/0022-built-in-starter-syllabus.md)) | P1 | N (17 Nov 2026) |
 
 ### D. Question authoring & content
 
