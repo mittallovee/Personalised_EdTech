@@ -29,7 +29,10 @@ test("the queue lists what waits, by tab and filter, and a return reaches the au
   // The queue: the question waits for QC, and the count says so.
   const page = await context.newPage();
   await page.goto("/");
-  await page.getByRole("navigation", { name: "Modules" }).getByRole("link", { name: "Review" }).click();
+  await page
+    .getByRole("navigation", { name: "Modules" })
+    .getByRole("link", { name: "Review" })
+    .click();
   await expect(page.getByRole("heading", { level: 1, name: "Review" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Waiting for QC (1)" })).toHaveAttribute(
     "aria-selected",
@@ -58,7 +61,7 @@ test("the queue lists what waits, by tab and filter, and a return reaches the au
   });
   expect(returned.status()).toBe(200);
   await page.goto("/");
-  const bell = page.getByRole("link", { name: "Notifications, 1 unread" });
+  const bell = page.getByRole("link", { name: "Notifications 1 unread" });
   await expect(bell).toBeVisible();
 
   // The notification says why, and opening it marks it read.

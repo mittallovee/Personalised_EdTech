@@ -3,7 +3,7 @@
 import type { components } from "@qbank/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { notificationsChanged } from "@/components/notification-bell";
@@ -54,12 +54,15 @@ function Notifications() {
   const [loaded, setLoaded] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const ticket = useRef(0); // as on the review page: a late answer to an older load is dropped
 
   const load = useCallback(async (cursor: string | null) => {
+    const mine = ++ticket.current;
     try {
       const result = await api().GET("/api/v1/notifications", {
         params: { query: { limit: 50, ...(cursor ? { cursor } : {}) } },
       });
+      if (mine !== ticket.current) return;
       if (!result.data) {
         setProblem(errorMessage(result.error as never, result.response.status));
         return;

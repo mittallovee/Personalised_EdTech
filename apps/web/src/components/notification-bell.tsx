@@ -39,22 +39,22 @@ export function NotificationBell() {
     };
   }, []);
 
-  const label =
-    unread === null || unread === 0 ? "Notifications" : `Notifications, ${unread} unread`;
+  // The link's name is its visible text ("Notifications 3 unread"), so what is read out and what
+  // is seen agree.
   return (
     <Link
       href="/notifications"
-      aria-label={label}
       className="relative rounded-md border border-zinc-300 px-3 py-1 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
     >
-      <span aria-hidden="true">Notifications</span>
+      Notifications
       {unread !== null && unread > 0 && (
-        <span
-          aria-hidden="true"
-          className="ml-2 rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white"
-        >
-          {unread > 99 ? "99+" : unread}
-        </span>
+        <>
+          {" "}
+          <span className="ml-1 rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+            {unread > 99 ? "99+" : unread}
+            <span className="sr-only"> unread</span>
+          </span>
+        </>
       )}
     </Link>
   );

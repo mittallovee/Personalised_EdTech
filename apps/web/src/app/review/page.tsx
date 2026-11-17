@@ -2,7 +2,7 @@
 
 import type { components } from "@qbank/api-client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { api, errorMessage } from "@/lib/api";
@@ -82,6 +82,9 @@ function Queue() {
   const [loaded, setLoaded] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [denied, setDenied] = useState(false);
+  // Each load takes a ticket; an answer to an older ticket (another tab or filter, or a "Show more"
+  // for the list that was there before) arrives too late and is dropped.
+  const ticket = useRef(0);
 
   const subjects = useAll<Node>(
     "subjects",
@@ -94,6 +97,7 @@ function Queue() {
 
   const load = useCallback(
     async (cursor: string | null) => {
+      const mine = ++ticket.current;
       try {
         const [page, count] = await Promise.all([
           api().GET("/api/v1/review/queue", {
@@ -111,6 +115,7 @@ function Queue() {
           }),
           cursor ? Promise.resolve(null) : api().GET("/api/v1/review/queue/counts"),
         ]);
+        if (mine !== ticket.current) return;
         if (page.response.status === 403) {
           setDenied(true);
           return;
@@ -126,7 +131,7 @@ function Queue() {
         setProblem(null);
         setLoaded(true);
       } catch {
-        setProblem(NETWORK);
+        if (mine === ticket.current) setProblem(NETWORK);
       }
     },
     [tab, filters],
