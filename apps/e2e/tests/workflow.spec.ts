@@ -67,7 +67,9 @@ test("a question goes through review: submit, return, resubmit, QC, approve, pub
 
   // A draft: editable, its findings are findings, and it can be submitted.
   await expect(heading).toContainText("Draft");
-  await expect(page.getByRole("region", { name: "Findings" })).toContainText("Nothing left to fix.");
+  await expect(page.getByRole("region", { name: "Findings" })).toContainText(
+    "Nothing left to fix.",
+  );
   await expect(bar.getByRole("button")).toHaveText(["Submit for review"]);
 
   // Submitted: read-only, the findings become the publication checklist.
