@@ -9240,7 +9240,7 @@
           "questions"
         ],
         "summary": "Possible duplicates of a question (D-16)",
-        "description": "Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open. A person decides whether they are duplicates; nothing is merged or changed.",
+        "description": "Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open, with the newest decision about each. A person decides whether they are duplicates; nothing is merged or changed.",
         "operationId": "get_duplicates_api_v1_questions__question_id__duplicates_get",
         "security": [
           {
@@ -9312,6 +9312,116 @@
           },
           "503": {
             "description": "The check took too long and was stopped (`SEARCH_TIMED_OUT`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/questions/{question_id}/duplicates/decisions": {
+      "post": {
+        "tags": [
+          "questions"
+        ],
+        "summary": "Record whether a question is a duplicate of another (D-16)",
+        "description": "For the text as it is now: an edit that changes the question needs a new decision, and a newer decision replaces an older one (both are kept). The author, admins, edit-others holders and quality control may decide. An exact match with no `NOT_DUPLICATE` decision, or a `DUPLICATE_OF`, blocks Pass QC (`QC_BLOCKED_DUPLICATE`). Nothing is merged or deleted.",
+        "operationId": "decide_duplicate_api_v1_questions__question_id__duplicates_decisions_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideDuplicate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "You may not decide this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question, or other question, that you may open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The question is published (`DUPLICATE_DECISION_CLOSED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The same question, an empty question, or no note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
             "content": {
               "application/json": {
                 "schema": {
@@ -12084,6 +12194,25 @@
         ],
         "title": "BankPage"
       },
+      "Blocker": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "code"
+        ],
+        "title": "Blocker"
+      },
       "BloomLevelOut": {
         "properties": {
           "key": {
@@ -12543,6 +12672,78 @@
         ],
         "title": "CreatedOrganization"
       },
+      "DecideDuplicate": {
+        "properties": {
+          "other_question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Other Question Id"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "NOT_DUPLICATE",
+              "DUPLICATE_OF"
+            ],
+            "title": "Decision",
+            "description": "`DUPLICATE_OF`: this question copies the other one (archive this one; nothing is merged). `NOT_DUPLICATE`: they only look alike."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Note",
+            "description": "Why, in a few words."
+          }
+        },
+        "type": "object",
+        "required": [
+          "other_question_id",
+          "decision",
+          "note"
+        ],
+        "title": "DecideDuplicate"
+      },
+      "DecisionOut": {
+        "properties": {
+          "other_question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Other Question Id"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "NOT_DUPLICATE",
+              "DUPLICATE_OF"
+            ],
+            "title": "Decision"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "decided_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "other_question_id",
+          "decision",
+          "note",
+          "decided_by",
+          "decided_at"
+        ],
+        "title": "DecisionOut"
+      },
       "DiffOut": {
         "properties": {
           "from_revision": {
@@ -12668,6 +12869,17 @@
             "type": "string",
             "title": "Preview",
             "description": "The beginning of the other question's stem (plain text)."
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest decision about this pair, for the text as it is now."
           }
         },
         "type": "object",
@@ -12677,7 +12889,8 @@
           "state",
           "match",
           "similarity_percent",
-          "preview"
+          "preview",
+          "decision"
         ],
         "title": "DuplicateOut"
       },
@@ -12700,13 +12913,22 @@
             "type": "array",
             "title": "Data",
             "description": "Exact matches first, then near ones, closest first."
+          },
+          "qc_blocked_by": {
+            "items": {
+              "$ref": "#/components/schemas/Blocker"
+            },
+            "type": "array",
+            "title": "Qc Blocked By",
+            "description": "What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of."
           }
         },
         "type": "object",
         "required": [
           "checked_revision_id",
           "version_number",
-          "data"
+          "data",
+          "qc_blocked_by"
         ],
         "title": "DuplicatesOut"
       },

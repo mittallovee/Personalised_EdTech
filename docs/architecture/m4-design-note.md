@@ -401,6 +401,33 @@ coaching, needed after a bug fix or a change to what is indexed).
   question the reader may not open is 404. Under the same 5-second limit as search (`503 SEARCH_TIMED_OUT`).
 - Not yet (4g-2): recording a decision, and an exact match blocking Pass QC until one is recorded.
 
+### 7.9 As built in 4g-2: decisions, and Pass QC waiting for them (D-16)
+
+- **Table** `duplicate_decisions` (migration 0033): version, revision, the `duplicate_key` of the text decided on, the
+  other question, `NOT_DUPLICATE` or `DUPLICATE_OF`, a note (1 to 1,000 characters), who and when. Append-only (a
+  trigger refuses UPDATE and DELETE even for the table owner; the app may only SELECT and INSERT), FORCE row-level
+  security, composite foreign keys to this coaching's versions, revisions and questions.
+- **A decision is about one text.** Only decisions whose key equals the key of the text as it is now count, and the
+  newest decision about a pair wins (the older ones stay as history). A decision made on a draft still counts after
+  the draft is submitted (the frozen revision is the same text); an edit that changes the meaning (another answer, a
+  changed equation) needs a new one.
+- **`POST /api/v1/questions/{id}/duplicates/decisions`** `{other_question_id, decision, note}`: the author, admins,
+  edit-others holders and QC holders may decide (others `403`); the question and the other question must be ones the
+  person may open (`404` otherwise, so someone else's private draft cannot be named); not the question itself
+  (`422 SAME_QUESTION`), not an empty question (`422 QUESTION_EMPTY`), not a published question
+  (`409 DUPLICATE_DECISION_CLOSED`). Audited (`QUESTION_DUPLICATE_DECIDED`, with the other code, decision and note),
+  and it locks the question like every change.
+- **Pass QC is refused** (`409 QC_BLOCKED_DUPLICATE`, with the codes in `details.duplicates`) while an exact match in
+  the **shared bank** (submitted or later, not archived) has no `NOT_DUPLICATE` decision for this text, or while
+  someone marked the question `DUPLICATE_OF` another (exact or near). A private draft never blocks anyone (it is not in
+  the shared bank, and nobody learns of it this way), an archived question never blocks, and a near match only informs
+  unless a person marks it a duplicate. Approve and Publish do not check again: QC is the step that looks.
+- `GET …/duplicates` now also returns each candidate's newest `decision` and `qc_blocked_by`, the list Pass QC
+  would refuse on, so the screen shows what must be decided.
+- `DUPLICATE_OF` changes nothing else: the author archives their copy; nothing is merged or deleted (decision 6).
+- **Tests that publish the same fixture twice** (other M3 and M4 tests) now get different stems, because a second
+  identical question correctly waits at QC.
+
 ## 8. Diff and history (E-08, E-09)
 
 - **Diff** (`GET /questions/{id}/diff?from=<revision>&to=<revision>`): both revisions must belong to this
@@ -460,7 +487,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
 | Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
 | Bank index (**built in 4e, migration 0029; text in 4f, migration 0030; words in 4f-2, migration 0031; duplicate key and match text in 4g-1, migration 0032**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; 0031 adds `bank_words` (each coaching's distinct words, kept by a trigger) for typo search; rows are filled by the reindex command, not by SQL |
-| Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
+| Duplicates (**built in 4g-2, migration 0033**) | `duplicate_decisions` (append-only: version, revision, the text's duplicate key, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
 
 ## 10. API (all under `/api/v1`)
@@ -471,7 +498,7 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
 | `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` (**built in 4d**, see §8.1) | Timeline and before/after |
 | `GET /bank/questions` (filters, `total`, `q` for search) · `GET /bank/questions/by-code/{code}` (**built in 4e and 4f**, see §7.5 and §7.6) | The bank |
-| `GET /questions/{id}/duplicates` (**built in 4g-1**, see §7.8) · `POST /questions/{id}/duplicates/decisions` (4g-2) | Duplicate check |
+| `GET /questions/{id}/duplicates` (**built in 4g-1**, see §7.8) · `POST /questions/{id}/duplicates/decisions` (**built in 4g-2**, see §7.9) | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
 
 ### 10.1 The review queue (built in 4c; no migration)
@@ -614,7 +641,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4f | **Built:** free text and typo search (F-03): migration 0030, `bank_text.py`, `q` on the bank list, limits; T38 part 2 |
 | 4f-2 | **Built:** the 100,000-question generator, k6 script, recorded timings (all targets met) and the index decision; typo search moved to a word list (migration 0031) because the first run missed the search target (K-08); T38 part 3 |
 | 4g-1 | **Built:** duplicate key, near match, `GET /questions/{id}/duplicates` (migration 0032); T39 part 1 |
-| 4g-2 | Duplicate decisions (`duplicate_decisions`), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
+| 4g-2 | **Built:** duplicate decisions (`duplicate_decisions`, migration 0033), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
 | 4h | **Built:** web workflow action bar, read-only editor, return form, publication checklist wording; e2e part 1 (see §11.1) |
 | 4i | **Built:** web review queue and notifications bell and page (see §11.2) |
 | 4j | **Built:** web bank screen (filters, count, search, code box; see §11.3) |

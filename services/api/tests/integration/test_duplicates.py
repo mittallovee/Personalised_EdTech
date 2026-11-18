@@ -199,9 +199,9 @@ def test_exact_copies_beyond_the_exact_limit_are_never_shown_as_near(
     published: dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    second = publish_as(
-        client, team, start(client, team, block_question(catalogue), "other"), "other"
-    )
+    second = act(
+        client, team, "other", start(client, team, block_question(catalogue), "other"), "submit"
+    )  # in the shared bank; a second copy would wait at QC
     draft = start(client, team, block_question(catalogue))
     monkeypatch.setattr(search_duplicates, "MAX_CANDIDATES", 1)  # only one exact match is shown
 

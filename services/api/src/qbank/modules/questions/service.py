@@ -47,6 +47,7 @@ from qbank.modules.questions.domain.workflow import (
     find_transition,
 )
 from qbank.modules.questions.domain.workflow_access import may_take_step
+from qbank.modules.questions.duplicates import require_no_duplicate_blockers
 from qbank.modules.questions.findings import Finding, Level
 from qbank.modules.questions.image_checks import check_images, image_ids
 from qbank.modules.questions.label_snapshot import label_ids, snapshot_labels
@@ -809,6 +810,8 @@ def _checked_step(
     transition = _require_step(principal, master, version, step)
     reviewed = _under_review(session, version)
     found, checklist = _publication_checklist(session, reviewed, rules)
+    if step is Step.PASS_QC:  # an exact copy must be decided first (D-16)
+        require_no_duplicate_blockers(session, master, version, reviewed)
     _move(
         session,
         principal,
