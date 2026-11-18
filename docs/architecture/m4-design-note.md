@@ -564,6 +564,27 @@ The browser holds no rules: allowed steps, findings, visibility and counts all c
   with a reason, resubmit, QC, approve, publish, correct as version 2) with accessibility checks, and two tabs racing
   on one step.
 
+### 11.4 As built in 4k: compare, history and possible duplicates
+
+- The question page's tabs are now **Edit · Preview · Compare · History** (`components/history-panel.tsx`,
+  `lib/history.ts`), and a **Possible duplicates** panel sits under the findings (`components/duplicates-panel.tsx`,
+  `lib/duplicates.ts`). Web only: the routes were built in 4d and 4g.
+- **History** (`GET /questions/{id}/history`): each step in order, oldest first, with when, and for a return its reasons
+  and note. The entry carries only a person's id, so it says "you" or "a colleague"; names are not in the answer.
+- **Compare** (`GET /questions/{id}/diff`): two choices, an older and a newer saved text, taken from the history
+  entries that name a text (a checkpoint, or the step that took a text into review). The two newest are chosen at first.
+  Changed prose shows its words marked (added underlined, removed struck through, not by colour alone); anything else
+  shows before and after as text. An identical pair says so. A text the person may not read is the API's 404, shown as a
+  sentence. A late answer to an earlier choice is dropped.
+- **Possible duplicates** (`GET /questions/{id}/duplicates`, `POST …/duplicates/decisions`): each candidate with its code
+  (a link), state, "Same content" or "Similar text (NN%)", a plain-text preview and the newest decision. A decision
+  needs a few words of why (the API requires one). The panel says which questions block Pass QC (`qc_blocked_by`), checks
+  again after every review step (so a refused Pass QC shows what blocks it) and on **Check again**. Who may decide is
+  the API's rule: a 403 is shown as a sentence.
+- Not done here: the "published against the open correction" default pair of §8.1 (the two newest saved texts are
+  chosen instead; either can be changed), and names instead of "a colleague" (a later change to the history answer).
+- Browser test `apps/e2e/tests/compare.spec.ts`.
+
 ### 11.3 As built in 4j: the bank screen
 
 - The **Questions** page keeps *Start a new question* and replaces the old "my questions" list with the **bank**
@@ -645,7 +666,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4h | **Built:** web workflow action bar, read-only editor, return form, publication checklist wording; e2e part 1 (see §11.1) |
 | 4i | **Built:** web review queue and notifications bell and page (see §11.2) |
 | 4j | **Built:** web bank screen (filters, count, search, code box; see §11.3) |
-| 4k | Web: compare, history and duplicates panel |
+| 4k | **Built:** web compare, history and duplicates panel (see §11.4) |
 | 5 | M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey, timings table |
 
 K-07 (squawk) goes in as its own small PR when you say so, before 4a-2 if possible (so the new migrations are

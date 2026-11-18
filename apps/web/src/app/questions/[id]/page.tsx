@@ -9,7 +9,9 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
 import { ConfirmPanel } from "@/components/confirm-panel";
+import { DuplicatesPanel } from "@/components/duplicates-panel";
 import { FindingsPanel } from "@/components/findings-panel";
+import { ComparePanel, HistoryPanel } from "@/components/history-panel";
 import { ItemsField } from "@/components/items-field";
 import { MatchingField } from "@/components/matching-field";
 import { MetadataField } from "@/components/metadata-field";
@@ -135,13 +137,13 @@ function QuestionScreen() {
           {shellError}
         </p>
       )}
-      <Loader id={id} />
+      <Loader id={id} myId={me.id} />
     </AppShell>
   );
 }
 
 /** Reads the question, then hands it to the editor (which owns it from then on). */
-function Loader({ id }: { id: string }) {
+function Loader({ id, myId }: { id: string; myId: string }) {
   const [question, setQuestion] = useState<Question | null>(null);
   const [problem, setProblem] = useState<"missing" | "failed" | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -200,8 +202,17 @@ function Loader({ id }: { id: string }) {
     );
   }
   if (!question) return <p>Loading…</p>;
-  return <Editor key={question.id} initial={question} />;
+  return <Editor key={question.id} initial={question} myId={myId} />;
 }
+
+type Tab = "edit" | "preview" | "compare" | "history";
+
+const TABS: readonly { name: Tab; label: string }[] = [
+  { name: "edit", label: "Edit" },
+  { name: "preview", label: "Preview" },
+  { name: "compare", label: "Compare" },
+  { name: "history", label: "History" },
+];
 
 const STATE_TEXT: Record<SaveState, string> = {
   saved: "All changes saved",
@@ -212,10 +223,12 @@ const STATE_TEXT: Record<SaveState, string> = {
   archived: "Archived",
 };
 
-function Editor({ initial }: { initial: Question }) {
+function Editor({ initial, myId }: { initial: Question; myId: string }) {
   const save = useAutosave(initial);
   const passage = usePinnedPassage(pinOf(save.content));
-  const [tab, setTab] = useState<"edit" | "preview">("edit");
+  const [tab, setTab] = useState<Tab>("edit");
+  // Counts the review steps taken, so the duplicates panel checks again after each one.
+  const [steps, setSteps] = useState(0);
   const [reveal, setReveal] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -308,6 +321,8 @@ function Editor({ initial }: { initial: Question }) {
     const done = await act(() =>
       sendStep(step, initial.id, stepIfMatch(step, save.revision.current, flow.flow_etag), back),
     );
+    // A refused Pass QC (a duplicate blocks it) is a reason to look at the panel again too.
+    setSteps((n) => n + 1);
     if (done) {
       setAsking(null);
       setNotice(STEP_DONE[step]);
@@ -459,7 +474,7 @@ function Editor({ initial }: { initial: Question }) {
       <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
         <div className="grid gap-4">
           <div role="tablist" aria-label="Editor" className="flex gap-2">
-            {(["edit", "preview"] as const).map((name) => (
+            {TABS.map(({ name, label }) => (
               <button
                 key={name}
                 role="tab"
@@ -474,7 +489,7 @@ function Editor({ initial }: { initial: Question }) {
                     : "hover:bg-zinc-50 dark:hover:bg-zinc-900"
                 }`}
               >
-                {name === "edit" ? "Edit" : "Preview"}
+                {label}
               </button>
             ))}
           </div>
@@ -559,6 +574,24 @@ function Editor({ initial }: { initial: Question }) {
                 The preview shows what is saved so far.
               </p>{" "}
             </div>
+          ) : tab === "compare" ? (
+            <div
+              role="tabpanel"
+              id="panel-compare"
+              aria-labelledby="tab-compare"
+              className="grid gap-4"
+            >
+              <ComparePanel questionId={initial.id} />
+            </div>
+          ) : tab === "history" ? (
+            <div
+              role="tabpanel"
+              id="panel-history"
+              aria-labelledby="tab-history"
+              className="grid gap-4"
+            >
+              <HistoryPanel questionId={initial.id} myId={myId} />
+            </div>
           ) : (
             <div
               role="tabpanel"
@@ -584,7 +617,10 @@ function Editor({ initial }: { initial: Question }) {
             </div>
           )}
         </div>
-        <FindingsPanel findings={save.findings} title={findingsTitle(flow.review_revision_id)} />
+        <div className="grid content-start gap-4">
+          <FindingsPanel findings={save.findings} title={findingsTitle(flow.review_revision_id)} />
+          <DuplicatesPanel questionId={initial.id} myId={myId} stamp={steps} />
+        </div>
       </div>
     </div>
   );
