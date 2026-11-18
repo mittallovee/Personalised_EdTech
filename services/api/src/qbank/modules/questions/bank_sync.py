@@ -16,7 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qbank.modules.questions.bank_fields import bank_fields
+from qbank.modules.questions.bank_text import bank_text
 from qbank.modules.questions.domain.workflow import PRIVATE_STATES
+from qbank.modules.questions.duplicate_key import duplicate_key
 from qbank.modules.questions.models import QuestionMaster, QuestionRevision, QuestionVersion
 from qbank.modules.search.public import BankEntry, save_entry
 
@@ -52,6 +54,7 @@ def bank_entry(session: Session, master: QuestionMaster) -> BankEntry:
     shown = published or newest
     revision = _shown_revision(session, shown)
     fields = bank_fields(revision.content)
+    text = bank_text(revision.content)
     # Worked out from the rows, not from the clock, so a rebuild gives the same answer.
     moments: list[datetime] = [
         master.created_at,
@@ -89,6 +92,10 @@ def bank_entry(session: Session, master: QuestionMaster) -> BankEntry:
         exam_year=fields.exam_year,
         has_solution=fields.has_solution,
         has_video=fields.has_video,
+        stem_text=text.stem_text,
+        preview=text.preview,
+        duplicate_key=duplicate_key(revision.content),
+        match_text=text.match_text,
     )
 
 

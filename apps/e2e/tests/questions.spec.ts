@@ -740,10 +740,15 @@ test("an equation shows as it will look, and can be written in the visual editor
   await expect(editor).toBeVisible();
   const field = editor.locator("math-field");
   await expect(field).toBeVisible({ timeout: 15_000 });
-  // The left edge: the middle of the small box is its keyboard button.
-  await field.click({ position: { x: 5, y: 10 } });
-  await page.keyboard.press("Control+a");
-  await page.keyboard.type("a/b");
+  // The left edge: the middle of the small box is its keyboard button. The box can be on screen a
+  // moment before it takes keystrokes, so type until the field holds the fraction.
+  await expect(async () => {
+    await field.click({ position: { x: 5, y: 10 } });
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("a/b");
+    const typed = await field.evaluate((el) => (el as unknown as { value: string }).value);
+    expect(typed).toMatch(/\\frac\{a\}\{b\}/);
+  }).toPass({ timeout: 15_000 });
   await expectNoSeriousA11yViolations(page);
   await editor.getByRole("button", { name: "Use this equation" }).click();
   await expect(editor).toHaveCount(0);

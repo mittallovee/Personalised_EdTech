@@ -157,6 +157,17 @@ def with_meta(catalogue: Catalogue, kind: str = "SCQ", **meta: Any) -> dict[str,
     return content
 
 
+_NUMBERS = itertools.count(1)
+
+
+def distinct(catalogue: Catalogue) -> dict[str, Any]:
+    """The ready fixture with a stem of its own: two identical questions would correctly wait at
+    Pass QC as exact duplicates (D-16), which is not what these tests are about."""
+    content = ready_for(catalogue)
+    content["stem"] = [{"kind": "paragraph", "text": f"What is 2 + {next(_NUMBERS)}?"}]
+    return content
+
+
 def snapshot(owner_db: Database, org_id: UUID) -> list[dict[str, Any]]:
     """Every row of the bank index of a coaching, exactly as stored, in code order."""
     with owner_db.transaction(TenantContext(organization_id=org_id)) as session:
@@ -209,6 +220,7 @@ def test_a_new_question_is_in_the_bank_with_its_labels(
         "exam_year": None,
         "has_solution": row["has_solution"],
         "has_video": False,
+        "preview": "What is 2 + 3?",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -367,13 +379,13 @@ def test_the_bank_agrees_with_what_each_person_may_open(
 ) -> None:
     """The bank applies the questions module's rule over its own columns. For a question in each
     state and each kind of person, the bank lists it exactly when opening it answers 200."""
-    drafts = start(client, team, ready_for(catalogue))
-    in_review = act(client, team, "author", start(client, team, ready_for(catalogue)), "submit")
+    drafts = start(client, team, distinct(catalogue))
+    in_review = act(client, team, "author", start(client, team, distinct(catalogue)), "submit")
     returned = act(
         client,
         team,
         "qc",
-        act(client, team, "author", start(client, team, ready_for(catalogue)), "submit"),
+        act(client, team, "author", start(client, team, distinct(catalogue)), "submit"),
         "return",
         RETURN,
     )
@@ -381,10 +393,10 @@ def test_the_bank_agrees_with_what_each_person_may_open(
         client,
         team,
         "qc",
-        act(client, team, "author", start(client, team, ready_for(catalogue)), "submit"),
+        act(client, team, "author", start(client, team, distinct(catalogue)), "submit"),
         "pass-qc",
     )
-    published = publish_through(client, team, start(client, team, ready_for(catalogue)))
+    published = publish_through(client, team, start(client, team, distinct(catalogue)))
     questions = [drafts, in_review, returned, passed, published]
 
     for who in ("author", "other", "editor", "admin", "owner", "qc", "approver", "publisher"):
@@ -694,7 +706,7 @@ def worked_bank(
     """Questions taken through every kind of change, so each write path has touched a row."""
     saved = start(client, team, with_meta(catalogue, difficulty=3))
     edit(client, team, saved, language="hi")
-    checkpointed = start(client, team, ready_for(catalogue))
+    checkpointed = start(client, team, distinct(catalogue))
     ok(
         client.post(
             f"{QUESTIONS}/{checkpointed['id']}/checkpoints",
@@ -704,12 +716,12 @@ def worked_bank(
             },
         )
     )
-    in_review = act(client, team, "author", start(client, team, ready_for(catalogue)), "submit")
+    in_review = act(client, team, "author", start(client, team, distinct(catalogue)), "submit")
     returned = act(
         client,
         team,
         "qc",
-        act(client, team, "author", start(client, team, ready_for(catalogue)), "submit"),
+        act(client, team, "author", start(client, team, distinct(catalogue)), "submit"),
         "return",
         RETURN,
     )
@@ -717,20 +729,20 @@ def worked_bank(
         client,
         team,
         "author",
-        act(client, team, "author", start(client, team, ready_for(catalogue)), "submit"),
+        act(client, team, "author", start(client, team, distinct(catalogue)), "submit"),
         "withdraw",
     )
-    published = publish_through(client, team, start(client, team, ready_for(catalogue)))
+    published = publish_through(client, team, start(client, team, distinct(catalogue)))
     corrected = act(
         client,
         team,
         "author",
-        publish_through(client, team, start(client, team, ready_for(catalogue))),
+        publish_through(client, team, start(client, team, distinct(catalogue))),
         "start-correction",
     )
-    archived = start(client, team, ready_for(catalogue))
+    archived = start(client, team, distinct(catalogue))
     ok(client.post(f"{QUESTIONS}/{archived['id']}/archive", headers=as_(client, team, "author")))
-    restored = start(client, team, ready_for(catalogue))
+    restored = start(client, team, distinct(catalogue))
     for path in ("archive", "restore"):
         ok(client.post(f"{QUESTIONS}/{restored['id']}/{path}", headers=as_(client, team, "author")))
     return [

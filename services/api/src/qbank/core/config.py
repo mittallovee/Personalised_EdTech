@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     import_upload_window_seconds: int = Field(default=600, ge=1)
     import_parses_at_once: int = Field(default=2, ge=1)
 
+    # Free-text search of the bank (F-03): per signed-in user, and how long the database may spend
+    # on one search before it stops it (a very common word over a very large bank).
+    searches_per_user: int = Field(default=60, ge=1)
+    search_window_seconds: int = Field(default=60, ge=1)
+    search_timeout_ms: int = Field(default=5000, ge=100)
+
     # Where uploaded files are kept (ADR-0012): a folder, in production a mounted volume. Picture
     # uploads (D-07) are limited per signed-in user, and pictures decoded at the same time (one
     # decode costs a processor for up to about a second and up to 160 MB for a 40-megapixel one).

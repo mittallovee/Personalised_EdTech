@@ -28,6 +28,7 @@ from qbank.modules.organizations.api import router as organizations_router
 from qbank.modules.organizations.members_api import router as members_router
 from qbank.modules.organizations.ownership_api import router as ownership_router
 from qbank.modules.questions.api import router as questions_router
+from qbank.modules.questions.duplicates_api import router as duplicates_router
 from qbank.modules.questions.history_api import router as history_router
 from qbank.modules.questions.passage_api import checkpoints_router as passage_revisions_router
 from qbank.modules.questions.passage_api import router as passages_router
@@ -84,6 +85,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.asset_uploads_per_user, settings.asset_upload_window_seconds
     )
     app.state.image_decode_gate = ConcurrencyGate(settings.image_decodes_at_once)
+    app.state.search_limiter = SlidingWindowLimiter(
+        settings.searches_per_user, settings.search_window_seconds
+    )
 
     # Google sign-in is available only when its client ID and secret are configured (B-02).
     app.state.google = (
@@ -113,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sources_router)
     app.include_router(questions_router)
     app.include_router(history_router)
+    app.include_router(duplicates_router)
     app.include_router(passages_router)
     app.include_router(passage_revisions_router)
     app.include_router(settings_router)

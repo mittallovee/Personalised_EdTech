@@ -3,8 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, Uuid
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import Computed, ForeignKey, Uuid
+from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from qbank.core.db import Base
@@ -44,3 +44,24 @@ class BankRow(Base):
     exam_year: Mapped[int | None]
     has_solution: Mapped[bool]
     has_video: Mapped[bool]
+
+    # What a free-text search reads (migration 0030). The text and its word index are left out of
+    # a plain list query; only ``preview`` is shown, and the search compares against the other two.
+    stem_text: Mapped[str] = mapped_column(deferred=True)
+    preview: Mapped[str]
+    search_vector: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('simple', stem_text)", persisted=True), deferred=True
+    )
+    # What the duplicate check compares (migration 0032, D-16).
+    duplicate_key: Mapped[str | None]
+    match_text: Mapped[str] = mapped_column(deferred=True)
+
+
+class BankWord(Base):
+    """A distinct word of a coaching's bank (migration 0031), for typo search. Written by a
+    database trigger on ``bank_index``; never by the app."""
+
+    __tablename__ = "bank_words"
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    word: Mapped[str] = mapped_column(primary_key=True)
