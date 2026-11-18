@@ -6,8 +6,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, errorMessage } from "@/lib/api";
 import {
+  CLOSED_TEXT,
   VERDICTS,
   blockedText,
+  canDecide,
   decisionText,
   matchText,
   type Duplicate,
@@ -83,10 +85,12 @@ export function DuplicatesPanel({
   questionId,
   myId,
   stamp,
+  state,
 }: {
   questionId: string;
   myId: string;
   stamp: number;
+  state: string;
 }) {
   const [found, setFound] = useState<Found | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -169,6 +173,9 @@ export function DuplicatesPanel({
           {blocked}
         </p>
       )}
+      {found && found.data.length > 0 && !canDecide(state) && (
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{CLOSED_TEXT}</p>
+      )}
       {found && found.data.length === 0 && (
         <p className="mt-2 text-sm text-emerald-800 dark:text-emerald-300">
           No similar question found.
@@ -194,7 +201,7 @@ export function DuplicatesPanel({
                 </p>
                 <p className="mt-1 break-words">{item.preview}</p>
                 {decided && <p className="mt-1 text-zinc-700 dark:text-zinc-300">{decided}</p>}
-                {open ? (
+                {!canDecide(state) ? null : open ? (
                   <DecisionForm
                     ask={VERDICTS.find((v) => v.verdict === open.verdict)!.ask}
                     busy={busy}

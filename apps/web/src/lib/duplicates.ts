@@ -35,3 +35,11 @@ export function blockedText(codes: readonly string[]): string | null {
   if (codes.length === 0) return null;
   return `Pass QC is blocked by ${codes.length === 1 ? "this question" : "these questions"}: ${codes.join(", ")}. Decide whether each one is a duplicate.`;
 }
+
+/** The API refuses every decision about a published question (`DUPLICATE_DECISION_CLOSED`). */
+export function canDecide(state: string): boolean {
+  return state !== "PUBLISHED";
+}
+
+export const CLOSED_TEXT =
+  "A published question is not checked again. Decide on the other question instead.";

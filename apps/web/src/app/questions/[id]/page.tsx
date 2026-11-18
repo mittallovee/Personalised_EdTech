@@ -619,7 +619,7 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
         </div>
         <div className="grid content-start gap-4">
           <FindingsPanel findings={save.findings} title={findingsTitle(flow.review_revision_id)} />
-          <DuplicatesPanel questionId={initial.id} myId={myId} stamp={steps} />
+          <DuplicatesPanel questionId={initial.id} myId={myId} stamp={steps} state={flow.state} />
         </div>
       </div>
     </div>

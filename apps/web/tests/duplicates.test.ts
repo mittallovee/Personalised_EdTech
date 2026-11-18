@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   VERDICTS,
   blockedText,
+  canDecide,
   decisionText,
   matchText,
   type Decision,
@@ -51,5 +52,12 @@ describe("the possible duplicates", () => {
     expect(blockedText(["AAAA1111", "BBBB2222"])).toBe(
       "Pass QC is blocked by these questions: AAAA1111, BBBB2222. Decide whether each one is a duplicate.",
     );
+  });
+
+  it("offers decisions on everything but a published question, which is not checked again", () => {
+    expect(canDecide("DRAFT")).toBe(true);
+    expect(canDecide("IN_REVIEW")).toBe(true);
+    expect(canDecide("QC_PASSED")).toBe(true);
+    expect(canDecide("PUBLISHED")).toBe(false);
   });
 });
