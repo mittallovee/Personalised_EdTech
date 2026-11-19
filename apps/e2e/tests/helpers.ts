@@ -195,9 +195,12 @@ const READY = (
   ) as Record<string, { ready: Content }>
 ).SCQ!.ready;
 
-/** A finished single-correct question with real labels, started through the API; returns its
- * id. The labels are a fresh syllabus branch, so call it once per coaching. */
-export async function finishedQuestion(context: BrowserContext, origin: string): Promise<string> {
+/**
+ * The content of a finished single-correct question with real labels: a fresh syllabus branch is
+ * made through the API, so call it once per coaching. The Owner makes the labels; anyone in the
+ * coaching can start a question with this content (labels are readable by every member).
+ */
+export async function readyContent(context: BrowserContext, origin: string): Promise<Content> {
   const headers = { Origin: origin, "X-CSRF-Token": await csrfOf(context) };
   const id = async (url: string, data: object) => {
     const res = await context.request.post(url, { headers, data });
@@ -223,5 +226,37 @@ export async function finishedQuestion(context: BrowserContext, origin: string):
     topic_id: topic,
     primary_concept_id: concept,
   });
-  return id("/api/v1/questions", { content });
+  return content;
+}
+
+/** A finished single-correct question with real labels, started through the API; returns its
+ * id. The labels are a fresh syllabus branch, so call it once per coaching. */
+export async function finishedQuestion(context: BrowserContext, origin: string): Promise<string> {
+  const content = await readyContent(context, origin);
+  const res = await context.request.post("/api/v1/questions", {
+    headers: { Origin: origin, "X-CSRF-Token": await csrfOf(context) },
+    data: { content },
+  });
+  expect(res.status()).toBe(201);
+  return ((await res.json()) as { id: string }).id;
+}
+
+/** Invite someone through the API; returns what the tests need to change or activate them. */
+export async function inviteByApi(
+  context: BrowserContext,
+  baseURL: string,
+  name: string,
+  role: "FACULTY" | "ADMIN" = "FACULTY",
+) {
+  const response = await context.request.post("/api/v1/members/invitations", {
+    headers: { Origin: baseURL, "X-CSRF-Token": await csrfOf(context) },
+    data: { email: `${role.toLowerCase()}-${unique()}@example.com`, display_name: name, role },
+  });
+  expect(response.status()).toBe(201);
+  const body = await response.json();
+  return {
+    membershipId: body.member.membership_id as string,
+    revision: body.member.revision as number,
+    link: `${baseURL}/activate#${body.activation.token as string}`,
+  };
 }
