@@ -96,3 +96,22 @@ export function priceSource(source: string): string {
   if (source === "ADMIN") return "set by an admin";
   return "unknown";
 }
+
+/**
+ * How much of a budget is used, as a whole percent from 0 to 100, for the width of a bar only
+ * (the amounts themselves are shown exactly, as the API gave them). ``null`` without a limit.
+ */
+export function usagePercent(spent: string, limit: string | null): number | null {
+  if (limit === null) return null;
+  const cap = Number(limit);
+  if (!(cap > 0)) return 100;
+  return Math.min(100, Math.max(0, Math.round((Number(spent) / cap) * 100)));
+}
+
+export const USAGE_STATE_TEXT: Record<string, string> = {
+  OK: "Within budget",
+  WARNING: "Above 80% of the budget",
+  REACHED: "Budget used up",
+  NO_LIMIT: "No limit",
+  OFF: "Budgets are off (no rate set)",
+};

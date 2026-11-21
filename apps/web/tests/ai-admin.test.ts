@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatInr, parseAmount, priceSource, priceText } from "../src/lib/ai-admin";
+import { formatInr, parseAmount, priceSource, priceText, usagePercent } from "../src/lib/ai-admin";
 
 const RATE = { maxDecimals: 4, max: 10000, allowEmpty: true };
 
@@ -52,5 +52,18 @@ describe("price words", () => {
     expect(priceSource("PROVIDER")).toBe("from the provider");
     expect(priceSource("ADMIN")).toBe("set by an admin");
     expect(priceSource("UNKNOWN")).toBe("unknown");
+  });
+});
+
+describe("usagePercent", () => {
+  it("is the share of the budget used, kept between 0 and 100", () => {
+    expect(usagePercent("50.00", "200")).toBe(25);
+    expect(usagePercent("0", "200")).toBe(0);
+    expect(usagePercent("250", "200")).toBe(100);
+    expect(usagePercent("1", null)).toBeNull();
+  });
+
+  it("treats a zero budget as used up", () => {
+    expect(usagePercent("0", "0")).toBe(100);
   });
 });
