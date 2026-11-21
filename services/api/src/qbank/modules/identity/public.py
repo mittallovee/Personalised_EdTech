@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import insert, select, text, update
 from sqlalchemy.orm import Session
 
+from qbank.core.auth import Principal
 from qbank.core.errors import Conflict
 from qbank.core.ids import new_id
 from qbank.core.security import hash_token, new_token
@@ -26,6 +27,7 @@ __all__ = [
     "display_names",
     "issue_account_link",
     "member_accounts",
+    "principal_for",
     "reserve_email",
     "revoke_coaching_sessions",
     "revoke_member_access",
@@ -215,3 +217,12 @@ def revoke_member_access(session: Session, user_id: UUID) -> None:
     )
     if session.scalar(text("SELECT auth_release_email(:u)"), {"u": user_id}):
         session.execute(update(User).where(User.id == user_id).values(status="DISABLED"))
+
+
+def principal_for(session: Session, user_id: UUID) -> Principal | None:
+    """The person as they are now (role, grants, active or not), or ``None`` when they may no
+    longer use the app. For background work that acts on someone's behalf hours after they asked
+    (an Economy AI run being applied): their rights are checked again at that moment (B-10)."""
+    from qbank.modules.identity.service import load_principal
+
+    return load_principal(session, user_id, None)

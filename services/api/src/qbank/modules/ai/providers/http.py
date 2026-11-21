@@ -54,12 +54,41 @@ class Http:
     def get(
         self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        return self._send("GET", url, headers=headers, params=params)
+        return self._json(self._fetch("GET", url, headers=headers, params=params), 200)
 
     def post(self, url: str, *, headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
-        return self._send("POST", url, headers=headers, json=body)
+        return self._json(self._fetch("POST", url, headers=headers, json=body), 200)
 
-    def _send(self, method: str, url: str, **options: Any) -> dict[str, Any]:
+    def get_text(self, url: str, *, headers: dict[str, str]) -> str:
+        """A file's content (for example a batch's results, one JSON object per line)."""
+        raw = self._fetch("GET", url, headers=headers)
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ProviderError(ProviderErrorKind.BAD_OUTPUT) from None
+
+    def post_file(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        fields: dict[str, str],
+        file_name: str,
+        content: bytes,
+    ) -> dict[str, Any]:
+        """Upload one file as multipart form data, with the plain text ``fields`` beside it."""
+        return self._json(
+            self._fetch(
+                "POST",
+                url,
+                headers=headers,
+                data=fields,
+                files={"file": (file_name, content, "application/jsonl")},
+            ),
+            200,
+        )
+
+    def _fetch(self, method: str, url: str, **options: Any) -> bytes:
         try:
             with self._client.stream(method, url, **options) as response:
                 status = response.status_code
@@ -82,8 +111,12 @@ class Http:
             raise ProviderError(ProviderErrorKind.UNAVAILABLE) from None
         if status >= 300:  # a redirect is never followed, so it is a failure too
             raise ProviderError(_kind_for(status), status=status, retry_after_seconds=retry)
+        return bytes(body)
+
+    @staticmethod
+    def _json(raw: bytes, status: int) -> dict[str, Any]:
         try:
-            parsed = json.loads(bytes(body))
+            parsed = json.loads(raw)
         except ValueError:
             raise ProviderError(ProviderErrorKind.BAD_OUTPUT, status=status) from None
         if not isinstance(parsed, dict):

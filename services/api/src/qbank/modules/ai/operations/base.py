@@ -33,6 +33,15 @@ class RunBase:
     question_id: UUID
     revision_id: UUID
     revision: int
+    request_id: str | None = None  # for the audit log of what applying does
+
+
+@dataclass(frozen=True, slots=True)
+class PrepareContext:
+    """What an operation may need besides the question: the coaching and the run's language."""
+
+    organization_id: UUID
+    target_language: str | None = None
 
 
 # (session, principal, what the run was based on, checked output) -> how it ended

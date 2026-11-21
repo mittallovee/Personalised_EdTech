@@ -25,6 +25,7 @@ from qbank.modules.questions.schemas import (
     RevisionOut,
     RevisionSummary,
     SaveQuestion,
+    TranslationOfOut,
 )
 
 router = APIRouter(prefix="/api/v1/questions", tags=["questions"])
@@ -82,6 +83,17 @@ def _out(view: service.QuestionView, principal: Principal) -> QuestionOut:
             FindingOut(path=f.path, code=f.code, level=f.level, message=f.message)
             for f in view.findings
         ],
+        translation_of=(
+            TranslationOfOut(
+                source_id=view.translation.source_id,
+                source_code=view.translation.source_code,
+                source_version_number=view.translation.source_version_number,
+                language=view.translation.language,
+                source_updated=view.translation.source_updated,
+            )
+            if view.translation is not None
+            else None
+        ),
     )
 
 

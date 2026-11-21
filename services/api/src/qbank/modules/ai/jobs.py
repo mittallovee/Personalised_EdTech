@@ -12,8 +12,10 @@ from sqlalchemy.orm import Session
 from qbank.core.jobs import Job, JobHandler, JobRegistry, PermanentJobError
 from qbank.core.secretbox import Keyring, KeyUnreadable
 from qbank.modules.ai.catalogue import apply_listing, record_refresh
+from qbank.modules.ai.economy import claim_submit, collect_handler, submit_handler
 from qbank.modules.ai.keys import open_key
 from qbank.modules.ai.names import Provider
+from qbank.modules.ai.orchestrator import CLAIM_SUBMIT, COLLECT_BATCH, SUBMIT_BATCH, ProviderFactory
 from qbank.modules.ai.providers.base import ProviderError
 from qbank.modules.ai.providers.registry import provider_for
 
@@ -64,5 +66,11 @@ def refresh_models_handler(keyring: Keyring | None) -> JobHandler:
     return handle
 
 
-def register_jobs(registry: JobRegistry, keyring: Keyring | None) -> None:
+def register_jobs(
+    registry: JobRegistry, keyring: Keyring | None, providers: ProviderFactory = provider_for
+) -> None:
     registry.register(REFRESH_MODELS, refresh_models_handler(keyring))
+    # Economy (batch) runs, M5 5h: claim, submit, collect.
+    registry.register(CLAIM_SUBMIT, claim_submit)
+    registry.register(SUBMIT_BATCH, submit_handler(keyring, providers))
+    registry.register(COLLECT_BATCH, collect_handler(keyring, providers))
