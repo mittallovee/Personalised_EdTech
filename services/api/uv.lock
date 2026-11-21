@@ -1176,6 +1176,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "argon2-cffi" },
+    { name = "cryptography" },
     { name = "defusedxml" },
     { name = "email-validator" },
     { name = "fastapi" },
@@ -1211,6 +1212,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.20,<2" },
     { name = "argon2-cffi", specifier = ">=25.1,<26" },
+    { name = "cryptography", specifier = ">=50,<51" },
     { name = "defusedxml", specifier = ">=0.7.1,<1" },
     { name = "email-validator", specifier = ">=2.3,<3" },
     { name = "fastapi", specifier = ">=0.144,<0.163" },

@@ -1,0 +1,9 @@
+# Secret-scan findings that were looked at and are not secrets (K-02: nothing is ignored silently).
+# Each line is a gitleaks fingerprint: commit:file:rule:line.
+
+# Made-up API keys in a test (services/api/tests/integration/test_ai_keys.py, M5 PR 5a-1), such as
+# "AIza-second-key-0002". They are not credentials for anything. The test was changed in the next
+# commit to build plainer fakes, but the first commit stays in the history of the pull request.
+8d0cc833ded02c544a546f76f5e5cf78ce6a80c1:services/api/tests/integration/test_ai_keys.py:generic-api-key:143
+8d0cc833ded02c544a546f76f5e5cf78ce6a80c1:services/api/tests/integration/test_ai_keys.py:generic-api-key:168
+8d0cc833ded02c544a546f76f5e5cf78ce6a80c1:services/api/tests/integration/test_ai_keys.py:generic-api-key:302

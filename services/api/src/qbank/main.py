@@ -16,6 +16,7 @@ from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
 from qbank.core.storage import LocalDiskStorage
 from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
+from qbank.modules.ai.api import router as ai_router
 from qbank.modules.assets.api import router as assets_router
 from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
@@ -68,6 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.db = database
+    app.state.ai_keyring = settings.ai_keyring()
     app.state.migration_heads = migration_heads(settings.migrations_dir)
     # Ways a caller can sign in, tried in order (ADR-0006). Bearer tokens join this list in P4.
     app.state.authenticators = [SessionCookieAuthenticator(database, settings)]
@@ -124,5 +126,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notifications_router)
     app.include_router(bank_router)
     app.include_router(review_router)
+    app.include_router(ai_router)
     install_openapi(app)
     return app

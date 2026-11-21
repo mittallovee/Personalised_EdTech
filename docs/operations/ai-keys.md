@@ -1,0 +1,83 @@
+# AI provider keys: the master key and how to look after it
+
+Each coaching pastes its own AI provider keys (Anthropic, OpenAI, Google, OpenRouter) into the app
+(Admin → AI, from M5's web steps; the API is `PUT /api/v1/ai/keys/{provider}`). The app never stores a
+key as typed. It **seals** it (AES-256-GCM) with a **master key** that lives only in the server's
+environment, never in the database. So a stolen database backup holds nothing a thief can use, and
+one coaching's sealed key cannot be opened as another's. The design is
+[ADR-0023](../architecture/adr/0023-ai-keys-encryption-and-provider-access.md).
+
+**You** make and keep the master key. Never paste it, or a provider key, into a chat, an issue or a file
+in this repository.
+
+## 1. Make a master key (once)
+
+In PowerShell (it asks the operating system for 32 random bytes and prints them as text):
+
+```powershell
+$b = New-Object byte[] 32; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($b); [Convert]::ToBase64String($b)
+```
+
+Copy the line it prints. Put it in two places:
+
+1. Your **password manager**, with a name such as "Question bank master key k1". This is the copy that
+   survives if the PC is lost. It must **not** live in the same backup as the database dump (K-16), or the
+   backup would hold both the lock and its key.
+2. The `.env` file next to `compose.yaml` (never committed):
+
+   ```text
+   AI_KEYS_MASTER_KEY=the-line-you-copied
+   ```
+
+Then restart the stack so the API reads it:
+
+```powershell
+docker compose up -d
+```
+
+Without a master key the app works as before and keys simply cannot be stored: the API answers
+`AI_NOT_CONFIGURED` and the AI screen says to ask whoever runs the server.
+
+A key that is not 32 bytes of base64 stops the app at start with a message that names the setting and
+never prints the value.
+
+## 2. What losing it means
+
+If the master key is lost, the stored provider keys **cannot be opened**. Nothing else is lost: an admin
+pastes each provider key again. Keep the password manager copy so that does not happen.
+
+## 3. Change it (rotation)
+
+Do this if the key may have leaked, or on a schedule. The old key stays available until every stored key has
+been sealed again.
+
+1. Make a new key as in section 1. Give it a new id.
+2. In `.env`, move the old settings and add the new ones (ids are lower-case letters, digits, `-` or `_`):
+
+   ```text
+   AI_KEYS_MASTER_KEY=the-new-key
+   AI_KEYS_MASTER_KEY_ID=k2
+   AI_KEYS_PREVIOUS=k1=the-old-key
+   ```
+
+3. Restart (`docker compose up -d`), then seal every stored key again under the new one:
+
+   ```powershell
+   docker compose run --rm migrate qbank rotate-ai-keys
+   ```
+
+   It prints, per coaching, how many keys it resealed. It stops with a message for any coaching whose keys
+   it could not open (for example, `AI_KEYS_PREVIOUS` was left out) and leaves that coaching unchanged.
+   Running it again is harmless.
+4. Once it reports nothing left to reseal, remove the `AI_KEYS_PREVIOUS` line and restart. Keep the old
+   key in the password manager for as long as you keep database backups made before the rotation: those
+   backups hold keys sealed with it.
+
+## 4. What is and is not visible
+
+- The API and the screen show only whether a key is stored and its **last four characters**.
+- The audit log records who stored, replaced or removed a key, and the last four characters, never the key.
+- Log lines and error messages never carry a key or the master key (the logging safety net blanks the field
+  names, and the code logs identifiers only).
+- A provider's own console is the place to set a spending limit and to revoke a key you think has leaked;
+  replacing a key in the app does not revoke the old one at the provider.

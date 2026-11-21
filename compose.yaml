@@ -44,6 +44,10 @@ services:
     command: ["alembic", "upgrade", "head"]
     environment:
       MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qbank_owner}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-qbank_dev}
+      # For `qbank rotate-ai-keys` (docs/operations/ai-keys.md).
+      AI_KEYS_MASTER_KEY: ${AI_KEYS_MASTER_KEY:-}
+      AI_KEYS_MASTER_KEY_ID: ${AI_KEYS_MASTER_KEY_ID:-k1}
+      AI_KEYS_PREVIOUS: ${AI_KEYS_PREVIOUS:-}
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -81,6 +85,11 @@ services:
       # Sign in with Google is off while these are empty (docs/operations/google-login.md).
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # The master key that seals coaching AI keys (ADR-0023, docs/operations/ai-keys.md). Empty: AI
+      # keys cannot be stored. Never commit a value; keep it in .env or a secret manager.
+      AI_KEYS_MASTER_KEY: ${AI_KEYS_MASTER_KEY:-}
+      AI_KEYS_MASTER_KEY_ID: ${AI_KEYS_MASTER_KEY_ID:-k1}
+      AI_KEYS_PREVIOUS: ${AI_KEYS_PREVIOUS:-}
       # Monitoring (ADR-0019, docs/operations/observability.md). The metrics page is reachable only
       # inside the compose network; traces go out only when an endpoint is set (see the profile below).
       METRICS_PORT: 9100

@@ -20,7 +20,7 @@ _FORBIDDEN_KEYS = frozenset({
     # secrets and credentials
     "password", "passwd", "password_hash", "secret", "client_secret", "token", "authorization",
     "cookie", "cookies", "set_cookie", "headers", "api_key", "apikey", "code_verifier", "nonce",
-    "link", "activation_link", "reset_link", "dsn",
+    "link", "activation_link", "reset_link", "dsn", "master_key", "provider_key",
     # personal data (people appear as user_id)
     "email", "email_address", "phone", "mobile", "display_name", "full_name", "first_name",
     "last_name", "filename",
