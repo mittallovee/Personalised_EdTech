@@ -56,7 +56,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 | `AI_NOT_CONFIGURED` | 409 | The server has no master encryption key (`AI_KEYS_MASTER_KEY`), so AI keys cannot be stored | M5 |
 | `AI_KEY_INVALID` | 422 | The pasted text does not look like an API key | M5 |
-| `AI_KEY_MISSING` | 409 | Refreshing a provider's model list needs that provider's key stored first | M5 |
+| `AI_KEY_MISSING` | 409 | Refreshing a model list, or running an operation, needs that provider's key stored first | M5 |
 | `AI_MODEL_UNAVAILABLE` | 409 | The provider no longer lists the model, so it cannot be enabled or chosen as a default | M5 |
 | `AI_MODEL_NOT_ENABLED` | 409 | A model chosen as an operation's default or fallback is not enabled yet | M5 |
 | `AI_MODEL_NO_JSON` | 409 | The model cannot return the structured answers the operations need | M5 |
@@ -67,6 +67,14 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_FALLBACK_WITHOUT_DEFAULT` | 422 | Fallbacks were given without a first model | M5 |
 | `AI_ECONOMY_NEEDS_MODEL` | 422 | Economy was chosen without a model | M5 |
 | `AI_BUDGET_EXCEEDED` | 409 | A run would pass the person's monthly AI budget (or the budget is 0); `details` has `limit_inr` and `remaining_inr` | M5 |
+| `AI_NO_MODEL` | 409 | No model is chosen for the operation (set one under Admin, AI) | M5 |
+| `AI_KEY_UNREADABLE` | 409 | The stored key cannot be opened (the master key changed); an admin enters it again | M5 |
+| `AI_OPERATION_NOT_AVAILABLE` | 409 | The operation is not built yet (`details.operation`) | M5 |
+| `AI_QUESTION_NOT_EDITABLE` | 409 | A real run needs an editable question; run it as a test, or withdraw the question | M5 |
+| `AI_EXTRA_TOO_LONG` | 422 | Extra instructions are longer than 1,000 characters | M5 |
+| `AI_TAG_NEEDS_SUBJECT` | 422 | Tagging needs the question's subject chosen first | M5 |
+| `AI_TAG_NO_SYLLABUS` | 422 | The subject has no chapters or no concepts to choose from | M5 |
+| `AI_TAG_SYLLABUS_TOO_LARGE` | 422 | The subject's syllabus is too large to send in one request | M5 |
 | `AI_GLOSSARY_DUPLICATE` | 409 | That term already has a glossary entry in that language (ignoring case) | M5 |
 | `AI_GLOSSARY_FULL` | 409 | A language already holds the most glossary terms allowed | M5 |
 | `AI_GLOSSARY_LANGUAGE_INVALID` | 422 | The glossary language is not one of the question languages | M5 |

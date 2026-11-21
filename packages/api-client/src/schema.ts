@@ -2417,6 +2417,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question_id}/ai/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The AI runs on a question (AI history)
+         * @description The person's own runs on this question, newest first; admins see everyone's.
+         */
+        get: operations["list_runs_api_v1_questions__question_id__ai_runs_get"];
+        put?: never;
+        /**
+         * Run an AI operation on a question (H-04, H-07)
+         * @description Runs now and returns the finished run. **A run that failed is still a 201** with `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the working revision, only if the question has not changed since the run began (otherwise `apply_status` is OUT_OF_DATE and nothing is written). `test` never writes.
+         */
+        post: operations["start_run_api_v1_questions__question_id__ai_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One AI run
+         * @description The person's own run, or any run for an admin.
+         */
+        get: operations["get_run_api_v1_ai_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4715,6 +4759,91 @@ export interface components {
              */
             updated_at: string;
         };
+        /** RunAttemptOut */
+        RunAttemptOut: {
+            /** Position */
+            position: number;
+            /** Model */
+            model: string;
+            /**
+             * Outcome
+             * @description `OK`, or the kind of failure (`TIMEOUT`, `RATE_LIMITED`...).
+             */
+            outcome: string;
+            /** Tokens In */
+            tokens_in: number | null;
+            /** Tokens Out */
+            tokens_out: number | null;
+            /** Latency Ms */
+            latency_ms: number | null;
+        };
+        /** RunOut */
+        RunOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            operation: components["schemas"]["Operation"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "RUNNING" | "SUCCEEDED" | "FAILED";
+            /**
+             * Apply Status
+             * @description What happened to the result: applied to the question, not applied (a test, a suggestion or a failure), out of date (the question changed meanwhile) or needing review (the person can no longer edit it).
+             * @enum {string}
+             */
+            apply_status: "NOT_APPLIED" | "APPLIED" | "OUT_OF_DATE" | "NEEDS_REVIEW";
+            /** Is Test */
+            is_test: boolean;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+            /**
+             * Prompt Source
+             * @enum {string}
+             */
+            prompt_source: "ONE_OFF" | "PERSONAL" | "COACHING" | "PLATFORM";
+            /** Prompt Version Id */
+            prompt_version_id: string | null;
+            /**
+             * Answered By
+             * @description The model that answered, after any fallback.
+             */
+            answered_by: string | null;
+            /**
+             * Result
+             * @description `output`: what the model chose. `before`: what it replaced.
+             */
+            result: {
+                [key: string]: unknown;
+            } | null;
+            /** Error Code */
+            error_code: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Attempts */
+            attempts: components["schemas"]["RunAttemptOut"][];
+        };
+        /** RunsOut */
+        RunsOut: {
+            /** Data */
+            data: components["schemas"]["RunOut"][];
+        };
         /** SaveAnswerRules */
         SaveAnswerRules: {
             /**
@@ -4929,6 +5058,36 @@ export interface components {
             /** Data */
             data: components["schemas"]["SourceOut"][];
             page: components["schemas"]["PageInfo"];
+        };
+        /** StartRun */
+        StartRun: {
+            operation: components["schemas"]["Operation"];
+            /**
+             * Extra Instructions
+             * @description A few more instructions for this run only, added after the locked safety preamble.
+             */
+            extra_instructions?: string | null;
+            /**
+             * Prompt
+             * @description A one-off prompt for this run only. It is checked like any prompt and kept on the run, nowhere else.
+             */
+            prompt?: string | null;
+            /**
+             * Personal Prompt Id
+             * @description One of the person's own prompts; its latest version is used.
+             */
+            personal_prompt_id?: string | null;
+            /**
+             * Model Id
+             * @description A model of the coaching; the operation's default when omitted.
+             */
+            model_id?: string | null;
+            /**
+             * Test
+             * @description A test run: the same call and cost, but nothing is ever written to the question.
+             * @default false
+             */
+            test: boolean;
         };
         /** StarterSyllabusOut */
         StarterSyllabusOut: {
@@ -15219,6 +15378,202 @@ export interface operations {
             };
             /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_runs_api_v1_questions__question_id__ai_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunsOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_run_api_v1_questions__question_id__ai_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRun"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No model or key for the operation (`AI_NO_MODEL`, `AI_KEY_MISSING`), the budget is used up (`AI_BUDGET_EXCEEDED`), or the question cannot be edited */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question lacks what the operation needs (`AI_TAG_NEEDS_SUBJECT`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_run_api_v1_ai_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question or run */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

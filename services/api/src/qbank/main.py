@@ -20,6 +20,8 @@ from qbank.modules.ai.api import router as ai_router
 from qbank.modules.ai.glossary_api import router as ai_glossary_router
 from qbank.modules.ai.models_api import router as ai_models_router
 from qbank.modules.ai.prompts_api import router as ai_prompts_router
+from qbank.modules.ai.providers.registry import provider_for
+from qbank.modules.ai.runs_api import router as ai_runs_router
 from qbank.modules.ai.settings_api import router as ai_settings_router
 from qbank.modules.ai.usage_api import router as ai_usage_router
 from qbank.modules.assets.api import router as assets_router
@@ -75,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.db = database
     app.state.ai_keyring = settings.ai_keyring()
+    app.state.ai_providers = provider_for  # tests swap in a fake provider here
     app.state.migration_heads = migration_heads(settings.migrations_dir)
     # Ways a caller can sign in, tried in order (ADR-0006). Bearer tokens join this list in P4.
     app.state.authenticators = [SessionCookieAuthenticator(database, settings)]
@@ -137,5 +140,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ai_usage_router)
     app.include_router(ai_prompts_router)
     app.include_router(ai_glossary_router)
+    app.include_router(ai_runs_router)
     install_openapi(app)
     return app
