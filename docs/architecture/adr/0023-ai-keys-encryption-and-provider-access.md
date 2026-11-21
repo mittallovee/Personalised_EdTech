@@ -16,7 +16,7 @@ returns a key.
 **Rotation.** A new master key id is added alongside the old; `qbank rotate-ai-keys` re-encrypts every row under
 the new one; the old one is removed afterwards. Without a master key the app starts, and AI features answer
 `AI_NOT_CONFIGURED`.
-**Reaching providers.** Plain HTTPS through `httpx`, one small adapter per provider behind the `AIProvider`
+**Reaching providers.** Plain HTTPS through `httpx2` (already used for Google sign-in), one small adapter per provider behind the `AIProvider`
 interface of ADR-0009. Base URLs are **fixed per provider** (never taken from a client or from the database), so
 a user cannot point the server at an internal address (SSRF). Responses are size-capped before parsing, timeouts
 are set on every call, and keys are sent only in the headers the provider documents. A fake transport serves
