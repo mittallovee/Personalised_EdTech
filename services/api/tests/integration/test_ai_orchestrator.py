@@ -46,7 +46,7 @@ from tests.integration.question_support import Catalogue, ready_for, seed_catalo
 
 QUESTIONS = "/api/v1/questions"
 MASTER = base64.b64encode(bytes(range(32))).decode()
-KEY = "sk-test-0123456789abcdef"
+KEY = "fake-openai-" + "a" * 16 + "wXyZ"  # too plain to look like a real key to the scanner
 D = Decimal
 
 

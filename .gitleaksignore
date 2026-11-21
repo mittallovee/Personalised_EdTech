@@ -7,3 +7,7 @@
 8d0cc833ded02c544a546f76f5e5cf78ce6a80c1:services/api/tests/integration/test_ai_keys.py:generic-api-key:143
 8d0cc833ded02c544a546f76f5e5cf78ce6a80c1:services/api/tests/integration/test_ai_keys.py:generic-api-key:168
 8d0cc833ded02c544a546f76f5e5cf78ce6a80c1:services/api/tests/integration/test_ai_keys.py:generic-api-key:302
+
+# A made-up key in a test (M5 PR 5e, test_ai_orchestrator.py). Not a credential for anything; the next
+# commit builds a plainer fake. The first commit stays in the pull request's history.
+fb250a48fb562dffa02497f7e4b063dcae7bf028:services/api/tests/integration/test_ai_orchestrator.py:generic-api-key:49
