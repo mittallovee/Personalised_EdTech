@@ -26,6 +26,7 @@ one). Everything below is done as the **Owner or an admin**, except where it say
 | Menu → **Concepts**. Pick the subject, add "Velocity" with an alias | Searching the alias finds the concept |
 | Menu → **Exams & sources**. Add an exam ("JEE Main") and a source (a book) | Both are listed; nothing is ever deleted, only retired |
 | **Bulk import** → download the template, fill two rows, upload it | A preview table says what is new, changed or an error; **Apply** is refused while any row is an error; applying twice changes nothing |
+| **Bulk import** → under *Start from a built-in syllabus*, press **Preview** beside "JEE Physics (Class 11 and 12)", then **Apply the import** (C-14) | The preview lists about 1,100 new items; after applying, **Syllabus** shows Class 11 and Class 12 Physics with chapters, topics and subtopics, and **Concepts** lists the physics concepts; pressing **Preview** again says everything is already there |
 
 ## 2. Write a question (D-01, D-02, D-11, E-04)
 
