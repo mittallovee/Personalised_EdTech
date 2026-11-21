@@ -119,6 +119,10 @@ services:
       # Its own role: the only one allowed to claim/complete jobs across coachings.
       DATABASE_URL: postgresql+psycopg://qbank_worker:${WORKER_DB_PASSWORD:-change-me-worker-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
       # Same settings as the api: the worker loads and validates the same configuration.
+      # Opens the coaching's sealed AI keys for background jobs (ADR-0023).
+      AI_KEYS_MASTER_KEY: ${AI_KEYS_MASTER_KEY:-}
+      AI_KEYS_MASTER_KEY_ID: ${AI_KEYS_MASTER_KEY_ID:-k1}
+      AI_KEYS_PREVIOUS: ${AI_KEYS_PREVIOUS:-}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
       METRICS_PORT: 9101

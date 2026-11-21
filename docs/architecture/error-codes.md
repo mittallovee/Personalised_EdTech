@@ -56,6 +56,16 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 | `AI_NOT_CONFIGURED` | 409 | The server has no master encryption key (`AI_KEYS_MASTER_KEY`), so AI keys cannot be stored | M5 |
 | `AI_KEY_INVALID` | 422 | The pasted text does not look like an API key | M5 |
+| `AI_KEY_MISSING` | 409 | Refreshing a provider's model list needs that provider's key stored first | M5 |
+| `AI_MODEL_UNAVAILABLE` | 409 | The provider no longer lists the model, so it cannot be enabled or chosen as a default | M5 |
+| `AI_MODEL_NOT_ENABLED` | 409 | A model chosen as an operation's default or fallback is not enabled yet | M5 |
+| `AI_MODEL_NO_JSON` | 409 | The model cannot return the structured answers the operations need | M5 |
+| `AI_ECONOMY_UNAVAILABLE` | 409 | Economy (batch) was chosen for a model the admin has not marked as offering it | M5 |
+| `AI_MODEL_NOT_FOUND` | 422 | A model id in an operation's setting is not one of this coaching's models | M5 |
+| `AI_MODEL_REPEATED` | 422 | A model appears twice in an operation's chain | M5 |
+| `AI_FALLBACKS_TOO_MANY` | 422 | More than two fallback models | M5 |
+| `AI_FALLBACK_WITHOUT_DEFAULT` | 422 | Fallbacks were given without a first model | M5 |
+| `AI_ECONOMY_NEEDS_MODEL` | 422 | Economy was chosen without a model | M5 |
 
 Feature modules add specific codes here (e.g. `QUESTION_NOT_EDITABLE`, `TWO_DECIMAL_PLACES_REQUIRED`) in the
 same pull request that introduces them.
