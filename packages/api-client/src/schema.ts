@@ -1501,6 +1501,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question_id}/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Possible duplicates of a question (D-16)
+         * @description Questions of this coaching with the same content (`EXACT`) or very similar text (`NEAR`), at most 20 of each, never archived ones, never another coaching's, and only ones you may open, with the newest decision about each. A person decides whether they are duplicates; nothing is merged or changed.
+         */
+        get: operations["get_duplicates_api_v1_questions__question_id__duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{question_id}/duplicates/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record whether a question is a duplicate of another (D-16)
+         * @description For the text as it is now: an edit that changes the question needs a new decision, and a newer decision replaces an older one (both are kept). The author, admins, edit-others holders and quality control may decide. An exact match with no `NOT_DUPLICATE` decision, or a `DUPLICATE_OF`, blocks Pass QC (`QC_BLOCKED_DUPLICATE`). Nothing is merged or deleted.
+         */
+        post: operations["decide_duplicate_api_v1_questions__question_id__duplicates_decisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/passages": {
         parameters: {
             query?: never;
@@ -2087,6 +2127,11 @@ export interface components {
             /** Has Video */
             has_video: boolean;
             /**
+             * Preview
+             * @description The beginning of the question's text (about 200 characters, plain text, with equations as their LaTeX). Empty until `qbank reindex-bank` has run once after 4f.
+             */
+            preview: string;
+            /**
              * Created At
              * Format: date-time
              */
@@ -2105,9 +2150,25 @@ export interface components {
             page: components["schemas"]["PageInfo"];
             /**
              * Total
-             * @description How many questions match the filters, not only the ones on this page.
+             * @description How many questions match the filters, not only the ones on this page. For a search (`q`) it is how many results are shown.
              */
             total: number;
+            /**
+             * Truncated
+             * @description A search (`q`) matched more questions than it shows: narrow it with a more specific word or a filter. Always false for the plain list, which has pages.
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** Blocker */
+        Blocker: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
         };
         /** BloomLevelOut */
         BloomLevelOut: {
@@ -2328,6 +2389,50 @@ export interface components {
             /** @description A new activation link for the Owner. Null only when a retried request finds that the Owner has already activated their account. */
             activation: components["schemas"]["ActivationLink"] | null;
         };
+        /** DecideDuplicate */
+        DecideDuplicate: {
+            /**
+             * Other Question Id
+             * Format: uuid
+             */
+            other_question_id: string;
+            /**
+             * Decision
+             * @description `DUPLICATE_OF`: this question copies the other one (archive this one; nothing is merged). `NOT_DUPLICATE`: they only look alike.
+             * @enum {string}
+             */
+            decision: "NOT_DUPLICATE" | "DUPLICATE_OF";
+            /**
+             * Note
+             * @description Why, in a few words.
+             */
+            note: string;
+        };
+        /** DecisionOut */
+        DecisionOut: {
+            /**
+             * Other Question Id
+             * Format: uuid
+             */
+            other_question_id: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "NOT_DUPLICATE" | "DUPLICATE_OF";
+            /** Note */
+            note: string;
+            /**
+             * Decided By
+             * Format: uuid
+             */
+            decided_by: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
         /** DiffOut */
         DiffOut: {
             from_revision: components["schemas"]["DiffRevision"];
@@ -2366,6 +2471,60 @@ export interface components {
             level: number;
             /** Meaning */
             meaning: string;
+        };
+        /** DuplicateOut */
+        DuplicateOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /**
+             * State
+             * @description The workflow state of the version the bank shows.
+             */
+            state: string;
+            /**
+             * Match
+             * @description `EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text.
+             * @enum {string}
+             */
+            match: "EXACT" | "NEAR";
+            /**
+             * Similarity Percent
+             * @description How alike the two texts are.
+             */
+            similarity_percent: number;
+            /**
+             * Preview
+             * @description The beginning of the other question's stem (plain text).
+             */
+            preview: string;
+            /** @description The newest decision about this pair, for the text as it is now. */
+            decision: components["schemas"]["DecisionOut"] | null;
+        };
+        /** DuplicatesOut */
+        DuplicatesOut: {
+            /**
+             * Checked Revision Id
+             * Format: uuid
+             * @description The text that was checked: the one under review or published, else the working copy of a draft.
+             */
+            checked_revision_id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Data
+             * @description Exact matches first, then near ones, closest first.
+             */
+            data: components["schemas"]["DuplicateOut"][];
+            /**
+             * Qc Blocked By
+             * @description What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of.
+             */
+            qc_blocked_by: components["schemas"]["Blocker"][];
         };
         /** ErrorField */
         ErrorField: {
@@ -10297,6 +10456,153 @@ export interface operations {
             };
         };
     };
+    get_duplicates_api_v1_questions__question_id__duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicatesOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question that you may open (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The check took too long and was stopped (`SEARCH_TIMED_OUT`) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    decide_duplicate_api_v1_questions__question_id__duplicates_decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideDuplicate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description You may not decide this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question, or other question, that you may open */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The question is published (`DUPLICATE_DECISION_CLOSED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The same question, an empty question, or no note */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_passages_api_v1_passages_get: {
         parameters: {
             query?: {
@@ -11231,6 +11537,8 @@ export interface operations {
                 has_video?: boolean | null;
                 /** @description List the archive instead. */
                 archived?: boolean;
+                /** @description Words to search for in the stem, options and solution. Quotes match a phrase, `-word` leaves a word out. Results are ranked, exact words first, then close words (typos); there is no next page, so give `limit` up to 100 and narrow with filters. Cannot be combined with `cursor`. */
+                q?: string | null;
                 limit?: number;
                 cursor?: string | null;
             };
@@ -11276,8 +11584,28 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Too many searches (`RATE_LIMITED`) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The search took too long and was stopped (`SEARCH_TIMED_OUT`) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

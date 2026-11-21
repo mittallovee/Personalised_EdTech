@@ -316,8 +316,117 @@ coaching, needed after a bug fix or a change to what is indexed).
   `create-platform-admin` does. A test damages and deletes rows and checks the rebuild writes them back, and
   that the rows written by every kind of change equal the rebuilt rows. The owner's runbook is
   `docs/operations/bank-index.md`.
-- Not built: the list has no text preview (it needs `stem_text`, 4f), and no filter on `has_open_correction` or
-  `has_published` (the columns are there; the web will say when it needs them).
+- Not built: no filter on `has_open_correction` or `has_published` (the columns are there; the web will say when it
+  needs them). The text preview and search came in 4f (§7.6).
+
+### 7.6 As built in 4f: free text and typo search (F-03)
+
+- **Table** (migration 0030): `bank_index` gains `stem_text` (the plain text: stem, then assertion, reason,
+  statements and columns, then each option, then the solution; equations as the LaTeX written; pictures as their
+  caption and description; one line, Unicode composed form, at most 20,000 characters), `preview` (the first 200
+  characters of the stem) and `search_vector`, a **generated column** (`to_tsvector('simple', stem_text)`), so
+  PostgreSQL keeps it in step and no writer can forget it. Two GIN indexes: on `search_vector` and a trigram index on
+  `stem_text` (`pg_trgm`, a standard "trusted" extension that the table owner may create). Existing rows have empty
+  text until `qbank reindex-bank` is run once (`docs/operations/bank-index.md`).
+- **Reading the text** is `questions/bank_text.py` (pure, never raises, bounded work: at most 20,000 characters and
+  5,000 blocks looked at per question), written through the same `bank_entry` as the labels, so an incremental row
+  and a rebuilt row are the same row (the 4e equality test covers the new columns).
+- **`GET /bank/questions?q=…`** is the same route with the same filters and the same visibility, so a private draft
+  is never a hit, exactly as it is never listed or counted. Exact words come first (`websearch_to_tsquery` on the
+  `simple` configuration, ranked with `ts_rank`; a quoted phrase and `-word` work; nothing typed can become query
+  syntax), then, when fewer than 10 questions matched exactly, **close words**: each typed word may also be one of
+  up to 3 words of the coaching's word list (`bank_words`, migration 0031, kept by a trigger) with a trigram
+  similarity of at least 0.45, and that widened query is run on the word index, best match first. (4f first matched
+  typos against the whole text with `word_similarity`; the 100,000-question test showed that takes about 4 seconds,
+  see §7.7.) A quoted phrase or a left-out word asks for exactness, so they get no close
+  words. At most `limit` (never more than 100) come back and **there is no next page**: `truncated: true` says more
+  matched and the person narrows the search; `cursor` with `q` is a `400`. `total` is the number shown.
+- **Protection:** `q` is at most 200 characters; one person may search 60 times a minute (`429` with `Retry-After`;
+  settings `searches_per_user`, `search_window_seconds`); the database stops one search after 5 seconds
+  (`search_timeout_ms`) and the answer is `503 SEARCH_TIMED_OUT` with a plain message. The limit counts per API
+  process, like the other limiters (the proxy enforces it across processes in M7).
+- **The list shows `preview`** (plain text; the web must show it as text, never as HTML).
+- **The threshold, measured** (word to word): typos of *acceleration*, *velocity*, *pendulum*, *frequency*, *gravity*
+  and *momentum* score 0.50 to 0.67 and a plural (*forces*) 0.63; different words (*forest*/*force*, *block*/*black*,
+  *mass*/*pass*) 0.25 to 0.33. 0.45 separates them. A typo of a very short word (*forse*, 0.33) is not caught. This
+  is a first value from a handful of words, not a measured accuracy; 4g builds a small labelled sample for the
+  duplicate threshold, and this one can be checked against it.
+- **Measured in 4f-2 (K-08, §7.7):** every target is met on 100,000 questions.
+- **Limits of what `simple` finds:** whole words only (no stemming: *forces* does not find *force*, though the close-word
+  step often does), in every language the same; Hindi words are matched as written and typed alike after Unicode
+  composition. There is no semantic ("find similar") search (F-04 is P2).
+
+### 7.7 As built in 4f-2: the 100,000-question load test (K-08)
+
+- **Generator** (`services/api/tests/load/`, test-support code, never shipped): `synthetic.py` makes physics-like
+  questions from word lists and a seed (one in ten in Hindi, equations, solutions; nothing real), and
+  `seed_bank.py` creates a load-test coaching with eight members and inserts the questions with plain SQL in batches
+  of 1,000, walking each through the real workflow states so the database triggers check every row, then rebuilds the
+  bank index with `reindex_bank`. It refuses any database whose name does not end in `_load`. Tests check that every
+  generated question is valid and that a seeded bank equals its own rebuild and is read by the API.
+- **k6 script** `infra/load/bank.js` and runner `infra/load/serve-load-api.sh`: 5 people (by default) doing list,
+  filter + count, code lookup and search (common words, phrases, typos, Hindi, LaTeX), with the targets as pass/fail
+  thresholds. How to run it and every number: `docs/operations/load-tests.md`.
+- **Result, 5 people:** p95 list 131 ms, filter + count 119 ms, code 81 ms (target 300), search 235 ms (target 800).
+  With 10 people all are still under target (list 278 ms); throughput stays at about 45 requests a second, so the limit
+  is the one API process, not the database (a page takes 0.2 ms in PostgreSQL, the full total 38 ms).
+- **What the measurements changed:** typo search against the whole text took about 4 s, so typos are now matched
+  against the coaching's word list (`bank_words`, migration 0031: one row per distinct word, FORCE row-level security,
+  filled by a trigger on `bank_index`, never deleted) and the close words are searched with the word index. The
+  starting indexes are kept; the full-text trigram index is no longer used by search and 4g decides whether
+  near-duplicate checking keeps it.
+- **Rebuild time:** `reindex-bank` takes about 12 minutes per 100,000 questions (135 a second); acceptable for a rare
+  admin job, recorded in the runbook.
+
+### 7.8 As built in 4g-1: finding possible duplicates (D-16)
+
+- **Exact** (`questions/duplicate_key.py`, pure, never raises): a SHA-256 of the format, stem, assertion, reason,
+  statements, columns, options (with their ids and, for matching, the mapping) and the answer. Prose is Unicode
+  composed, spaces collapsed and case folded; **equations are kept as written** (only spacing collapsed), in equation
+  blocks and between `\(` and `\)` alike, so `x^2` and `X^2` differ. A picture counts by its stored picture. The
+  solution, the video, the language and the labels are not part of it. An empty stem has no key.
+- **Near**: trigram similarity of `match_text` (the question's text without the solution, so a different worked
+  solution does not hide a copy) of at least **0.75**, through a trigram index. The value comes from a labelled sample
+  of made-up pairs (`services/api/tests/fixtures/duplicate_sample.json`): the same question with a small change scored
+  0.83 to 1.00, a different question on the same topic 0.35 to 0.65. A test checks the threshold still separates them.
+  The template-sharing synthetic questions of the load test score about 0.70, below it.
+- **Table** (migration 0032): `bank_index` gains `duplicate_key` (indexed with the coaching) and `match_text` (a
+  trigram index). The full-text trigram index of 0030 is dropped: since 0031 nothing reads it. Run `qbank
+  reindex-bank` once after the upgrade, as for 0030.
+- **`GET /api/v1/questions/{id}/duplicates`** (`questions/duplicates.py`, `duplicates_api.py`): checks the text the
+  person sees (the revision under review or published; else the working copy of a draft, for those who may open it)
+  against the bank index through `search.public.find_duplicates`, with the bank's visibility rule: at most 20 exact
+  matches (newest first) then 20 near ones (closest first), with code, state, similarity in percent and a preview.
+  Never the question itself, an archived question, another coaching's, or a private draft the reader may not open; a
+  question the reader may not open is 404. Under the same 5-second limit as search (`503 SEARCH_TIMED_OUT`).
+- Not yet (4g-2): recording a decision, and an exact match blocking Pass QC until one is recorded.
+
+### 7.9 As built in 4g-2: decisions, and Pass QC waiting for them (D-16)
+
+- **Table** `duplicate_decisions` (migration 0033): version, revision, the `duplicate_key` of the text decided on, the
+  other question, `NOT_DUPLICATE` or `DUPLICATE_OF`, a note (1 to 1,000 characters), who and when. Append-only (a
+  trigger refuses UPDATE and DELETE even for the table owner; the app may only SELECT and INSERT), FORCE row-level
+  security, composite foreign keys to this coaching's versions, revisions and questions.
+- **A decision is about one text.** Only decisions whose key equals the key of the text as it is now count, and the
+  newest decision about a pair wins (the older ones stay as history). A decision made on a draft still counts after
+  the draft is submitted (the frozen revision is the same text); an edit that changes the meaning (another answer, a
+  changed equation) needs a new one.
+- **`POST /api/v1/questions/{id}/duplicates/decisions`** `{other_question_id, decision, note}`: the author, admins,
+  edit-others holders and QC holders may decide (others `403`); the question and the other question must be ones the
+  person may open (`404` otherwise, so someone else's private draft cannot be named); not the question itself
+  (`422 SAME_QUESTION`), not an empty question (`422 QUESTION_EMPTY`), not a published question
+  (`409 DUPLICATE_DECISION_CLOSED`). Audited (`QUESTION_DUPLICATE_DECIDED`, with the other code, decision and note),
+  and it locks the question like every change.
+- **Pass QC is refused** (`409 QC_BLOCKED_DUPLICATE`, with the codes in `details.duplicates`) while an exact match in
+  the **shared bank** (submitted or later, not archived) has no `NOT_DUPLICATE` decision for this text, or while
+  someone marked the question `DUPLICATE_OF` another (exact or near). A private draft never blocks anyone (it is not in
+  the shared bank, and nobody learns of it this way), an archived question never blocks, and a near match only informs
+  unless a person marks it a duplicate. Approve and Publish do not check again: QC is the step that looks.
+- `GET …/duplicates` now also returns each candidate's newest `decision` and `qc_blocked_by`, the list Pass QC
+  would refuse on, so the screen shows what must be decided.
+- `DUPLICATE_OF` changes nothing else: the author archives their copy; nothing is merged or deleted (decision 6).
+- **Tests that publish the same fixture twice** (other M3 and M4 tests) now get different stems, because a second
+  identical question correctly waits at QC.
 
 ## 8. Diff and history (E-08, E-09)
 
@@ -377,8 +486,8 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 |---|---|
 | Workflow | `question_versions` gains `state`, `flow_revision` (the ETag counter), `review_revision_id` (the frozen revision under review), `state_changed_at`; `question_masters` gains `published_version_id`. Existing M3 rows become `DRAFT`. Trigger: only the allowed state pairs; a PUBLISHED version and its revisions never change. `review_decisions` (append-only: version, revision, step, actor, reasons, note, checklist result, time) and `published_versions` (label snapshot, publisher, time) |
 | Publication (**built in 4a-4, migration 0027**) | `question_masters.published_version_id` (a trigger lets it name only a PUBLISHED version of the same master, only forward); `published_versions` (append-only: label names as they were that day, the hash of the published text, who and when); a trigger refusing any insert, change or delete of a revision of a PUBLISHED version; and a unique index so a master has at most one version that is not PUBLISHED (one correction at a time) |
-| Bank index (**built in 4e, migration 0029**) | `bank_index` with the label columns and a starting set of indexes; the `pg_trgm` extension, the text columns and their indexes come in 4f; rows are filled by the reindex command, not by SQL |
-| Duplicates | `duplicate_decisions` (append-only: version, revision, other master, decision, note, actor) |
+| Bank index (**built in 4e, migration 0029; text in 4f, migration 0030; words in 4f-2, migration 0031; duplicate key and match text in 4g-1, migration 0032**) | `bank_index` with the label columns and a starting set of indexes; 0030 adds the `pg_trgm` extension, `stem_text`, `preview`, the generated `search_vector` and the two GIN indexes; 0031 adds `bank_words` (each coaching's distinct words, kept by a trigger) for typo search; rows are filled by the reindex command, not by SQL |
+| Duplicates (**built in 4g-2, migration 0033**) | `duplicate_decisions` (append-only: version, revision, the text's duplicate key, other master, decision, note, actor) |
 | Notifications | `notifications` (policy: own rows only) |
 
 ## 10. API (all under `/api/v1`)
@@ -388,8 +497,8 @@ keys (ADR-0005), and are covered by the automatic isolation test. Numbers are ta
 | `POST /questions/{id}/submit` (`If-Match: "rev-N"`) · `/withdraw` · `/return` (`{reasons, note}`) · `/pass-qc` · `/approve` · `/publish` · `/start-correction` (these last six with `If-Match: "flow-N"`) | The steps; each answers with the question view, which now carries `state`, `flow_etag`, `allowed_steps`, `version_number`, `review_revision_id` |
 | `GET /review/queue?state=&subject_id=&chapter_id=&author_id=&language=&older_than_days=&limit=&cursor=` · `GET /review/queue/counts` (**built in 4c**, see §10.1) | The shared queue and the number waiting at each step |
 | `GET /questions/{id}/history` · `GET /questions/{id}/diff?from=&to=` (**built in 4d**, see §8.1) | Timeline and before/after |
-| `GET /bank/questions` (filters, `total`; `q` comes in 4f) · `GET /bank/questions/by-code/{code}` (**built in 4e**, see §7.5) | The bank |
-| `GET /questions/{id}/duplicates` · `POST /questions/{id}/duplicates/decisions` | Duplicate check |
+| `GET /bank/questions` (filters, `total`, `q` for search) · `GET /bank/questions/by-code/{code}` (**built in 4e and 4f**, see §7.5 and §7.6) | The bank |
+| `GET /questions/{id}/duplicates` (**built in 4g-1**, see §7.8) · `POST /questions/{id}/duplicates/decisions` (**built in 4g-2**, see §7.9) | Duplicate check |
 | `GET /notifications?unread=` · `GET /notifications/unread-count` · `POST /notifications/{id}/read` · `POST /notifications/read-all` | Notifications |
 
 ### 10.1 The review queue (built in 4c; no migration)
@@ -437,6 +546,76 @@ New error codes (added to `error-codes.md` in the PR that introduces each): `WOR
 
 The browser holds no rules: allowed steps, findings, visibility and counts all come from the API.
 
+### 11.1 As built in 4h: the review steps on the question page
+
+- **State badge** beside the title, and a **Review steps** bar with exactly the API's `allowed_steps`, in a fixed
+  order (the step that moves the question on first): Submit for review, Pass QC, Approve, Publish, Start a
+  correction, Return to the author, Withdraw to edit. `apps/web/src/lib/workflow.ts` only names states and steps and
+  says where each step is sent; it decides nothing.
+- **Submit** is sent with the text's ETag (`"rev-N"`), every later step with the workflow ETag (`"flow-N"`), so a step
+  from an out-of-date screen is refused. A refused step (412, or `WORKFLOW_STEP_INVALID` because another screen moved
+  the question on) stops the screen and offers **Reload**, as a refused save already did.
+- **Read-only** outside DRAFT and CHANGES_REQUESTED: every field is disabled, Save checkpoint is hidden, and a line
+  says how to change it (withdraw it, or start a correction once published). The API refuses such saves anyway.
+- **Return** opens a form with the nine reasons (appendix wording) and a note; Send waits for at least one reason and
+  ten characters, and the API checks the same again. **Publish** and **Start a correction** ask first.
+- The findings panel is titled **Publication checklist** once the question has been submitted (E-07).
+- Browser test `apps/e2e/tests/workflow.spec.ts`: the whole path for one person holding every grant (submit, return
+  with a reason, resubmit, QC, approve, publish, correct as version 2) with accessibility checks, and two tabs racing
+  on one step.
+
+### 11.4 As built in 4k: compare, history and possible duplicates
+
+- The question page's tabs are now **Edit · Preview · Compare · History** (`components/history-panel.tsx`,
+  `lib/history.ts`), and a **Possible duplicates** panel sits under the findings (`components/duplicates-panel.tsx`,
+  `lib/duplicates.ts`). Web only: the routes were built in 4d and 4g.
+- **History** (`GET /questions/{id}/history`): each step in order, oldest first, with when, and for a return its reasons
+  and note. The entry carries only a person's id, so it says "you" or "a colleague"; names are not in the answer.
+- **Compare** (`GET /questions/{id}/diff`): two choices, an older and a newer saved text, taken from the history
+  entries that name a text (a checkpoint, or the step that took a text into review). The two newest are chosen at first.
+  Changed prose shows its words marked (added underlined, removed struck through, not by colour alone); anything else
+  shows before and after as text. An identical pair says so. A text the person may not read is the API's 404, shown as a
+  sentence. A late answer to an earlier choice is dropped.
+- **Possible duplicates** (`GET /questions/{id}/duplicates`, `POST …/duplicates/decisions`): each candidate with its code
+  (a link), state, "Same content" or "Similar text (NN%)", a plain-text preview and the newest decision. A decision
+  needs a few words of why (the API requires one). The panel says which questions block Pass QC (`qc_blocked_by`), checks
+  again after every review step (so a refused Pass QC shows what blocks it) and on **Check again**. Who may decide is
+  the API's rule: a 403 is shown as a sentence.
+- Not done here: the "published against the open correction" default pair of §8.1 (the two newest saved texts are
+  chosen instead; either can be changed), and names instead of "a colleague" (a later change to the history answer).
+- Browser test `apps/e2e/tests/compare.spec.ts`.
+
+### 11.3 As built in 4j: the bank screen
+
+- The **Questions** page keeps *Start a new question* and replaces the old "my questions" list with the **bank**
+  (`components/bank-list.tsx`, `GET /bank/questions`): every question the person may open, the most recently changed
+  first, 50 at a time with Show more, each row with its code (a link), state badge, format, "correction in progress",
+  the stem preview (plain text) and its subject, chapter, difficulty, past-year year and when it changed.
+- **Search** box (stem, options and solution; phrases and `-word` work; typos forgiven by the API). It waits for a
+  0.4-second pause in typing before it asks, because searches are limited per person; a search shows the best
+  matches with no Show more, and says "The best N matches are shown" when the API reports `truncated`.
+- **Filters**: subject, chapter (of that subject), topic (of that chapter), format, difficulty, Bloom level, language,
+  state, past-year, has a solution, has a video, **Only mine** (the signed-in person as author) and **Archived**, and
+  Clear. The live count above the rows is the API's `total`.
+- **Code box**: opens a question by its code, forgiving case, spaces and dashes; an unknown code says so.
+- `lib/bank.ts` only turns the chosen filters into the API's query and words the count. A late answer to an older
+  query is dropped, so it never replaces a newer list. Browser test `apps/e2e/tests/bank.spec.ts`.
+
+### 11.2 As built in 4i: the review queue and the notifications
+
+- **Review** (`/review`, in the menu for people with a review grant, admins, the Owner and an acting platform admin;
+  the API refuses everyone else and the page says so): tabs *Waiting for QC · Waiting for approval · Waiting to
+  publish · Returned to me* with the counts from `/review/queue/counts`, filters for subject, chapter (of that
+  subject), language and waiting time, the oldest first, 50 at a time with Show more. Each row shows the code (a link
+  to the question), format, subject, language, how long it has waited, and "correction, version N" for a correction.
+- **Notifications**: a header link with the unread count, read when a page opens, every minute and when the tab is
+  focused again (`/notifications/unread-count`). `/notifications` lists them newest first in plain text: "Question
+  X was returned to you" with the reasons in the appendix wording and the note, or "Question X was published"
+  (with the version for a correction). Opening one marks it read and goes to the question; **Mark all as read**.
+- `apps/web/src/lib/review.ts` only names the tabs and turns a notification's facts into a sentence, ignoring
+  facts it does not expect. Browser test `apps/e2e/tests/review-queue.spec.ts`: a submitted question in the queue,
+  the filters and tabs, opening it, then a return reaching the author's bell and notifications page.
+
 ## 12. Tests that prove M4
 
 | # | Test | Type |
@@ -480,13 +659,15 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4c | Review queue and counts (`review` module routes); visibility predicate; T37 part 1 |
 | 4d | **Built:** History and diff (backend, unit tests); T40 |
 | 4e | **Built:** `search` module: `bank_index` (migration 0029), index writes from `questions`, `reindex-bank`, list + filters + count + by-code; T37, T38 part 1 |
-| 4f | Free text and typo search; the 100,000-question generator; k6 scripts; recorded timings (K-08); T38 |
-| 4g | Duplicate check (exact + near) and decisions; T39 |
-| 4h | Web: workflow action bar, read-only editor, return dialog, publication checklist wording; e2e part 1 |
-| 4i | Web: review queue and notifications bell and page |
-| 4j | Web: bank screen (filters, count, search, code box) |
-| 4k | Web: compare, history and duplicates panel |
-| 5 | M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey, timings table |
+| 4f | **Built:** free text and typo search (F-03): migration 0030, `bank_text.py`, `q` on the bank list, limits; T38 part 2 |
+| 4f-2 | **Built:** the 100,000-question generator, k6 script, recorded timings (all targets met) and the index decision; typo search moved to a word list (migration 0031) because the first run missed the search target (K-08); T38 part 3 |
+| 4g-1 | **Built:** duplicate key, near match, `GET /questions/{id}/duplicates` (migration 0032); T39 part 1 |
+| 4g-2 | **Built:** duplicate decisions (`duplicate_decisions`, migration 0033), an exact match blocking Pass QC (`QC_BLOCKED_DUPLICATE`); T39 part 2 |
+| 4h | **Built:** web workflow action bar, read-only editor, return form, publication checklist wording; e2e part 1 (see §11.1) |
+| 4i | **Built:** web review queue and notifications bell and page (see §11.2) |
+| 4j | **Built:** web bank screen (filters, count, search, code box; see §11.3) |
+| 4k | **Built:** web compare, history and duplicates panel (see §11.4) |
+| 5 | **Built:** M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey (`apps/e2e/tests/m4-exit.spec.ts`), timings table |
 
 K-07 (squawk) goes in as its own small PR when you say so, before 4a-2 if possible (so the new migrations are
 checked). The order can change if a PR grows; split rather than stretch.

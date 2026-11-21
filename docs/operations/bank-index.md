@@ -17,8 +17,10 @@ read **`bank_index`**: one small row per question with the labels pulled out int
 Normally never. Run the rebuild after:
 
 - a bug fix in how a row is worked out (the fix does not change rows that already exist);
-- an upgrade that adds something to the index (the release notes will say so: for example the text columns that
-  come with search);
+- an upgrade that adds something to the index (the release notes will say so). **After the upgrade that adds free-text
+  search (migration 0030) run it once**: until then every question has empty text, so a search finds nothing and
+  the list shows no preview. **The same after the duplicate check (migration 0032)**: until then existing questions
+  are not found as duplicates;
 - restoring a backup taken before the index existed.
 
 ```bash
@@ -26,7 +28,8 @@ docker compose run --rm migrate qbank reindex-bank                       # every
 docker compose run --rm migrate qbank reindex-bank --organization <id>   # one coaching
 ```
 
-It prints one line per coaching (`Coaching <id>: N questions indexed`). It is safe to run while the app is in use
+It prints one line per coaching (`Coaching <id>: N questions indexed`). It takes about **12 minutes per 100,000
+questions** (measured, `docs/operations/load-tests.md`). It is safe to run while the app is in use
 and safe to repeat: it recomputes each row from the questions and writes it only if it changed. It works in
 batches of 500 questions, one transaction per batch, so it never holds one open for long. It needs the table-owner
 connection (`MIGRATION_DATABASE_URL`), like `create-platform-admin`, which the `migrate` service already has.

@@ -1,12 +1,16 @@
+import math
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from pydantic import Field
 
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
+from qbank.core.errors import MalformedRequest, TooManyRequests
+from qbank.core.metrics import RATE_LIMITED
 from qbank.core.pagination import DEFAULT_LIMIT, MAX_LIMIT, PageInfo, decode_cursor, encode_cursor
+from qbank.core.ratelimit import SlidingWindowLimiter
 from qbank.modules.search import service
 from qbank.modules.search.models import BankRow
 from qbank.modules.search.schemas import BankItem, BankPage
@@ -19,6 +23,7 @@ _DENIED: dict[int | str, dict[str, Any]] = {
 _NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"description": "No such question"}}
 _MAX_VALUES = 50
 _MAX_CURSOR_LENGTH = 200
+_MAX_SEARCH_LENGTH = 200
 _Several = Query(max_length=_MAX_VALUES)
 
 
@@ -47,6 +52,7 @@ def _item(row: BankRow) -> BankItem:
         exam_year=row.exam_year,
         has_solution=row.has_solution,
         has_video=row.has_video,
+        preview=row.preview,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -60,9 +66,14 @@ def _item(row: BankRow) -> BankItem:
     " several times to match any of its values. `total` counts every match, not only this page."
     " A draft, or a returned question, is listed only to its author, admins and holders of the"
     " edit-others grant; to everyone else it does not exist. `archived=true` lists the archive.",
-    responses=_DENIED,
+    responses={
+        **_DENIED,
+        429: {"description": "Too many searches (`RATE_LIMITED`)"},
+        503: {"description": "The search took too long and was stopped (`SEARCH_TIMED_OUT`)"},
+    },
 )
 def list_bank(
+    request: Request,
     principal: CurrentPrincipal,
     database: Annotated[Database, Depends(get_database)],
     class_id: Annotated[list[UUID] | None, _Several] = None,
@@ -95,6 +106,17 @@ def list_bank(
     has_solution: bool | None = None,
     has_video: bool | None = None,
     archived: Annotated[bool, Query(description="List the archive instead.")] = False,
+    q: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            max_length=_MAX_SEARCH_LENGTH,
+            description="Words to search for in the stem, options and solution. Quotes match a"
+            " phrase, `-word` leaves a word out. Results are ranked, exact words first, then close"
+            " words (typos); there is no next page, so give `limit` up to 100 and narrow with"
+            " filters. Cannot be combined with `cursor`.",
+        ),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     cursor: Annotated[str | None, Query(max_length=_MAX_CURSOR_LENGTH)] = None,
 ) -> BankPage:
@@ -117,6 +139,12 @@ def list_bank(
         has_video=has_video,
         archived=archived,
     )
+    if q is not None:
+        if cursor is not None:
+            raise MalformedRequest(
+                "A search has no next page. Narrow it with a more specific word or a filter."
+            )
+        return _search(request, principal, database, filters, q, limit)
     after = decode_cursor(cursor) if cursor is not None else None
     # One snapshot for the count and the page, so `total` is the number of matches of these rows.
     with database.transaction(
@@ -133,6 +161,39 @@ def list_bank(
         data=data,
         page=PageInfo(next_cursor=next_cursor, has_more=found.has_more),
         total=found.total,
+    )
+
+
+def _search(
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Database,
+    filters: service.BankFilters,
+    q: str,
+    limit: int,
+) -> BankPage:
+    # Before any work is done, so a refused search costs nothing. Counted per signed-in person.
+    limiter: SlidingWindowLimiter = request.app.state.search_limiter
+    wait = limiter.hit(str(principal.user_id))
+    if wait > 0:
+        RATE_LIMITED.labels("bank_search").inc()
+        raise TooManyRequests(
+            "You have searched many times in a short while. Please wait a moment.",
+            retry_after_seconds=math.ceil(wait),
+        )
+    timeout_ms: int = request.app.state.settings.search_timeout_ms
+    with database.transaction(
+        principal.tenant_context, isolation_level="REPEATABLE READ"
+    ) as session:
+        found = service.search_bank(
+            session, principal, filters, q, limit=limit, timeout_ms=timeout_ms
+        )
+        data = [_item(row) for row in found.rows]
+    return BankPage(
+        data=data,
+        page=PageInfo(next_cursor=None, has_more=False),
+        total=found.total,
+        truncated=found.truncated,
     )
 
 
