@@ -11577,6 +11577,240 @@
           }
         ]
       }
+    },
+    "/api/v1/ai/keys": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Which provider keys the coaching has stored (H-02)",
+        "description": "Owner and admins. One entry per provider: whether a key is stored and its last four characters. **A key is never returned.** `encryption_ready` is false when the server has no master encryption key, and then no key can be stored.",
+        "operationId": "list_keys_api_v1_ai_keys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeysOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/keys/{provider}": {
+      "put": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Store or replace the coaching's key for a provider (H-02)",
+        "description": "Owner and admins. The key is sealed on the server with the master encryption key and cannot be read back: write-only. Replacing a key replaces it for every run from now on. The change is written to the audit log with the last four characters only.",
+        "operationId": "set_key_api_v1_ai_keys__provider__put",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Provider"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetKey"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderKeyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The server has no master encryption key (`AI_NOT_CONFIGURED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Does not look like an API key (`AI_KEY_INVALID`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Remove the coaching's key for a provider",
+        "description": "Owner and admins. AI runs that need this provider stop working until a key is stored again. Written to the audit log.",
+        "operationId": "delete_key_api_v1_ai_keys__provider__delete",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Provider"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No key is stored for that provider (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13686,6 +13920,28 @@
         ],
         "title": "InvitedOwner"
       },
+      "KeysOut": {
+        "properties": {
+          "encryption_ready": {
+            "type": "boolean",
+            "title": "Encryption Ready",
+            "description": "False when the server has no master encryption key: keys cannot be stored until whoever runs the server sets `AI_KEYS_MASTER_KEY`."
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderKeyOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "encryption_ready",
+          "data"
+        ],
+        "title": "KeysOut"
+      },
       "LanguageOut": {
         "properties": {
           "tag": {
@@ -14776,6 +15032,59 @@
         ],
         "title": "PassageSummary"
       },
+      "Provider": {
+        "type": "string",
+        "enum": [
+          "ANTHROPIC",
+          "OPENAI",
+          "GOOGLE",
+          "OPENROUTER"
+        ],
+        "title": "Provider"
+      },
+      "ProviderKeyOut": {
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "last4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last4",
+            "description": "The last four characters, so a person can tell which key is stored."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "configured",
+          "last4",
+          "updated_at"
+        ],
+        "title": "ProviderKeyOut"
+      },
       "QuestionOut": {
         "properties": {
           "id": {
@@ -15527,6 +15836,23 @@
           "grants"
         ],
         "title": "SetGrants"
+      },
+      "SetKey": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "format": "password",
+            "title": "Key",
+            "description": "The provider's API key, as copied from the provider. It is sealed on the server and never shown again; only its last four characters are.",
+            "writeOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "SetKey",
+        "description": "The key as the provider gave it. Write-only: no response ever carries it."
       },
       "SettingBounds": {
         "properties": {

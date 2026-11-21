@@ -9,6 +9,8 @@ from pathlib import Path
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from qbank.core.secretbox import Keyring, build_keyring
+
 # services/api/ — the folder holding alembic.ini and migrations/.
 SERVICE_ROOT = Path(__file__).resolve().parents[3]
 
@@ -85,6 +87,13 @@ class Settings(BaseSettings):
     google_client_id: str | None = None
     google_client_secret: SecretStr | None = None
 
+    # The master encryption key for coaching AI keys (ADR-0023): 32 random bytes as base64, kept
+    # outside the database and its backups. Without it the app runs and AI keys cannot be stored.
+    # Earlier keys, still needed to open keys sealed before a rotation: "id=base64,id=base64".
+    ai_keys_master_key: SecretStr | None = None
+    ai_keys_master_key_id: str = "k1"
+    ai_keys_previous: SecretStr | None = None
+
     # Web addresses allowed to send changes (POST/PUT/PATCH/DELETE) from a browser; see
     # core/origin.py. JSON list, e.g. ALLOWED_ORIGINS='["https://app.example.com"]'.
     allowed_origins: list[str] = Field(default=["http://localhost:3000"], min_length=1)
@@ -97,7 +106,14 @@ class Settings(BaseSettings):
         default=[IPv4Network("127.0.0.1/32"), IPv6Network("::1/128")]
     )
 
-    @field_validator("client_ip_header", "google_client_id", "google_client_secret", mode="before")
+    @field_validator(
+        "client_ip_header",
+        "google_client_id",
+        "google_client_secret",
+        "ai_keys_master_key",
+        "ai_keys_previous",
+        mode="before",
+    )
     @classmethod
     def _blank_means_none(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
@@ -112,6 +128,25 @@ class Settings(BaseSettings):
                     f"ALLOWED_ORIGINS entries must look like https://host[:port], got {origin!r}"
                 )
         return [without_default_port(origin) for origin in normalised]
+
+    @model_validator(mode="after")
+    def _ai_keys_are_well_formed(self) -> Settings:
+        """A wrong master key must stop the app at start, not fail later on someone's key. The
+        message names the setting and never the value."""
+        try:
+            self.ai_keyring()
+        except ValueError as problem:
+            raise ValueError(f"AI_KEYS_MASTER_KEY / AI_KEYS_PREVIOUS: {problem}") from None
+        return self
+
+    def ai_keyring(self) -> Keyring | None:
+        """The master keys of this process, or None when AI keys are not set up (ADR-0023)."""
+        master, previous = self.ai_keys_master_key, self.ai_keys_previous
+        return build_keyring(
+            master.get_secret_value() if master else None,
+            self.ai_keys_master_key_id,
+            previous.get_secret_value() if previous else None,
+        )
 
     @model_validator(mode="after")
     def _google_needs_both_values(self) -> Settings:

@@ -54,6 +54,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `CONTENT_NOT_JSON` | 422 | A question holds a value that is not plain data (for example a number that is not a number), so it was not saved | M3 |
 | `RATE_LIMITED` | 429 | Too many attempts (e.g. sign-in), too many syllabus import uploads in a short time, or the server is busy reading other import files; wait `Retry-After` seconds | M1 |
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
+| `AI_NOT_CONFIGURED` | 409 | The server has no master encryption key (`AI_KEYS_MASTER_KEY`), so AI keys cannot be stored | M5 |
+| `AI_KEY_INVALID` | 422 | The pasted text does not look like an API key | M5 |
 
 Feature modules add specific codes here (e.g. `QUESTION_NOT_EDITABLE`, `TWO_DECIMAL_PLACES_REQUIRED`) in the
 same pull request that introduces them.

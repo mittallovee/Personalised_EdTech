@@ -1829,6 +1829,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which provider keys the coaching has stored (H-02)
+         * @description Owner and admins. One entry per provider: whether a key is stored and its last four characters. **A key is never returned.** `encryption_ready` is false when the server has no master encryption key, and then no key can be stored.
+         */
+        get: operations["list_keys_api_v1_ai_keys_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/keys/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Store or replace the coaching's key for a provider (H-02)
+         * @description Owner and admins. The key is sealed on the server with the master encryption key and cannot be read back: write-only. Replacing a key replaces it for every run from now on. The change is written to the audit log with the last four characters only.
+         */
+        put: operations["set_key_api_v1_ai_keys__provider__put"];
+        post?: never;
+        /**
+         * Remove the coaching's key for a provider
+         * @description Owner and admins. AI runs that need this provider stop working until a key is stored again. Written to the audit log.
+         */
+        delete: operations["delete_key_api_v1_ai_keys__provider__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2835,6 +2879,16 @@ export interface components {
             /** Email */
             email: string;
         };
+        /** KeysOut */
+        KeysOut: {
+            /**
+             * Encryption Ready
+             * @description False when the server has no master encryption key: keys cannot be stored until whoever runs the server sets `AI_KEYS_MASTER_KEY`.
+             */
+            encryption_ready: boolean;
+            /** Data */
+            data: components["schemas"]["ProviderKeyOut"][];
+        };
         /** LanguageOut */
         LanguageOut: {
             /**
@@ -3386,6 +3440,24 @@ export interface components {
             /** Latest Checkpoint Number */
             latest_checkpoint_number: number | null;
         };
+        /**
+         * Provider
+         * @enum {string}
+         */
+        Provider: "ANTHROPIC" | "OPENAI" | "GOOGLE" | "OPENROUTER";
+        /** ProviderKeyOut */
+        ProviderKeyOut: {
+            provider: components["schemas"]["Provider"];
+            /** Configured */
+            configured: boolean;
+            /**
+             * Last4
+             * @description The last four characters, so a person can tell which key is stored.
+             */
+            last4: string | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
         /** QuestionOut */
         QuestionOut: {
             /**
@@ -3789,6 +3861,18 @@ export interface components {
              *     ]
              */
             grants: components["schemas"]["Grant"][];
+        };
+        /**
+         * SetKey
+         * @description The key as the provider gave it. Write-only: no response ever carries it.
+         */
+        SetKey: {
+            /**
+             * Key
+             * Format: password
+             * @description The provider's API key, as copied from the provider. It is sealed on the server and never shown again; only its last four characters are.
+             */
+            key: string;
         };
         /** SettingBounds */
         SettingBounds: {
@@ -11581,6 +11665,189 @@ export interface operations {
             };
             /** @description You hold no review grant (`PERMISSION_DENIED`) */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_keys_api_v1_ai_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeysOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_key_api_v1_ai_keys__provider__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: components["schemas"]["Provider"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetKey"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderKeyOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The server has no master encryption key (`AI_NOT_CONFIGURED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Does not look like an API key (`AI_KEY_INVALID`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_key_api_v1_ai_keys__provider__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: components["schemas"]["Provider"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No key is stored for that provider (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

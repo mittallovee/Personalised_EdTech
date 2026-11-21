@@ -52,6 +52,8 @@ class Action(StrEnum):
     MANAGE_ANSWER_RULES = "MANAGE_ANSWER_RULES"
     # Read and mark one's own in-app notifications (M4, I-01).
     USE_NOTIFICATIONS = "USE_NOTIFICATIONS"
+    # Provider keys, models, budgets and the other AI settings of the coaching (M5, H-02, H-03).
+    MANAGE_AI_SETTINGS = "MANAGE_AI_SETTINGS"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -72,6 +74,7 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.USE_ASSETS: _EVERYONE,
     Action.MANAGE_ANSWER_RULES: _ADMINS,
     Action.USE_NOTIFICATIONS: _EVERYONE,
+    Action.MANAGE_AI_SETTINGS: _ADMINS,
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).

@@ -20,7 +20,9 @@ from sqlalchemy import text
 
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
+from qbank.core.secretbox import build_keyring
 from qbank.core.tenancy import TenantContext
+from qbank.modules.ai.public import KeyUnreadable, reseal_all
 from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.questions.public import reindex_bank
 
@@ -105,6 +107,52 @@ def _reindex_bank(args: argparse.Namespace) -> int:
     return 0
 
 
+def _rotate_ai_keys(args: argparse.Namespace) -> int:
+    """Seal every stored AI key again under the current master key (ADR-0023). Add the new key as
+    AI_KEYS_MASTER_KEY with a new AI_KEYS_MASTER_KEY_ID, put the old one in AI_KEYS_PREVIOUS, run
+    this, then remove the old one."""
+    owner_url = os.environ.get("MIGRATION_DATABASE_URL")
+    if not owner_url:
+        print("Set MIGRATION_DATABASE_URL (table-owner connection).", file=sys.stderr)
+        return 2
+    try:
+        keyring = build_keyring(
+            os.environ.get("AI_KEYS_MASTER_KEY"),
+            os.environ.get("AI_KEYS_MASTER_KEY_ID", "k1"),
+            os.environ.get("AI_KEYS_PREVIOUS"),
+        )
+    except ValueError as problem:
+        print(f"AI_KEYS_MASTER_KEY / AI_KEYS_PREVIOUS: {problem}", file=sys.stderr)
+        return 2
+    if keyring is None:
+        print("Set AI_KEYS_MASTER_KEY first.", file=sys.stderr)
+        return 2
+    database = Database(owner_url)
+    failed = 0
+    try:
+        with database.transaction(TenantContext(is_platform=True)) as session:
+            organizations = list(session.scalars(text("SELECT id FROM organizations ORDER BY id")))
+        for organization_id in organizations:
+            try:
+                with database.transaction(
+                    TenantContext(organization_id=organization_id)
+                ) as session:
+                    resealed, current = reseal_all(session, keyring, organization_id)
+            except KeyUnreadable:
+                failed += 1
+                print(
+                    f"Coaching {organization_id}: a key could not be opened with the keys given;"
+                    " nothing was changed for it.",
+                    file=sys.stderr,
+                )
+                continue
+            if resealed or current:
+                print(f"Coaching {organization_id}: {resealed} resealed, {current} already current")
+    finally:
+        database.dispose()
+    return 1 if failed else 0
+
+
 def _export_openapi(args: argparse.Namespace) -> int:
     # Builds the whole app, so it is imported only when this command runs.
     from qbank.contract import OPENAPI_FILE, render_openapi
@@ -136,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     reindex.add_argument("--organization", help="Only this coaching (its id); default: all")
     reindex.set_defaults(handler=_reindex_bank)
+
+    rotate = commands.add_parser(
+        "rotate-ai-keys",
+        help="Seal every stored AI provider key again under the current master key",
+    )
+    rotate.set_defaults(handler=_rotate_ai_keys)
 
     openapi = commands.add_parser("export-openapi", help="Write the API contract (OpenAPI JSON)")
     openapi.add_argument("--output", help="Default: api/openapi.json in the repository")
