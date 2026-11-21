@@ -26,6 +26,11 @@ E2E_ADMIN_EMAIL=you@example.com E2E_ADMIN_PASSWORD='your admin password' \
   The tests make many from one address, so start the stack for them with higher limits:
   `LOGIN_ATTEMPTS_PER_IP=1000 LOGIN_ATTEMPTS_PER_EMAIL=1000 docker compose up --build -d`
   (CI does this), or wait 5 minutes.
+- **The AI journey (`m5-exit.spec.ts`)** needs the stack started with `AI_DEMO_PROVIDER=true` (a built-in
+  stand-in answers instead of a real provider; hosted environments refuse the setting) and an
+  `AI_KEYS_MASTER_KEY` (see `docs/operations/ai-keys.md`): for example
+  `AI_DEMO_PROVIDER=true AI_KEYS_MASTER_KEY="$(openssl rand -base64 32)" docker compose up --build -d`.
+  Economy (batch) runs are not in the browser journey; the backend tests cover them.
 - To watch the browser: add `--headed`; to step through one test: `--debug`;
   to open a failure report: `pnpm --filter @qbank/e2e exec playwright show-report`.
 

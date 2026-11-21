@@ -41,10 +41,7 @@ test("an admin sets up the AI and faculty tag, translate and verify, within a bu
   await expect(admin.getByText(FAKE_KEY)).toHaveCount(0);
 
   // The model list comes from the provider through a background job: refresh and wait for it.
-  await admin
-    .locator("button:not([disabled])", { hasText: "Refresh the list" })
-    .first()
-    .click();
+  await admin.locator("button:not([disabled])", { hasText: "Refresh the list" }).first().click();
   const offer = admin.getByLabel("Offer Fake small");
   await expect(offer).toBeVisible({ timeout: 45_000 });
   await offer.check();
