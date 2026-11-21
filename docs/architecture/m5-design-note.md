@@ -252,7 +252,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 5f | Verify and solve with apply flows; T49. **Built:** the apply step is `POST /ai/runs/{id}/apply` |
 | 5g | Translate, `question_links`, "source updated"; T49. **Built:** the result must keep the source's exact structure (only words differ); the target language is given per run |
 | 5h-1 | Economy (batch) runs: the state machine, jobs, cancel, resolve and the fake provider's batch service; T50 to T52. **Built** |
-| 5h-2 | The real batch adapters (OpenAI, Google) and `qbank ai-smoke` for batch; until then Economy is offered only where an adapter exists |
+| 5h-2 | The real batch adapter for OpenAI (upload, create tagged, status, results, cancel, find by tag). **Built.** Google, Anthropic and OpenRouter are not offered Economy: they cannot find a batch again by a tag (ADR-0009); a smoke check for batch is not built |
 | 5i | Web: Admin → AI |
 | 5j | Web: Prompt Library |
 | 5k | Web: AI actions, result panel, AI history, Usage |

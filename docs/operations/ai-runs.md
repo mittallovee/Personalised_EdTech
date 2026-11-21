@@ -60,9 +60,17 @@ keeps working and is notified (`AI_RUN_FINISHED`) when it ends.
 
 **Offered only** for a model the admin has marked as offering batch (with its discount), whose price is known,
 and whose provider adapter can find a batch again by a tag we give it (the run's id). Without that, a lost reply
-could not be told apart from a batch that was never made. Until the owner has tried it with `qbank ai-smoke`
-the adapters are unverified against the live providers, and Economy is available only where an adapter has
-proved the lookup.
+could not be told apart from a batch that was never made. 
+
+**Which providers.** Only **OpenAI** offers Economy today. Its batches carry metadata and its list of batches
+shows it, so a batch is found again by the run's id. Google's and Anthropic's published documents show no way
+to find a batch by a tag we give it (Anthropic's custom ids are visible only once a batch has ended; Google's
+list items document no name field), and OpenRouter has no batch service, so Economy is **not offered** for them:
+a lost reply could not be told from a batch that was never made, and a run could be paid for twice. This can be
+revisited if their documents change. Where the documents were unclear, the OpenAI adapter follows the
+Responses API for the request body inside a batch (the documents do not show structured output inside a batch
+body); it is **unverified against the live service** until the owner runs `qbank ai-smoke` and tries one
+Economy run with a small question and a small budget.
 
 States: `QUEUED`, `SUBMITTING`, `SUBMITTED`, then `SUCCEEDED`, `FAILED`, `CANCELLED`, `EXPIRED` or
 `SUBMISSION_UNKNOWN`. Three background jobs do the work (the worker process must be running):
