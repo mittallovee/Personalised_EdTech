@@ -206,3 +206,92 @@ test("while an import is being applied, another file cannot be started", async (
   await expect(page.getByRole("status")).toContainText("1 added");
   await expect(page.getByRole("button", { name: "Import another file" })).toBeEnabled();
 });
+
+// C-14: a built-in syllabus is previewed and applied like a file, without uploading one.
+test("the Owner loads a built-in syllabus, and loading it again adds nothing", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Starter ${unique()}`);
+  const page = await context.newPage();
+  await openImport(page);
+  const starters = page.getByRole("list", { name: "Built-in syllabuses" });
+  await expect(starters.getByRole("listitem")).toHaveCount(3);
+  await expectNoSeriousA11yViolations(page);
+
+  const physics = page.getByRole("button", { name: "Preview JEE Physics (Class 11 and 12)" });
+  await physics.click();
+  await expect(
+    page.getByRole("heading", { name: /Check the preview: Built-in: JEE Physics/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("table")).toContainText("Class 11 > Physics");
+
+  await page.getByRole("button", { name: "Apply the import" }).click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("added");
+  await page.getByRole("link", { name: "Syllabus" }).click();
+  await expect(page.getByRole("list", { name: "Syllabus items" })).toContainText("Class 11");
+
+  await openImport(page);
+  await physics.click();
+  await expect(page.getByText("Everything in this file is already in the syllabus.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply the import" })).toHaveCount(0);
+});
+
+// Only one check at a time: a late answer must not replace the preview being read or applied.
+test("a file and a built-in syllabus cannot be checked at the same time", async ({
+  browser,
+  baseURL,
+}) => {
+  const { context } = await signedInOwner(browser, baseURL!, `Starter busy ${unique()}`);
+  const page = await context.newPage();
+  await openImport(page);
+  const checkFile = page.getByRole("button", { name: "Check the file" });
+  const physics = page.getByRole("button", { name: "Preview JEE Physics (Class 11 and 12)" });
+  const chemistry = page.getByRole("button", { name: "Preview JEE Chemistry (Class 11 and 12)" });
+
+  // Hold the answer to the built-in preview: meanwhile the file cannot be sent.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/v1/taxonomy/starter-syllabuses/*/imports", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await pick(
+    page,
+    "one-class.csv",
+    `${HEADER}
+CLASS,Class 11,1,,,,,,,
+`,
+  );
+  await expect(checkFile).toBeEnabled();
+  await physics.click();
+  await expect(checkFile).toBeDisabled();
+  await expect(chemistry).toBeDisabled();
+  release();
+  await expect(
+    page.getByRole("heading", { name: /Check the preview: Built-in: JEE Physics/ }),
+  ).toBeVisible();
+
+  // And the other way round: while a file is being checked, no built-in preview can start.
+  await page.getByRole("button", { name: "Upload a different file" }).click();
+  let releaseUpload = () => {};
+  const heldUpload = new Promise<void>((resolve) => (releaseUpload = resolve));
+  await page.route("**/api/v1/taxonomy/imports?*", async (route) => {
+    await heldUpload;
+    await route.continue();
+  });
+  await pick(
+    page,
+    "one-class.csv",
+    `${HEADER}
+CLASS,Class 11,1,,,,,,,
+`,
+  );
+  await checkFile.click();
+  await expect(physics).toBeDisabled();
+  releaseUpload();
+  await expect(
+    page.getByRole("heading", { name: /Check the preview: one-class.csv/ }),
+  ).toBeVisible();
+});
