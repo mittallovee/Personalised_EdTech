@@ -24,3 +24,11 @@ class Mode(StrEnum):
 
     NOW = "NOW"
     ECONOMY = "ECONOMY"
+
+
+class Scope(StrEnum):
+    """Whose prompt it is: the platform's, one coaching's, or one person's (prompt spec §4)."""
+
+    PLATFORM = "PLATFORM"
+    COACHING = "COACHING"
+    PERSONAL = "PERSONAL"
