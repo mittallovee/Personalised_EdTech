@@ -870,6 +870,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/taxonomy/starter-syllabuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The built-in syllabuses a coaching can start from
+         * @description Owner and admins. Each one is a ready-made file in the import format; preview it with `POST /taxonomy/starter-syllabuses/{key}/imports`.
+         */
+        get: operations["list_starter_syllabuses_api_v1_taxonomy_starter_syllabuses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/taxonomy/starter-syllabuses/{key}/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * See what a built-in syllabus would do
+         * @description Owner and admins. Makes the same preview as uploading the built-in file yourself: **nothing in the syllabus changes** until the preview is applied, and items the coaching already has are listed as unchanged. Counts towards the same upload limits (`429`, `RATE_LIMITED`). Send an `Idempotency-Key` so a retry returns the same preview.
+         */
+        post: operations["create_starter_import_api_v1_taxonomy_starter_syllabuses__key__imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/taxonomy/imports/{import_id}": {
         parameters: {
             query?: never;
@@ -4890,6 +4930,26 @@ export interface components {
             data: components["schemas"]["SourceOut"][];
             page: components["schemas"]["PageInfo"];
         };
+        /** StarterSyllabusOut */
+        StarterSyllabusOut: {
+            /**
+             * Key
+             * @example jee-physics
+             */
+            key: string;
+            /**
+             * Title
+             * @example JEE Physics (Class 11 and 12)
+             */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Rows
+             * @description How many syllabus items and concepts the file has.
+             */
+            rows: number;
+        };
         /**
          * State
          * @enum {string}
@@ -8709,6 +8769,143 @@ export interface operations {
             };
             /** @description The file cannot be read (`IMPORT_INVALID`) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many uploads in a short time, or the server is busy reading other files; see the Retry-After header (`RATE_LIMITED`) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_starter_syllabuses_api_v1_taxonomy_starter_syllabuses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StarterSyllabusOut"][];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_starter_import_api_v1_taxonomy_starter_syllabuses__key__imports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Any unique string (e.g. a UUID). Retrying with the same key never creates twice. */
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such starter syllabus (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The Idempotency-Key was used for a different file (`IDEMPOTENCY_KEY_REUSED`) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
