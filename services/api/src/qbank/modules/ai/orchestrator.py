@@ -34,8 +34,8 @@ from qbank.modules.ai.catalogue import effective
 from qbank.modules.ai.keys import open_key
 from qbank.modules.ai.models import AiModel, AiRun, AiRunAttempt, OperationSetting
 from qbank.modules.ai.names import Mode, Operation, Provider
-from qbank.modules.ai.operations import tag
-from qbank.modules.ai.operations.base import BadOutput, Prepared
+from qbank.modules.ai.operations import solve, tag, verify
+from qbank.modules.ai.operations.base import ApplyStep, BadOutput, Prepared, RunBase
 from qbank.modules.ai.providers.base import (
     AIProvider,
     ProviderError,
@@ -43,6 +43,7 @@ from qbank.modules.ai.providers.base import (
     StructuredResult,
 )
 from qbank.modules.ai.settings import usable_model
+from qbank.modules.audit.public import record_event
 from qbank.modules.questions.public import QuestionForAi, read_for_ai
 
 log = structlog.get_logger("qbank.ai")
@@ -59,11 +60,22 @@ _MICRO = Decimal("0.000001")
 def _preparer(operation: Operation) -> Callable[[Session, QuestionForAi], Prepared]:
     if operation is Operation.TAG:
         return tag.prepare
+    if operation is Operation.SOLVE:
+        return solve.prepare
+    if operation is Operation.VERIFY:
+        return verify.prepare
     raise Conflict(
         "This operation is not available yet.",
         code="AI_OPERATION_NOT_AVAILABLE",
         details={"operation": operation.value},
     )
+
+
+# Operations whose result is only a suggestion: applied by an explicit click, never by the run.
+ACCEPTORS: dict[Operation, ApplyStep] = {
+    Operation.SOLVE: solve.accept,
+    Operation.VERIFY: verify.accept,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +307,7 @@ def _finish(
     attempts: list[Attempt],
     *,
     test: bool,
+    request_id: str | None,
 ) -> RunView:
     """Steps 8 to 10: validate, record, settle or release, apply."""
     run = session.scalars(select(AiRun).where(AiRun.id == started.run_id).with_for_update()).one()
@@ -338,7 +351,12 @@ def _finish(
     run.status = "SUCCEEDED"
     run.result = {"output": output, "before": started.prepared.before}
     if not test and started.prepared.apply is not None:
-        run.apply_status = started.prepared.apply(session, principal, started.question, output)
+        base = RunBase(
+            started.question.question_id, started.question.revision_id, started.question.revision
+        )
+        run.apply_status = started.prepared.apply(session, principal, base, output)
+        if run.apply_status == "APPLIED":
+            _audit_applied(session, principal, run, request_id)
     session.flush()
     return _view(session, run)
 
@@ -367,6 +385,7 @@ def run_operation(
     personal_prompt_id: UUID | None = None,
     model_id: UUID | None = None,
     test: bool = False,
+    request_id: str | None = None,
 ) -> RunView:
     """Run one operation on one question and return the finished run (it may have FAILED: a failed
     run is a result, with its error code, not an exception)."""
@@ -385,7 +404,7 @@ def run_operation(
         )
     attempts = _ask_models(started, providers)
     with database.transaction(principal.tenant_context) as session:
-        return _finish(session, principal, started, attempts, test=test)
+        return _finish(session, principal, started, attempts, test=test, request_id=request_id)
 
 
 def _ask_models(started: Started, providers: ProviderFactory) -> list[Attempt]:
@@ -452,3 +471,54 @@ def list_runs(session: Session, principal: Principal, question_id: UUID) -> list
         query = query.where(AiRun.user_id == principal.user_id)
     runs = session.scalars(query.order_by(AiRun.started_at.desc()).limit(100))
     return [_view(session, run) for run in runs]
+
+
+def _audit_applied(
+    session: Session, principal: Principal, run: AiRun, request_id: str | None
+) -> None:
+    """A result that changed a question is written to the audit log (the run keeps the before)."""
+    record_event(
+        session,
+        action="AI_RUN_APPLIED",
+        entity_type="question",
+        entity_id=run.question_id,
+        organization_id=run.organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=principal.acting_organization_id is not None,
+        request_id=request_id,
+        before=None,
+        after={"run_id": str(run.id), "operation": run.operation},
+    )
+
+
+def apply_run(
+    session: Session, principal: Principal, run_id: UUID, *, request_id: str | None
+) -> RunView:
+    """Apply a suggestion (a solved answer, a verify correction) after a person has seen it.
+
+    Only to the exact revision the run read: if the question has changed since, the run becomes
+    ``OUT_OF_DATE`` and nothing is written. The person applying must still be able to edit it."""
+    require(principal, Action.USE_AI)
+    run = session.scalars(select(AiRun).where(AiRun.id == run_id).with_for_update()).first()
+    if run is None or not _may_see(principal, run):
+        raise NotFound("No such run.")
+    accept = ACCEPTORS.get(Operation(run.operation))
+    if accept is None or run.is_test or run.status != "SUCCEEDED" or run.result is None:
+        raise Conflict("This run has nothing to apply.", code="AI_RUN_NOT_APPLICABLE")
+    if run.apply_status != "NOT_APPLIED":
+        raise Conflict(
+            "This run was already applied or can no longer be applied.",
+            code="AI_RUN_NOT_APPLICABLE",
+            details={"apply_status": run.apply_status},
+        )
+    output = run.result.get("output")
+    if not isinstance(output, dict) or (
+        run.operation == Operation.VERIFY.value and "corrected_content" not in output
+    ):
+        raise Conflict("This run suggests no change.", code="AI_RUN_NOT_APPLICABLE")
+    base = RunBase(run.question_id, run.question_revision_id, run.question_revision)
+    run.apply_status = accept(session, principal, base, output)
+    if run.apply_status == "APPLIED":
+        _audit_applied(session, principal, run, request_id)
+    session.flush()
+    return _view(session, run)

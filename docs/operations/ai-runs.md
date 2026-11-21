@@ -1,7 +1,7 @@
 # AI runs: how an operation runs on a question
 
-Part of M5 (see `docs/architecture/m5-design-note.md` §6). Tagging is the first operation; solve, verify and
-translate use the same path (PRs 5f and 5g).
+Part of M5 (see `docs/architecture/m5-design-note.md` §6). Tagging, solving and verifying are built;
+translating uses the same path (PR 5g).
 
 ## Running tagging
 
@@ -16,6 +16,23 @@ The answer is checked (ids exist, the topic is under the chapter, difficulty is 
 level); a good one fills those labels on the working revision **only if the question has not changed since the
 run began**. Otherwise the run keeps `apply_status` `OUT_OF_DATE` (it changed) or `NEEDS_REVIEW` (the person can
 no longer edit it) and nothing is written.
+
+## Solving and verifying: suggestions you apply
+
+`SOLVE` and `VERIFY` **never write to the question by themselves**. The run's `result.output` holds the
+suggestion and `result.before` what it would replace, so the screen can show old and new.
+
+- **Solve** suggests an answer (in the shape of the question type: an option, options, a whole number, an exact
+  value or a range) and a worked solution. The model is not shown the labels, the current answer or the current
+  solution. The answer goes through the same validator as a person's save.
+- **Verify** returns findings (path, severity `error` / `warning` / `note`, message; shown as plain text) and,
+  only when the model is sure, a corrected version of the whole question. A correction must be a finished
+  question that passes the validator, keeps the same type and keeps the labels as they were.
+
+`POST /api/v1/ai/runs/{id}/apply` applies the suggestion, after a person has seen it. It is written to the audit
+log (`AI_RUN_APPLIED`). It applies only to the exact revision the run read: if the question changed since, the run
+becomes `OUT_OF_DATE` and nothing is written. The person applying must still be able to edit the question, and
+must be the one who asked (or an admin). A test run can never be applied.
 
 ## Reading a run
 

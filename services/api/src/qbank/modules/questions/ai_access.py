@@ -6,6 +6,7 @@ marker lets the answer be refused if the question changed in the meantime or if 
 asked can no longer edit it (B-10): the result is then kept but changes nothing.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 from uuid import UUID
@@ -61,6 +62,43 @@ def read_for_ai(session: Session, principal: Principal, question_id: UUID) -> Qu
     )
 
 
+def apply_changes(
+    session: Session,
+    principal: Principal,
+    question_id: UUID,
+    *,
+    revision_id: UUID,
+    revision: int,
+    change: Callable[[dict[str, Any]], dict[str, Any]],
+) -> Applied:
+    """Replace the working revision's content with ``change(current content)``, if it is still the
+    revision a run was based on.
+
+    Returns ``APPLIED``, or ``OUT_OF_DATE`` when the question has moved on (another save, or it is
+    no longer editable), or ``NEEDS_REVIEW`` when the person applying can no longer see or edit it.
+    Nothing is written unless it is ``APPLIED``.
+    """
+    try:
+        current = read_for_ai(session, principal, question_id)
+    except NotFound, PermissionDenied:
+        return "NEEDS_REVIEW"
+    if not current.editable:
+        return "OUT_OF_DATE"
+    if current.revision_id != revision_id or current.revision != revision:
+        return "OUT_OF_DATE"
+    try:
+        save_working_revision(
+            session, principal, question_id, change(current.content), if_match=etag(revision)
+        )
+    except NotFound, PermissionDenied:
+        return "NEEDS_REVIEW"
+    except Conflict, PreconditionFailed:
+        return "OUT_OF_DATE"
+    except AppError:
+        return "NEEDS_REVIEW"
+    return "APPLIED"
+
+
 def apply_labels(
     session: Session,
     principal: Principal,
@@ -70,28 +108,13 @@ def apply_labels(
     revision: int,
     labels: dict[str, Any],
 ) -> Applied:
-    """Fill in ``labels`` on the working revision a run was based on.
-
-    Returns ``APPLIED``, or ``OUT_OF_DATE`` when the question has moved on (another save, or it is
-    no longer editable), or ``NEEDS_REVIEW`` when the person who asked can no longer see or edit it.
-    Nothing is written unless it is ``APPLIED``. Only the labels in ``TAGGABLE`` are accepted.
-    """
+    """Fill in ``labels`` (only ``TAGGABLE`` ones) on the working revision a run was based on."""
     wanted = {key: value for key, value in labels.items() if key in TAGGABLE}
-    try:
-        current = read_for_ai(session, principal, question_id)
-    except NotFound, PermissionDenied:
-        return "NEEDS_REVIEW"
-    if not current.editable:
-        return "OUT_OF_DATE"
-    if current.revision_id != revision_id or current.revision != revision:
-        return "OUT_OF_DATE"
-    content = {**current.content, "metadata": {**current.metadata, **wanted}}
-    try:
-        save_working_revision(session, principal, question_id, content, if_match=etag(revision))
-    except NotFound, PermissionDenied:
-        return "NEEDS_REVIEW"
-    except Conflict, PreconditionFailed:
-        return "OUT_OF_DATE"
-    except AppError:
-        return "NEEDS_REVIEW"
-    return "APPLIED"
+
+    def merge(content: dict[str, Any]) -> dict[str, Any]:
+        meta = content.get("metadata")
+        return {**content, "metadata": {**(meta if isinstance(meta, dict) else {}), **wanted}}
+
+    return apply_changes(
+        session, principal, question_id, revision_id=revision_id, revision=revision, change=merge
+    )
