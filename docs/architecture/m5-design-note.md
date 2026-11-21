@@ -253,10 +253,10 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 5g | Translate, `question_links`, "source updated"; T49. **Built:** the result must keep the source's exact structure (only words differ); the target language is given per run |
 | 5h-1 | Economy (batch) runs: the state machine, jobs, cancel, resolve and the fake provider's batch service; T50 to T52. **Built** |
 | 5h-2 | The real batch adapter for OpenAI (upload, create tagged, status, results, cancel, find by tag). **Built.** Google, Anthropic and OpenRouter are not offered Economy: they cannot find a batch again by a tag (ADR-0009); a smoke check for batch is not built |
-| 5i | Web: Admin → AI |
-| 5j | Web: Prompt Library |
-| 5k | Web: AI actions, result panel, AI history, Usage |
-| 5l | M5 demo notes, T55 browser journey, review pass |
+| 5i | Web: Admin → AI. **Built** |
+| 5j | Web: Prompt Library and the glossary. **Built** |
+| 5k | Web: AI tab on the question (run, history, apply, cancel) and the Usage page with budgets. **Built.** A cost estimate before running is not shown (the API gives none); the model cannot be chosen per run (the model list is admin-only), so a run uses the operation's default |
+| 5l | M5 demo notes, the demo provider (`AI_DEMO_PROVIDER`), T55 browser journey (Now runs only), review pass. **Built** |
 
 ## 15. Decisions taken in this note (change them by editing the note)
 
