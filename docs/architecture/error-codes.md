@@ -56,6 +56,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `HTTP_<status>` | any | Generic framework error without a specific code (e.g. `HTTP_405`) | M1 |
 | `AI_NOT_CONFIGURED` | 409 | The server has no master encryption key (`AI_KEYS_MASTER_KEY`), so AI keys cannot be stored | M5 |
 | `AI_KEY_INVALID` | 422 | The pasted text does not look like an API key | M5 |
+| `AI_KEY_MISSING` | 409 | Refreshing a provider's model list needs that provider's key stored first | M5 |
+| `AI_MODEL_UNAVAILABLE` | 409 | The provider no longer lists the model, so it cannot be enabled | M5 |
 
 Feature modules add specific codes here (e.g. `QUESTION_NOT_EDITABLE`, `TWO_DECIMAL_PLACES_REQUIRED`) in the
 same pull request that introduces them.

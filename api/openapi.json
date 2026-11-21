@@ -11811,6 +11811,360 @@
           }
         }
       }
+    },
+    "/api/v1/ai/models": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "The coaching's AI models, as the providers list them (H-17)",
+        "description": "Owner and admins. Every model the providers' lists have shown for this coaching, with the facts a run relies on (**effective**: the admin's entry where there is one, else the provider's, else unknown) and whether it is enabled. `providers` says when each list was last fetched and how the last try ended. A model the provider no longer lists stays here as `available: false`.",
+        "operationId": "list_models_api_v1_ai_models_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Provider"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "name": "enabled",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Enabled"
+            }
+          },
+          {
+            "name": "available",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Available"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/models/refresh": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Fetch a provider's model list again (H-17)",
+        "description": "Owner and admins. Starts a background job that asks the provider for its list with the coaching's stored key and updates the rows. Pressing it twice in a minute starts one job. Read `providers` in the model list to see when it finished and whether it worked; a failure is not retried by itself.",
+        "operationId": "refresh_models_api_v1_ai_models_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No key is stored for that provider (`AI_KEY_MISSING`), or the server has no master encryption key (`AI_NOT_CONFIGURED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/models/{model_id}": {
+      "patch": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Enable or disable a model, or set the admin's own facts about it (H-03, H-17)",
+        "description": "Owner and admins. `enabled` offers the model to faculty (a model the provider no longer lists cannot be enabled: `AI_MODEL_UNAVAILABLE`). `overlay` holds the admin's own capability and price entries, which win over the provider's; send only what changes, and `null` to remove one. Send the ETag you last read in `If-Match`. Written to the audit log.",
+        "operationId": "update_model_api_v1_ai_models__model_id__patch",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Model Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412.",
+              "title": "If-Match"
+            },
+            "description": "The ETag from your last read, e.g. \"rev-3\". Required; a newer revision gives 412."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateModel"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the Owner and admins (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such model (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The provider no longer lists it (`AI_MODEL_UNAVAILABLE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Changed since you read it (`REVISION_STALE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "`If-Match` is missing (`IF_MATCH_REQUIRED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -14228,6 +14582,176 @@
         ],
         "title": "MemberPage"
       },
+      "ModelOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "model_id": {
+            "type": "string",
+            "title": "Model Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available",
+            "description": "False when the provider's list no longer includes it; it cannot be enabled."
+          },
+          "supports_vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Vision",
+            "description": "Effective: the overlay, else the provider's."
+          },
+          "supports_json": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Json",
+            "description": "Effective: the overlay, else the provider's."
+          },
+          "context_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Tokens"
+          },
+          "price_in_per_mtok": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In Per Mtok",
+            "description": "US dollars per million input tokens, effective; null = unknown."
+          },
+          "price_out_per_mtok": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out Per Mtok",
+            "description": "US dollars per million output tokens, effective; null = unknown."
+          },
+          "price_source": {
+            "type": "string",
+            "enum": [
+              "PROVIDER",
+              "ADMIN",
+              "UNKNOWN"
+            ],
+            "title": "Price Source"
+          },
+          "batch_supported": {
+            "type": "boolean",
+            "title": "Batch Supported",
+            "description": "Whether Economy (batch) runs are offered: only when the admin says so."
+          },
+          "batch_discount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Discount"
+          },
+          "overlay": {
+            "$ref": "#/components/schemas/OverlayOut"
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "model_id",
+          "display_name",
+          "enabled",
+          "available",
+          "supports_vision",
+          "supports_json",
+          "context_tokens",
+          "price_in_per_mtok",
+          "price_out_per_mtok",
+          "price_source",
+          "batch_supported",
+          "batch_discount",
+          "overlay",
+          "fetched_at",
+          "revision"
+        ],
+        "title": "ModelOut"
+      },
+      "ModelsOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ModelOut"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderStateOut"
+            },
+            "type": "array",
+            "title": "Providers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "providers"
+        ],
+        "title": "ModelsOut"
+      },
       "MyOrganization": {
         "properties": {
           "id": {
@@ -14525,6 +15049,176 @@
           "page"
         ],
         "title": "OrganizationPage"
+      },
+      "OverlayIn": {
+        "properties": {
+          "supports_vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Vision"
+          },
+          "supports_json": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Json"
+          },
+          "price_in": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In"
+          },
+          "price_out": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out"
+          },
+          "batch_supported": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Supported"
+          },
+          "batch_discount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Discount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OverlayIn",
+        "description": "Only what is sent changes. A value of `null` removes the admin's entry for that fact, so the\nprovider's value counts again."
+      },
+      "OverlayOut": {
+        "properties": {
+          "supports_vision": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Vision"
+          },
+          "supports_json": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Json"
+          },
+          "price_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In"
+          },
+          "price_out": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out"
+          },
+          "batch_supported": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Supported"
+          },
+          "batch_discount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Discount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supports_vision",
+          "supports_json",
+          "price_in",
+          "price_out",
+          "batch_supported",
+          "batch_discount"
+        ],
+        "title": "OverlayOut",
+        "description": "What the admin entered; null where nothing was entered (the provider's value counts)."
       },
       "OwnershipTransferred": {
         "properties": {
@@ -15085,6 +15779,50 @@
         ],
         "title": "ProviderKeyOut"
       },
+      "ProviderStateOut": {
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "configured": {
+            "type": "boolean",
+            "title": "Configured",
+            "description": "Whether the coaching has a key stored for it."
+          },
+          "last_refreshed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refreshed At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error",
+            "description": "The kind of failure of the last refresh (`AUTH`, `RATE_LIMITED`, `TIMEOUT`, `UNAVAILABLE`, `NO_KEY`, `KEY_UNREADABLE` ...), or null when it worked."
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "configured",
+          "last_refreshed_at",
+          "last_error"
+        ],
+        "title": "ProviderStateOut"
+      },
       "QuestionOut": {
         "properties": {
           "id": {
@@ -15487,6 +16225,32 @@
           "password"
         ],
         "title": "RedeemLinkRequest"
+      },
+      "RefreshIn": {
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider"
+        ],
+        "title": "RefreshIn"
+      },
+      "RefreshOut": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "RefreshOut"
       },
       "RemoveMember": {
         "properties": {
@@ -16122,6 +16886,35 @@
         },
         "type": "object",
         "title": "UpdateExam"
+      },
+      "UpdateModel": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled",
+            "description": "Offer the model to faculty (true) or stop offering it (false)."
+          },
+          "overlay": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OverlayIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "UpdateModel"
       },
       "UpdateNode": {
         "properties": {

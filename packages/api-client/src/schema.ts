@@ -1873,6 +1873,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The coaching's AI models, as the providers list them (H-17)
+         * @description Owner and admins. Every model the providers' lists have shown for this coaching, with the facts a run relies on (**effective**: the admin's entry where there is one, else the provider's, else unknown) and whether it is enabled. `providers` says when each list was last fetched and how the last try ended. A model the provider no longer lists stays here as `available: false`.
+         */
+        get: operations["list_models_api_v1_ai_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/models/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fetch a provider's model list again (H-17)
+         * @description Owner and admins. Starts a background job that asks the provider for its list with the coaching's stored key and updates the rows. Pressing it twice in a minute starts one job. Read `providers` in the model list to see when it finished and whether it worked; a failure is not retried by itself.
+         */
+        post: operations["refresh_models_api_v1_ai_models_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/models/{model_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Enable or disable a model, or set the admin's own facts about it (H-03, H-17)
+         * @description Owner and admins. `enabled` offers the model to faculty (a model the provider no longer lists cannot be enabled: `AI_MODEL_UNAVAILABLE`). `overlay` holds the admin's own capability and price entries, which win over the provider's; send only what changes, and `null` to remove one. Send the ETag you last read in `If-Match`. Written to the audit log.
+         */
+        patch: operations["update_model_api_v1_ai_models__model_id__patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3028,6 +3088,75 @@ export interface components {
             data: components["schemas"]["MemberOut"][];
             page: components["schemas"]["PageInfo"];
         };
+        /** ModelOut */
+        ModelOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            provider: components["schemas"]["Provider"];
+            /** Model Id */
+            model_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Available
+             * @description False when the provider's list no longer includes it; it cannot be enabled.
+             */
+            available: boolean;
+            /**
+             * Supports Vision
+             * @description Effective: the overlay, else the provider's.
+             */
+            supports_vision: boolean | null;
+            /**
+             * Supports Json
+             * @description Effective: the overlay, else the provider's.
+             */
+            supports_json: boolean | null;
+            /** Context Tokens */
+            context_tokens: number | null;
+            /**
+             * Price In Per Mtok
+             * @description US dollars per million input tokens, effective; null = unknown.
+             */
+            price_in_per_mtok: string | null;
+            /**
+             * Price Out Per Mtok
+             * @description US dollars per million output tokens, effective; null = unknown.
+             */
+            price_out_per_mtok: string | null;
+            /**
+             * Price Source
+             * @enum {string}
+             */
+            price_source: "PROVIDER" | "ADMIN" | "UNKNOWN";
+            /**
+             * Batch Supported
+             * @description Whether Economy (batch) runs are offered: only when the admin says so.
+             */
+            batch_supported: boolean;
+            /** Batch Discount */
+            batch_discount: string | null;
+            overlay: components["schemas"]["OverlayOut"];
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Revision */
+            revision: number;
+        };
+        /** ModelsOut */
+        ModelsOut: {
+            /** Data */
+            data: components["schemas"]["ModelOut"][];
+            /** Providers */
+            providers: components["schemas"]["ProviderStateOut"][];
+        };
         /** MyOrganization */
         MyOrganization: {
             /**
@@ -3173,6 +3302,43 @@ export interface components {
             /** Data */
             data: components["schemas"]["OrganizationOut"][];
             page: components["schemas"]["PageInfo"];
+        };
+        /**
+         * OverlayIn
+         * @description Only what is sent changes. A value of `null` removes the admin's entry for that fact, so the
+         *     provider's value counts again.
+         */
+        OverlayIn: {
+            /** Supports Vision */
+            supports_vision?: boolean | null;
+            /** Supports Json */
+            supports_json?: boolean | null;
+            /** Price In */
+            price_in?: number | string | null;
+            /** Price Out */
+            price_out?: number | string | null;
+            /** Batch Supported */
+            batch_supported?: boolean | null;
+            /** Batch Discount */
+            batch_discount?: number | string | null;
+        };
+        /**
+         * OverlayOut
+         * @description What the admin entered; null where nothing was entered (the provider's value counts).
+         */
+        OverlayOut: {
+            /** Supports Vision */
+            supports_vision: boolean | null;
+            /** Supports Json */
+            supports_json: boolean | null;
+            /** Price In */
+            price_in: string | null;
+            /** Price Out */
+            price_out: string | null;
+            /** Batch Supported */
+            batch_supported: boolean | null;
+            /** Batch Discount */
+            batch_discount: string | null;
         };
         /** OwnershipTransferred */
         OwnershipTransferred: {
@@ -3458,6 +3624,22 @@ export interface components {
             /** Updated At */
             updated_at: string | null;
         };
+        /** ProviderStateOut */
+        ProviderStateOut: {
+            provider: components["schemas"]["Provider"];
+            /**
+             * Configured
+             * @description Whether the coaching has a key stored for it.
+             */
+            configured: boolean;
+            /** Last Refreshed At */
+            last_refreshed_at: string | null;
+            /**
+             * Last Error
+             * @description The kind of failure of the last refresh (`AUTH`, `RATE_LIMITED`, `TIMEOUT`, `UNAVAILABLE`, `NO_KEY`, `KEY_UNREADABLE` ...), or null when it worked.
+             */
+            last_error: string | null;
+        };
         /** QuestionOut */
         QuestionOut: {
             /**
@@ -3665,6 +3847,18 @@ export interface components {
              * @description The new password (at least 12 characters).
              */
             password: string;
+        };
+        /** RefreshIn */
+        RefreshIn: {
+            provider: components["schemas"]["Provider"];
+        };
+        /** RefreshOut */
+        RefreshOut: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
         };
         /** RemoveMember */
         RemoveMember: {
@@ -3982,6 +4176,15 @@ export interface components {
              * @description Send null to remove the short code; leave it out to keep it.
              */
             short_code?: string | null;
+        };
+        /** UpdateModel */
+        UpdateModel: {
+            /**
+             * Enabled
+             * @description Offer the model to faculty (true) or stop offering it (false).
+             */
+            enabled?: boolean | null;
+            overlay?: components["schemas"]["OverlayIn"] | null;
         };
         /** UpdateNode */
         UpdateNode: {
@@ -11848,6 +12051,236 @@ export interface operations {
             };
             /** @description No key is stored for that provider (`NOT_FOUND`) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_models_api_v1_ai_models_get: {
+        parameters: {
+            query?: {
+                provider?: components["schemas"]["Provider"] | null;
+                enabled?: boolean | null;
+                available?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelsOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    refresh_models_api_v1_ai_models_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No key is stored for that provider (`AI_KEY_MISSING`), or the server has no master encryption key (`AI_NOT_CONFIGURED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_model_api_v1_ai_models__model_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                model_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateModel"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such model (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The provider no longer lists it (`AI_MODEL_UNAVAILABLE`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
