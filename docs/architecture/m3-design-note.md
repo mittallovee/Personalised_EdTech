@@ -114,6 +114,11 @@ Importing is a **preview, then apply** flow, so nothing changes until the admin 
   uploads again. An import never deletes or deprecates anything: removal is a deliberate click.
 - Every apply is one audit event naming the counts. Real coaching syllabus files are never committed; tests
   use a small synthetic file.
+- **Starter syllabus (C-14, [ADR-0022](./adr/0022-built-in-starter-syllabus.md), added 17 Nov 2026):** the app
+  ships three ready-made files in this format (JEE Physics, Chemistry and Mathematics; names only, written for
+  the product, not a coaching's material). `GET /taxonomy/starter-syllabuses` lists them and
+  `POST /taxonomy/starter-syllabuses/{key}/imports` makes the same preview as uploading that file; applying,
+  permissions, limits and the audit event are those of any import.
 - **Security review (K-10, 24 Oct 2026):** [threat model](./threat-model-import.md) and
   [ADR-0018](./adr/0018-syllabus-import-parsing-stays-in-process.md). The parse stays inside the API request; before
   the import screen two controls are added (K-10a upload rate limit and a cap on parses at once; K-10b retention
@@ -301,6 +306,7 @@ foreign keys `(organization_id, …)` (ADR-0005), and a two-coaching isolation t
 | `GET /taxonomy/concepts` (`?subject_id=`, `?state=`, `?q=` over names and aliases) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Concepts and aliases (built in PR 2b) |
 | `GET /exams` · `GET /sources` (+ `?kind=`) · `GET /{id}` · `POST` (`Idempotency-Key`) · `PATCH /{id}` (`If-Match`) · `POST /{id}/deprecate` · `/restore` | Exams, sources (built in PR 2b) |
 | `GET /taxonomy/import-template` · `POST /taxonomy/imports?file_name=` (the file is the request body; creates the preview, `Idempotency-Key`) · `GET /taxonomy/imports/{id}` · `GET /taxonomy/imports/{id}/rows?status=` · `POST /taxonomy/imports/{id}/apply` | Excel/CSV import (built in PRs 2c-2 and 2c-3) |
+| `GET /taxonomy/starter-syllabuses` · `POST /taxonomy/starter-syllabuses/{key}/imports` (creates a preview from a built-in file, `Idempotency-Key`) | Starter syllabus (C-14, ADR-0022) |
 | `POST /questions` (`Idempotency-Key`) · `GET /questions` (mine, or all for admins; cursor pages) · `GET /questions/by-code/{code}` · `GET /questions/{id}` | Create and read; every read carries the findings |
 | `PUT /questions/{id}/working-revision` (`If-Match`) | Autosave |
 | `POST /questions/{id}/checkpoints` (`If-Match`) · `GET /questions/{id}/revisions` · `GET /questions/{id}/revisions/{n}` | Checkpoints and history |
