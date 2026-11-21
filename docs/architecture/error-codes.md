@@ -67,6 +67,10 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_FALLBACK_WITHOUT_DEFAULT` | 422 | Fallbacks were given without a first model | M5 |
 | `AI_ECONOMY_NEEDS_MODEL` | 422 | Economy was chosen without a model | M5 |
 | `AI_BUDGET_EXCEEDED` | 409 | A run would pass the person's monthly AI budget (or the budget is 0); `details` has `limit_inr` and `remaining_inr` | M5 |
+| `AI_GLOSSARY_DUPLICATE` | 409 | That term already has a glossary entry in that language (ignoring case) | M5 |
+| `AI_GLOSSARY_FULL` | 409 | A language already holds the most glossary terms allowed | M5 |
+| `AI_GLOSSARY_LANGUAGE_INVALID` | 422 | The glossary language is not one of the question languages | M5 |
+| `AI_GLOSSARY_TERM_EMPTY` | 422 | A glossary entry needs both terms | M5 |
 | `AI_PROMPT_INVALID` | 422 | Prompt instructions cannot be used; `details.problems` lists each (unknown or missing placeholder, too long, looks like a key, ...) | M5 |
 | `AI_PROMPT_NOTE_REQUIRED` | 422 | A new prompt version needs a change note | M5 |
 | `AI_PROMPT_NAME_REQUIRED` | 422 | A personal prompt needs a name | M5 |

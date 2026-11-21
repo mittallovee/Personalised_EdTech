@@ -372,3 +372,37 @@ class DiffOut(BaseModel):
     lines: list[DiffLineOut]
     temperature_from: str | None
     temperature_to: str | None
+
+
+# --- The translation glossary (H-14) ------------------------------------------------------------
+
+
+class GlossaryEntryOut(BaseModel):
+    id: UUID
+    language: str
+    source_term: str
+    target_term: str
+    note: str | None
+    revision: int = Field(description="Send as the ETag to change or remove the entry.")
+    updated_at: datetime
+
+
+class GlossaryOut(BaseModel):
+    data: list[GlossaryEntryOut]
+
+
+class AddGlossaryEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    language: str = Field(max_length=3, description="The target language tag, e.g. `hi`.")
+    source_term: str = Field(min_length=1, max_length=200)
+    target_term: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=300)
+
+
+class ChangeGlossaryEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_term: str = Field(min_length=1, max_length=200)
+    target_term: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=300)
