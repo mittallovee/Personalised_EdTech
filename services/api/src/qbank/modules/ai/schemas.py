@@ -203,3 +203,47 @@ class SaveBudget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     monthly_inr: Rupees = Field(description="0 means this person may not use AI.")
+
+
+# --- Usage and cost (H-05, H-06) ----------------------------------------------------------------
+
+
+class UsageOut(BaseModel):
+    period: str = Field(description="The month, `YYYY-MM`, in India time.")
+    spent_usd: str = Field(
+        description="What providers billed (and what is reserved for runs in progress)."
+    )
+    spent_inr: str = Field(
+        description="The same in rupees, at the rate in force when each cost was recorded."
+    )
+    limit_inr: str | None = Field(
+        description="The person's monthly budget (their own, else the coaching's default);"
+        " null = none."
+    )
+    remaining_inr: str | None = Field(
+        description="What is left of the budget; null when there is no limit or no rate."
+    )
+    state: Literal["NO_LIMIT", "OK", "WARNING", "REACHED", "OFF"] = Field(
+        description="`WARNING` from 80 % of the budget, `REACHED` at 100 % (new runs are refused),"
+        " `OFF` when a budget is set but no dollar-to-rupee rate has been entered."
+    )
+
+
+class PersonUsageOut(UsageOut):
+    user_id: UUID
+    display_name: str | None
+
+
+class UsageListOut(BaseModel):
+    period: str
+    data: list[PersonUsageOut]
+
+
+class AdjustUsage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    amount_usd: Annotated[Decimal, Field(max_digits=12, decimal_places=6)] = Field(
+        description="US dollars to add (positive) or take off (negative) this month's usage."
+    )
+    note: str = Field(min_length=1, max_length=300, description="Why, e.g. the invoice it follows.")

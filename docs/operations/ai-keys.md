@@ -122,3 +122,18 @@ M5's web steps):
 
 Each save needs the version you last read, so two admins cannot overwrite each other unseen, and each is
 in the audit log with before and after.
+
+## 7. Usage, notices and corrections
+
+- Every AI cost is an entry in an **append-only ledger** (the database refuses to change or delete one,
+  even for its owner). A run first sets aside its estimated cost, is refused if that would pass the
+  person's budget (`AI_BUDGET_EXCEEDED`, with what is left), and when it ends is settled at the
+  provider's real token counts. Runs in progress count at their estimate.
+- Each person gets one in-app notice at 80 % of the month's budget and one at 100 %.
+- `GET /api/v1/ai/usage/me` shows a person their own month; `GET /api/v1/ai/usage` shows admins
+  everyone's.
+- When the provider's invoice differs from what the app recorded, an admin adds a correction
+  (`POST /api/v1/ai/usage/adjustments`, positive or negative dollars with a note). It is a new entry,
+  audited; nothing already recorded is edited.
+- A model whose price the provider does not publish is recorded as "cost unknown" and adds nothing to
+  the spend until you enter its price (on the model) or add a correction.

@@ -2041,6 +2041,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/usage/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your own AI usage and what is left of your budget this month (H-05)
+         * @description Any member of the coaching. Costs are US dollars (what providers bill) and rupees at the rate in force when each was recorded; runs in progress count at their estimate.
+         */
+        get: operations["my_usage_api_v1_ai_usage_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everyone's AI usage for a month (H-05, H-06)
+         * @description Owner and admins. One row per member who has usage or a budget of their own that month, with their budget and state.
+         */
+        get: operations["usage_api_v1_ai_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/usage/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a member's usage this month after reading the provider's invoice (H-06)
+         * @description Owner and admins. Adds an entry (positive or negative dollars) to this month; the ledger is never edited, so a mistake is corrected by another adjustment. Written to the audit log. Returns the member's new standing.
+         */
+        post: operations["adjust_usage_api_v1_ai_usage_adjustments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2078,6 +2138,24 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+        };
+        /** AdjustUsage */
+        AdjustUsage: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /**
+             * Amount Usd
+             * @description US dollars to add (positive) or take off (negative) this month's usage.
+             */
+            amount_usd: number | string;
+            /**
+             * Note
+             * @description Why, e.g. the invoice it follows.
+             */
+            note: string;
         };
         /** AnswerRulesOut */
         AnswerRulesOut: {
@@ -3785,6 +3863,47 @@ export interface components {
             /** Latest Checkpoint Number */
             latest_checkpoint_number: number | null;
         };
+        /** PersonUsageOut */
+        PersonUsageOut: {
+            /**
+             * Period
+             * @description The month, `YYYY-MM`, in India time.
+             */
+            period: string;
+            /**
+             * Spent Usd
+             * @description What providers billed (and what is reserved for runs in progress).
+             */
+            spent_usd: string;
+            /**
+             * Spent Inr
+             * @description The same in rupees, at the rate in force when each cost was recorded.
+             */
+            spent_inr: string;
+            /**
+             * Limit Inr
+             * @description The person's monthly budget (their own, else the coaching's default); null = none.
+             */
+            limit_inr: string | null;
+            /**
+             * Remaining Inr
+             * @description What is left of the budget; null when there is no limit or no rate.
+             */
+            remaining_inr: string | null;
+            /**
+             * State
+             * @description `WARNING` from 80 % of the budget, `REACHED` at 100 % (new runs are refused), `OFF` when a budget is set but no dollar-to-rupee rate has been entered.
+             * @enum {string}
+             */
+            state: "NO_LIMIT" | "OK" | "WARNING" | "REACHED" | "OFF";
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Display Name */
+            display_name: string | null;
+        };
         /**
          * Provider
          * @enum {string}
@@ -4447,6 +4566,47 @@ export interface components {
              * @description The kind never changes.
              */
             name?: string | null;
+        };
+        /** UsageListOut */
+        UsageListOut: {
+            /** Period */
+            period: string;
+            /** Data */
+            data: components["schemas"]["PersonUsageOut"][];
+        };
+        /** UsageOut */
+        UsageOut: {
+            /**
+             * Period
+             * @description The month, `YYYY-MM`, in India time.
+             */
+            period: string;
+            /**
+             * Spent Usd
+             * @description What providers billed (and what is reserved for runs in progress).
+             */
+            spent_usd: string;
+            /**
+             * Spent Inr
+             * @description The same in rupees, at the rate in force when each cost was recorded.
+             */
+            spent_inr: string;
+            /**
+             * Limit Inr
+             * @description The person's monthly budget (their own, else the coaching's default); null = none.
+             */
+            limit_inr: string | null;
+            /**
+             * Remaining Inr
+             * @description What is left of the budget; null when there is no limit or no rate.
+             */
+            remaining_inr: string | null;
+            /**
+             * State
+             * @description `WARNING` from 80 % of the budget, `REACHED` at 100 % (new runs are refused), `OFF` when a budget is set but no dollar-to-rupee rate has been entered.
+             * @enum {string}
+             */
+            state: "NO_LIMIT" | "OK" | "WARNING" | "REACHED" | "OFF";
         };
     };
     responses: never;
@@ -13003,6 +13163,184 @@ export interface operations {
             };
             /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    my_usage_api_v1_ai_usage_me_get: {
+        parameters: {
+            query?: {
+                /** @description A month, `YYYY-MM` (India time). Defaults to this month. */
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    usage_api_v1_ai_usage_get: {
+        parameters: {
+            query?: {
+                /** @description A month, `YYYY-MM` (India time). Defaults to this month. */
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageListOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    adjust_usage_api_v1_ai_usage_adjustments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustUsage"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such member in this coaching (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
