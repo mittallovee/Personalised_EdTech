@@ -89,6 +89,7 @@ def start_run(
         personal_prompt_id=body.personal_prompt_id,
         model_id=body.model_id,
         test=body.test,
+        request_id=request.state.request_id,
     )
     return _out(view)
 
@@ -123,3 +124,27 @@ def get_run(
 ) -> RunOut:
     with database.transaction(principal.tenant_context) as session:
         return _out(orchestrator.get_run(session, principal, run_id))
+
+
+@router.post(
+    "/ai/runs/{run_id}/apply",
+    summary="Apply a suggested answer or correction (H-09, H-10)",
+    description="Applies what a solve or verify run suggested, after the person has seen old and"
+    " new. Only to the exact revision the run read: if the question has changed since, the run"
+    " becomes `OUT_OF_DATE` and nothing is written. The person must still be able to edit the"
+    " question. Written to the audit log.",
+    responses={
+        **_READ,
+        409: {"description": "The run has nothing to apply or was already settled"},
+    },
+)
+def apply_run(
+    run_id: UUID,
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> RunOut:
+    with database.transaction(principal.tenant_context) as session:
+        return _out(
+            orchestrator.apply_run(session, principal, run_id, request_id=request.state.request_id)
+        )

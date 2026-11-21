@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
 from qbank.core.errors import ValidationFailed
-from qbank.modules.ai.operations.base import BadOutput, Prepared
+from qbank.modules.ai.operations.base import BadOutput, Prepared, RunBase
 from qbank.modules.questions.public import Applied, QuestionForAi, apply_labels
 from qbank.modules.taxonomy.public import SubjectSyllabus, bloom_keys, syllabus_of
 
@@ -93,14 +93,14 @@ def _checker(syllabus: SubjectSyllabus) -> Any:
 
 
 def _apply(
-    session: Session, principal: Principal, question: QuestionForAi, labels: dict[str, Any]
+    session: Session, principal: Principal, base: RunBase, labels: dict[str, Any]
 ) -> Applied:
     return apply_labels(
         session,
         principal,
-        question.question_id,
-        revision_id=question.revision_id,
-        revision=question.revision,
+        base.question_id,
+        revision_id=base.revision_id,
+        revision=base.revision,
         labels=labels,
     )
 

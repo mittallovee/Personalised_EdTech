@@ -3,6 +3,7 @@
 from qbank.modules.questions.ai_access import (
     Applied,
     QuestionForAi,
+    apply_changes,
     apply_labels,
     read_for_ai,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "QueueRow",
     "Rules",
     "State",
+    "apply_changes",
     "apply_labels",
     "list_queue",
     "queue_counts",

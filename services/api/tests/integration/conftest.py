@@ -270,3 +270,7 @@ def new_coaching(name: str = "Sharma Classes", email: str | None = None) -> dict
         "timezone": "Asia/Kolkata",
         "owner": {"email": email, "display_name": "Priya Sharma"},
     }
+
+
+# The `world` fixture of the AI run tests. Imported last: its module uses what is above.
+from tests.integration.ai_support import world as world  # noqa: E402

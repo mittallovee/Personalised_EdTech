@@ -75,6 +75,10 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_TAG_NEEDS_SUBJECT` | 422 | Tagging needs the question's subject chosen first | M5 |
 | `AI_TAG_NO_SYLLABUS` | 422 | The subject has no chapters or no concepts to choose from | M5 |
 | `AI_TAG_SYLLABUS_TOO_LARGE` | 422 | The subject's syllabus is too large to send in one request | M5 |
+| `AI_QUESTION_TOO_LARGE` | 422 | The question is too large to send to the AI | M5 |
+| `AI_SOLVE_UNSUPPORTED` | 422 | The question's type is not known, so it cannot be solved | M5 |
+| `AI_SOLVE_NEEDS_OPTIONS` | 422 | Add the answer options before asking the AI to solve it | M5 |
+| `AI_RUN_NOT_APPLICABLE` | 409 | A run has nothing to apply (a test, a failure, a tag run, no correction) or was already settled; `details.apply_status` | M5 |
 | `AI_GLOSSARY_DUPLICATE` | 409 | That term already has a glossary entry in that language (ignoring case) | M5 |
 | `AI_GLOSSARY_FULL` | 409 | A language already holds the most glossary terms allowed | M5 |
 | `AI_GLOSSARY_LANGUAGE_INVALID` | 422 | The glossary language is not one of the question languages | M5 |
