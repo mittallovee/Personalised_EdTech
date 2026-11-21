@@ -667,7 +667,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 4i | **Built:** web review queue and notifications bell and page (see §11.2) |
 | 4j | **Built:** web bank screen (filters, count, search, code box; see §11.3) |
 | 4k | **Built:** web compare, history and duplicates panel (see §11.4) |
-| 5 | M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey, timings table |
+| 5 | **Built:** M4 demo notes and exit checks: `docs/operations/m4-demo.md`, the T42 journey (`apps/e2e/tests/m4-exit.spec.ts`), timings table |
 
 K-07 (squawk) goes in as its own small PR when you say so, before 4a-2 if possible (so the new migrations are
 checked). The order can change if a PR grows; split rather than stretch.
