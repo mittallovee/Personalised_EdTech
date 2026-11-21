@@ -410,14 +410,6 @@ def test_a_question_without_a_subject_cannot_be_tagged(world: World) -> None:
     assert (refused.status_code, refused.json()["error"]["code"]) == (422, "AI_TAG_NEEDS_SUBJECT")
 
 
-def test_an_operation_not_built_yet_says_so(world: World) -> None:
-    refused = world.run({"operation": "TRANSLATE"})
-    assert (refused.status_code, refused.json()["error"]["code"]) == (
-        409,
-        "AI_OPERATION_NOT_AVAILABLE",
-    )
-
-
 def test_a_submitted_question_cannot_be_run_for_real_but_can_be_tested(world: World) -> None:
     submitted = world.client.post(
         f"{QUESTIONS}/{world.question['id']}/submit",

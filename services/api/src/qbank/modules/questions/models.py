@@ -235,3 +235,33 @@ class AnswerRuleSettings(Base):
     exams: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class QuestionLink(Base):
+    """A translated question's link to its source (migration 0041, M5 design note §4, D-13).
+
+    ``source_version_number`` is the version of the source that was translated; whether the source
+    has since published a newer one is worked out on read, never stored.
+    """
+
+    __tablename__ = "question_links"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "source_master_id"],
+            ["question_masters.organization_id", "question_masters.id"],
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "target_master_id"],
+            ["question_masters.organization_id", "question_masters.id"],
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(String(20))
+    source_master_id: Mapped[UUID]
+    source_version_number: Mapped[int]
+    target_master_id: Mapped[UUID]
+    language: Mapped[str] = mapped_column(String(3))
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
