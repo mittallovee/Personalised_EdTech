@@ -18,6 +18,7 @@ from qbank.core.storage import LocalDiskStorage
 from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
 from qbank.modules.ai.api import router as ai_router
 from qbank.modules.ai.models_api import router as ai_models_router
+from qbank.modules.ai.settings_api import router as ai_settings_router
 from qbank.modules.assets.api import router as assets_router
 from qbank.modules.audit.api import router as audit_router
 from qbank.modules.health.api import router as health_router
@@ -129,5 +130,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(review_router)
     app.include_router(ai_router)
     app.include_router(ai_models_router)
+    app.include_router(ai_settings_router)
     install_openapi(app)
     return app

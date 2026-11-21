@@ -87,3 +87,56 @@ class AiModel(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
     revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+
+
+class AiSettings(Base):
+    """A coaching's dollar-to-rupee rate and default monthly budget (migration 0036).
+
+    ``None`` rate = not entered, so no budget can be applied; ``None`` budget = no limit.
+    """
+
+    __tablename__ = "ai_settings"
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    usd_to_inr: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    default_budget_inr: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class OperationSetting(Base):
+    """The model, mode and fallbacks a coaching offers first for one operation (migration 0036)."""
+
+    __tablename__ = "ai_operation_settings"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    operation: Mapped[str] = mapped_column(String(20))
+    default_model_id: Mapped[UUID | None] = mapped_column()
+    default_mode: Mapped[str] = mapped_column(String(10), default="NOW", server_default="NOW")
+    fallback_1_id: Mapped[UUID | None] = mapped_column()
+    fallback_2_id: Mapped[UUID | None] = mapped_column()
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class AiBudget(Base):
+    """A person's own monthly budget in rupees, where not the default (migration 0036)."""
+
+    __tablename__ = "ai_budgets"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    monthly_inr: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )

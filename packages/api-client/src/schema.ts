@@ -1973,6 +1973,114 @@ export interface paths {
         patch: operations["update_model_api_v1_ai_models__model_id__patch"];
         trace?: never;
     };
+    "/api/v1/ai/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The dollar-to-rupee rate and the default monthly budget (H-05)
+         * @description Owner and admins. `revision` is also sent as the ETag. A coaching that has never saved has revision 0 and no rate or budget.
+         */
+        get: operations["get_settings_api_v1_ai_settings_get"];
+        /**
+         * Set the rate and the default monthly budget (H-05)
+         * @description Owner and admins. Replaces both values (`null` = not set). Providers bill in US dollars and budgets are in rupees, so a budget cannot be applied until a rate is entered. Send the ETag you last read in `If-Match` (`"rev-0"` before the first save). Written to the audit log.
+         */
+        put: operations["put_settings_api_v1_ai_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The model and mode offered first for each operation (H-03)
+         * @description Owner and admins. Always the four operations (`TAG`, `TRANSLATE`, `SOLVE`, `VERIFY`). `problem` says when the chosen model cannot be used today (it was disabled or the provider stopped listing it).
+         */
+        get: operations["get_operations_api_v1_ai_operations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/operations/{operation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose the model, mode and fallbacks for an operation (H-03, H-04)
+         * @description Owner and admins. Replaces the setting of one operation. The first model and each fallback must be enabled, listed by the provider and able to return JSON; Economy only for a model marked as offering batch runs. At most two fallbacks; a model appears once. Send the operation's `revision` as the ETag (`"rev-0"` before the first save). Written to the audit log.
+         */
+        put: operations["put_operation_api_v1_ai_operations__operation__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Members who have a monthly budget of their own (H-05)
+         * @description Owner and admins. Everyone else has the default from the settings.
+         */
+        get: operations["get_budgets_api_v1_ai_budgets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/budgets/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give a member a monthly budget of their own (H-05)
+         * @description Owner and admins. In rupees; `0` means the person may not use AI. Send the member's budget `revision` as the ETag (`"rev-0"` when they have none yet). Written to the audit log.
+         */
+        put: operations["put_budget_api_v1_ai_budgets__user_id__put"];
+        post?: never;
+        /**
+         * Take a member's own budget away (H-05)
+         * @description Owner and admins. The coaching's default applies to the member again. Send the budget's `revision` as the ETag. Written to the audit log.
+         */
+        delete: operations["delete_budget_api_v1_ai_budgets__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2283,6 +2391,25 @@ export interface components {
             key: string;
             /** Label */
             label: string;
+        };
+        /** BudgetOut */
+        BudgetOut: {
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Monthly Inr */
+            monthly_inr: string;
+            /** Revision */
+            revision: number;
+        };
+        /** BudgetsOut */
+        BudgetsOut: {
+            /** Data */
+            data: components["schemas"]["BudgetOut"][];
         };
         /** ChangeOut */
         ChangeOut: {
@@ -3128,6 +3255,12 @@ export interface components {
             data: components["schemas"]["MemberOut"][];
             page: components["schemas"]["PageInfo"];
         };
+        /**
+         * Mode
+         * @description Now runs at once; Economy is a batch run at the provider's lower price, finished later.
+         * @enum {string}
+         */
+        Mode: "NOW" | "ECONOMY";
         /** ModelOut */
         ModelOut: {
             /**
@@ -3189,6 +3322,23 @@ export interface components {
             fetched_at: string;
             /** Revision */
             revision: number;
+        };
+        /** ModelRef */
+        ModelRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            provider: components["schemas"]["Provider"];
+            /** Model Id */
+            model_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Available */
+            available: boolean;
         };
         /** ModelsOut */
         ModelsOut: {
@@ -3313,6 +3463,35 @@ export interface components {
          * @enum {string}
          */
         Op: "add" | "remove" | "replace";
+        /**
+         * Operation
+         * @description What the AI can be asked to do to a question (M5 design note §8).
+         * @enum {string}
+         */
+        Operation: "TAG" | "TRANSLATE" | "SOLVE" | "VERIFY";
+        /** OperationOut */
+        OperationOut: {
+            operation: components["schemas"]["Operation"];
+            default_model: components["schemas"]["ModelRef"] | null;
+            mode: components["schemas"]["Mode"];
+            /** Fallbacks */
+            fallbacks: components["schemas"]["ModelRef"][];
+            /**
+             * Problem
+             * @description Why a run would refuse the chosen model today; null when it can be used.
+             */
+            problem: ("MODEL_UNAVAILABLE" | "MODEL_DISABLED") | null;
+            /**
+             * Revision
+             * @description 0 until first saved. Send it as the ETag.
+             */
+            revision: number;
+        };
+        /** OperationsOut */
+        OperationsOut: {
+            /** Data */
+            data: components["schemas"]["OperationOut"][];
+        };
         /** OrganizationOut */
         OrganizationOut: {
             /**
@@ -4053,6 +4232,29 @@ export interface components {
                 };
             };
         };
+        /** SaveBudget */
+        SaveBudget: {
+            /**
+             * Monthly Inr
+             * @description 0 means this person may not use AI.
+             */
+            monthly_inr: number | string;
+        };
+        /** SaveOperation */
+        SaveOperation: {
+            /**
+             * Default Model Id
+             * @description The model offered first (an id from the model list), or null for none.
+             */
+            default_model_id: string | null;
+            /** @default NOW */
+            mode: components["schemas"]["Mode"];
+            /**
+             * Fallback Model Ids
+             * @description Tried in order if the first model fails in a way that may pass.
+             */
+            fallback_model_ids?: string[];
+        };
         /** SavePassage */
         SavePassage: {
             /**
@@ -4072,6 +4274,19 @@ export interface components {
             content: {
                 [key: string]: unknown;
             };
+        };
+        /** SaveSettings */
+        SaveSettings: {
+            /**
+             * Usd To Inr
+             * @description Null clears it.
+             */
+            usd_to_inr: number | string | null;
+            /**
+             * Default Budget Inr
+             * @description Null = no limit.
+             */
+            default_budget_inr: number | string | null;
         };
         /**
          * SegmentKind
@@ -4120,6 +4335,21 @@ export interface components {
             low: number | string;
             /** High */
             high: number | string;
+        };
+        /** SettingsOut */
+        SettingsOut: {
+            /**
+             * Usd To Inr
+             * @description Rupees per US dollar, as the admin entered it. Null = not entered: budgets cannot be applied until it is.
+             */
+            usd_to_inr: string | null;
+            /**
+             * Default Budget Inr
+             * @description Monthly budget per person in rupees where they have none of their own. Null = no limit.
+             */
+            default_budget_inr: string | null;
+            /** Revision */
+            revision: number;
         };
         /** SourceOut */
         SourceOut: {
@@ -12460,6 +12690,498 @@ export interface operations {
             };
             /** @description The provider no longer lists it (`AI_MODEL_UNAVAILABLE`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_settings_api_v1_ai_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_settings_api_v1_ai_settings_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_operations_api_v1_ai_operations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationsOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_operation_api_v1_ai_operations__operation__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                operation: components["schemas"]["Operation"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveOperation"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A model is not enabled (`AI_MODEL_NOT_ENABLED`), no longer listed (`AI_MODEL_UNAVAILABLE`), cannot return JSON (`AI_MODEL_NO_JSON`), or is not set up for Economy (`AI_ECONOMY_UNAVAILABLE`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A model is unknown or repeated, or too many fallbacks */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_budgets_api_v1_ai_budgets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetsOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_budget_api_v1_ai_budgets__user_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveBudget"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such member in this coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Changed since you read it (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_budget_api_v1_ai_budgets__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Only the Owner and admins (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This member has no budget of their own (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
