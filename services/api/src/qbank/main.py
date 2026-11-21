@@ -17,6 +17,7 @@ from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindo
 from qbank.core.storage import LocalDiskStorage
 from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
 from qbank.modules.ai.api import router as ai_router
+from qbank.modules.ai.glossary_api import router as ai_glossary_router
 from qbank.modules.ai.models_api import router as ai_models_router
 from qbank.modules.ai.prompts_api import router as ai_prompts_router
 from qbank.modules.ai.settings_api import router as ai_settings_router
@@ -135,5 +136,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ai_settings_router)
     app.include_router(ai_usage_router)
     app.include_router(ai_prompts_router)
+    app.include_router(ai_glossary_router)
     install_openapi(app)
     return app

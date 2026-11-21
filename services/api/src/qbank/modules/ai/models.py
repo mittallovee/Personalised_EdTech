@@ -231,3 +231,25 @@ class PromptActivation(Base):
     activated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
+
+
+class GlossaryEntry(Base):
+    """A term a coaching wants translated one fixed way into one language (migration 0039)."""
+
+    __tablename__ = "translation_glossary"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    language: Mapped[str] = mapped_column(String(3))
+    source_term: Mapped[str] = mapped_column(String(200))
+    target_term: Mapped[str] = mapped_column(String(200))
+    note: Mapped[str | None] = mapped_column(String(300))
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )

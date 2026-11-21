@@ -43,6 +43,14 @@ characters. `POST /api/v1/ai/prompts/validate` lists every problem at once, and 
   available** and chooses: **adopt** it (saved as a new coaching version and activated) or **dismiss** it.
 - Every change is in the audit log (who, when, version numbers, change note, text fingerprint; not the text).
 
+## The translation glossary
+
+Admins keep a list of terms the coaching wants translated one fixed way, per target language
+(`/api/v1/ai/glossary`): for example "work done" must become the coaching's chosen Hindi term. A translation
+run is given only the entries whose source term appears in the question (longest term first, at most 100
+entries and about 6,000 characters), placed in the prompt as data like the question itself. A term has one entry
+per language, ignoring case; each change needs the version you last read and is in the audit log.
+
 ## What is not built yet
 
 Test runs (try a draft against a real question), the run dialog, and the screens for all this come with the
