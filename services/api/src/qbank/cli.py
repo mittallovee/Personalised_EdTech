@@ -22,7 +22,14 @@ from qbank.core.db import Database
 from qbank.core.errors import Conflict
 from qbank.core.secretbox import build_keyring
 from qbank.core.tenancy import TenantContext
-from qbank.modules.ai.public import KeyUnreadable, reseal_all
+from qbank.modules.ai.public import (
+    KeyUnreadable,
+    Provider,
+    open_key,
+    provider_for,
+    reseal_all,
+    smoke,
+)
 from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.questions.public import reindex_bank
 
@@ -153,6 +160,48 @@ def _rotate_ai_keys(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _ai_smoke(args: argparse.Namespace) -> int:
+    """Try one provider with the coaching's stored key (ADR-0023). CI never calls a provider, so
+    this is how to learn that an adapter and a key really work. Prints what happened, never the
+    key."""
+    owner_url = os.environ.get("MIGRATION_DATABASE_URL")
+    if not owner_url:
+        print("Set MIGRATION_DATABASE_URL (table-owner connection).", file=sys.stderr)
+        return 2
+    try:
+        organization_id = UUID(args.organization)
+        provider = Provider(args.provider.upper())
+        keyring = build_keyring(
+            os.environ.get("AI_KEYS_MASTER_KEY"),
+            os.environ.get("AI_KEYS_MASTER_KEY_ID", "k1"),
+            os.environ.get("AI_KEYS_PREVIOUS"),
+        )
+    except ValueError as problem:
+        print(f"Cannot use those values: {problem}", file=sys.stderr)
+        return 2
+    database = Database(owner_url)
+    try:
+        with database.transaction(TenantContext(organization_id=organization_id)) as session:
+            try:
+                key = open_key(session, keyring, organization_id, provider)
+            except KeyUnreadable:
+                print(
+                    "The stored key could not be opened with the master keys given.",
+                    file=sys.stderr,
+                )
+                return 1
+    finally:
+        database.dispose()
+    if key is None:
+        print(f"This coaching has no {provider.value} key stored.", file=sys.stderr)
+        return 1
+    worked, lines = smoke(provider_for(provider), key, args.model)
+    print(f"{provider.value}:")
+    for line in lines:
+        print(f"  {line}")
+    return 0 if worked else 1
+
+
 def _export_openapi(args: argparse.Namespace) -> int:
     # Builds the whole app, so it is imported only when this command runs.
     from qbank.contract import OPENAPI_FILE, render_openapi
@@ -190,6 +239,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Seal every stored AI provider key again under the current master key",
     )
     rotate.set_defaults(handler=_rotate_ai_keys)
+
+    smoke_check = commands.add_parser(
+        "ai-smoke", help="Try one AI provider with a coaching's stored key (not run in CI)"
+    )
+    smoke_check.add_argument("--organization", required=True, help="The coaching's id")
+    smoke_check.add_argument(
+        "--provider", required=True, help="anthropic, openai, google or openrouter"
+    )
+    smoke_check.add_argument("--model", help="Also ask this model for a tiny answer")
+    smoke_check.set_defaults(handler=_ai_smoke)
 
     openapi = commands.add_parser("export-openapi", help="Write the API contract (OpenAPI JSON)")
     openapi.add_argument("--output", help="Default: api/openapi.json in the repository")
