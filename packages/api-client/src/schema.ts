@@ -2938,15 +2938,17 @@ export interface components {
              */
             decided_at: string;
         };
-        /** DiffLineOut */
-        DiffLineOut: {
+        /** DiffOut */
+        DiffOut: {
+            from_revision: components["schemas"]["DiffRevision"];
+            to_revision: components["schemas"]["DiffRevision"];
+            /** Identical */
+            identical: boolean;
             /**
-             * Op
-             * @enum {string}
+             * Changes
+             * @description What turns the first text into the second. Equations, pictures, tables and lists count as single items: a changed one is replaced as a whole.
              */
-            op: "same" | "removed" | "added";
-            /** Text */
-            text: string;
+            changes: components["schemas"]["ChangeOut"][];
         };
         /** DiffRevision */
         DiffRevision: {
@@ -4162,6 +4164,27 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** PromptDiffLineOut */
+        PromptDiffLineOut: {
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "same" | "removed" | "added";
+            /** Text */
+            text: string;
+        };
+        /** PromptDiffOut */
+        PromptDiffOut: {
+            /** Changed */
+            changed: boolean;
+            /** Lines */
+            lines: components["schemas"]["PromptDiffLineOut"][];
+            /** Temperature From */
+            temperature_from: string | null;
+            /** Temperature To */
+            temperature_to: string | null;
+        };
         /**
          * Provider
          * @enum {string}
@@ -5016,29 +5039,6 @@ export interface components {
         VersionsOut: {
             /** Data */
             data: components["schemas"]["VersionSummary"][];
-        };
-        /** DiffOut */
-        qbank__modules__ai__schemas__DiffOut: {
-            /** Changed */
-            changed: boolean;
-            /** Lines */
-            lines: components["schemas"]["DiffLineOut"][];
-            /** Temperature From */
-            temperature_from: string | null;
-            /** Temperature To */
-            temperature_to: string | null;
-        };
-        /** DiffOut */
-        qbank__modules__questions__history_schemas__DiffOut: {
-            from_revision: components["schemas"]["DiffRevision"];
-            to_revision: components["schemas"]["DiffRevision"];
-            /** Identical */
-            identical: boolean;
-            /**
-             * Changes
-             * @description What turns the first text into the second. Equations, pictures, tables and lists count as single items: a changed one is replaced as a whole.
-             */
-            changes: components["schemas"]["ChangeOut"][];
         };
     };
     responses: never;
@@ -11327,7 +11327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["qbank__modules__questions__history_schemas__DiffOut"];
+                    "application/json": components["schemas"]["DiffOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
@@ -13957,7 +13957,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["qbank__modules__ai__schemas__DiffOut"];
+                    "application/json": components["schemas"]["PromptDiffOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */

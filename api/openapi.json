@@ -9186,7 +9186,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/qbank__modules__questions__history_schemas__DiffOut"
+                  "$ref": "#/components/schemas/DiffOut"
                 }
               }
             }
@@ -13361,7 +13361,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/qbank__modules__ai__schemas__DiffOut"
+                  "$ref": "#/components/schemas/PromptDiffOut"
                 }
               }
             }
@@ -15555,28 +15555,35 @@
         ],
         "title": "DecisionOut"
       },
-      "DiffLineOut": {
+      "DiffOut": {
         "properties": {
-          "op": {
-            "type": "string",
-            "enum": [
-              "same",
-              "removed",
-              "added"
-            ],
-            "title": "Op"
+          "from_revision": {
+            "$ref": "#/components/schemas/DiffRevision"
           },
-          "text": {
-            "type": "string",
-            "title": "Text"
+          "to_revision": {
+            "$ref": "#/components/schemas/DiffRevision"
+          },
+          "identical": {
+            "type": "boolean",
+            "title": "Identical"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "type": "array",
+            "title": "Changes",
+            "description": "What turns the first text into the second. Equations, pictures, tables and lists count as single items: a changed one is replaced as a whole."
           }
         },
         "type": "object",
         "required": [
-          "op",
-          "text"
+          "from_revision",
+          "to_revision",
+          "identical",
+          "changes"
         ],
-        "title": "DiffLineOut"
+        "title": "DiffOut"
       },
       "DiffRevision": {
         "properties": {
@@ -18229,6 +18236,74 @@
         ],
         "title": "ProblemOut"
       },
+      "PromptDiffLineOut": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "same",
+              "removed",
+              "added"
+            ],
+            "title": "Op"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op",
+          "text"
+        ],
+        "title": "PromptDiffLineOut"
+      },
+      "PromptDiffOut": {
+        "properties": {
+          "changed": {
+            "type": "boolean",
+            "title": "Changed"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PromptDiffLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "temperature_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature From"
+          },
+          "temperature_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changed",
+          "lines",
+          "temperature_from",
+          "temperature_to"
+        ],
+        "title": "PromptDiffOut"
+      },
       "Provider": {
         "type": "string",
         "enum": [
@@ -20197,81 +20272,6 @@
           "data"
         ],
         "title": "VersionsOut"
-      },
-      "qbank__modules__ai__schemas__DiffOut": {
-        "properties": {
-          "changed": {
-            "type": "boolean",
-            "title": "Changed"
-          },
-          "lines": {
-            "items": {
-              "$ref": "#/components/schemas/DiffLineOut"
-            },
-            "type": "array",
-            "title": "Lines"
-          },
-          "temperature_from": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temperature From"
-          },
-          "temperature_to": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Temperature To"
-          }
-        },
-        "type": "object",
-        "required": [
-          "changed",
-          "lines",
-          "temperature_from",
-          "temperature_to"
-        ],
-        "title": "DiffOut"
-      },
-      "qbank__modules__questions__history_schemas__DiffOut": {
-        "properties": {
-          "from_revision": {
-            "$ref": "#/components/schemas/DiffRevision"
-          },
-          "to_revision": {
-            "$ref": "#/components/schemas/DiffRevision"
-          },
-          "identical": {
-            "type": "boolean",
-            "title": "Identical"
-          },
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/ChangeOut"
-            },
-            "type": "array",
-            "title": "Changes",
-            "description": "What turns the first text into the second. Equations, pictures, tables and lists count as single items: a changed one is replaced as a whole."
-          }
-        },
-        "type": "object",
-        "required": [
-          "from_revision",
-          "to_revision",
-          "identical",
-          "changes"
-        ],
-        "title": "DiffOut"
       }
     },
     "securitySchemes": {

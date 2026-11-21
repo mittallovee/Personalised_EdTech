@@ -362,13 +362,13 @@ class ValidateOut(BaseModel):
     problems: list[ProblemOut]
 
 
-class DiffLineOut(BaseModel):
+class PromptDiffLineOut(BaseModel):
     op: Literal["same", "removed", "added"]
     text: str
 
 
-class DiffOut(BaseModel):
+class PromptDiffOut(BaseModel):
     changed: bool
-    lines: list[DiffLineOut]
+    lines: list[PromptDiffLineOut]
     temperature_from: str | None
     temperature_to: str | None
