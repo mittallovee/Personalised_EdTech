@@ -259,7 +259,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 
 ## 15. Decisions taken in this note (change them by editing the note)
 
-1. **HTTP through `httpx`, no vendor SDKs** (ADR-0023): a smaller supply chain, one timeout and retry policy, and
+1. **HTTP through `httpx2` (the client already used for Google sign-in), no vendor SDKs** (ADR-0023): a smaller supply chain, one timeout and retry policy, and
    the fake transport makes adapters testable without the network.
 2. **Budgets in ₹, costs in USD and ₹** with an admin-set rate (the owner's mock-up shows ₹; providers bill in USD).
 3. **Tagging applies by itself; solve, verify and translate need a person's click** (tag is "fills fields directly,
