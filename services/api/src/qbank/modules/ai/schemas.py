@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from qbank.modules.ai.names import Provider
+from qbank.modules.ai.names import Mode, Operation, Provider
 
 
 class SetKey(BaseModel):
@@ -123,3 +123,83 @@ class RefreshIn(BaseModel):
 
 class RefreshOut(BaseModel):
     job_id: UUID
+
+
+# --- Operation defaults, the rate and budgets (H-03, H-05, H-06) ----------------------------------
+
+Rate = Annotated[Decimal, Field(gt=0, le=10000, max_digits=10, decimal_places=4)]
+Rupees = Annotated[Decimal, Field(ge=0, le=1000000000, max_digits=12, decimal_places=2)]
+
+
+class SettingsOut(BaseModel):
+    usd_to_inr: str | None = Field(
+        description="Rupees per US dollar, as the admin entered it. Null = not entered: budgets"
+        " cannot be applied until it is."
+    )
+    default_budget_inr: str | None = Field(
+        description="Monthly budget per person in rupees where they have none of their own."
+        " Null = no limit."
+    )
+    revision: int
+
+
+class SaveSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    usd_to_inr: Rate | None = Field(description="Null clears it.")
+    default_budget_inr: Rupees | None = Field(description="Null = no limit.")
+
+
+class ModelRef(BaseModel):
+    id: UUID
+    provider: Provider
+    model_id: str
+    display_name: str
+    enabled: bool
+    available: bool
+
+
+class OperationOut(BaseModel):
+    operation: Operation
+    default_model: ModelRef | None
+    mode: Mode
+    fallbacks: list[ModelRef]
+    problem: Literal["MODEL_UNAVAILABLE", "MODEL_DISABLED"] | None = Field(
+        description="Why a run would refuse the chosen model today; null when it can be used."
+    )
+    revision: int = Field(description="0 until first saved. Send it as the ETag.")
+
+
+class OperationsOut(BaseModel):
+    data: list[OperationOut]
+
+
+class SaveOperation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_model_id: UUID | None = Field(
+        description="The model offered first (an id from the model list), or null for none."
+    )
+    mode: Mode = Mode.NOW
+    fallback_model_ids: list[UUID] = Field(
+        default_factory=list,
+        max_length=2,
+        description="Tried in order if the first model fails in a way that may pass.",
+    )
+
+
+class BudgetOut(BaseModel):
+    user_id: UUID
+    display_name: str | None
+    monthly_inr: str
+    revision: int
+
+
+class BudgetsOut(BaseModel):
+    data: list[BudgetOut]
+
+
+class SaveBudget(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    monthly_inr: Rupees = Field(description="0 means this person may not use AI.")

@@ -8,3 +8,19 @@ class Provider(StrEnum):
     OPENAI = "OPENAI"
     GOOGLE = "GOOGLE"
     OPENROUTER = "OPENROUTER"
+
+
+class Operation(StrEnum):
+    """What the AI can be asked to do to a question (M5 design note §8)."""
+
+    TAG = "TAG"
+    TRANSLATE = "TRANSLATE"
+    SOLVE = "SOLVE"
+    VERIFY = "VERIFY"
+
+
+class Mode(StrEnum):
+    """Now runs at once; Economy is a batch run at the provider's lower price, finished later."""
+
+    NOW = "NOW"
+    ECONOMY = "ECONOMY"
