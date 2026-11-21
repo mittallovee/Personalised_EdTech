@@ -1,9 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -138,5 +139,31 @@ class AiBudget(Base):
     revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class LedgerEntry(Base):
+    """One entry of the append-only usage ledger (migration 0037, M5 design note §7).
+
+    Entries are only ever added: a trigger refuses UPDATE, DELETE and TRUNCATE. ``period`` is the
+    first day of the month, in India time, in which the run began.
+    """
+
+    __tablename__ = "ai_ledger"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    run_id: Mapped[UUID | None] = mapped_column()
+    entry_kind: Mapped[str] = mapped_column(String(12))
+    period: Mapped[date] = mapped_column(Date)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(14, 6))
+    amount_inr: Mapped[Decimal | None] = mapped_column(Numeric(16, 4))
+    rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    cost_kind: Mapped[str | None] = mapped_column(String(10))
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )

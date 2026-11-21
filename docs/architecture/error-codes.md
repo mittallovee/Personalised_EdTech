@@ -66,6 +66,7 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_FALLBACKS_TOO_MANY` | 422 | More than two fallback models | M5 |
 | `AI_FALLBACK_WITHOUT_DEFAULT` | 422 | Fallbacks were given without a first model | M5 |
 | `AI_ECONOMY_NEEDS_MODEL` | 422 | Economy was chosen without a model | M5 |
+| `AI_BUDGET_EXCEEDED` | 409 | A run would pass the person's monthly AI budget (or the budget is 0); `details` has `limit_inr` and `remaining_inr` | M5 |
 
 Feature modules add specific codes here (e.g. `QUESTION_NOT_EDITABLE`, `TWO_DECIMAL_PLACES_REQUIRED`) in the
 same pull request that introduces them.
