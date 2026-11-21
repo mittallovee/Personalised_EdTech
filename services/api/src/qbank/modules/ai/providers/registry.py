@@ -1,8 +1,11 @@
 """The adapter for a provider, by name: the one place that knows which class serves which."""
 
+from collections.abc import Callable
+
 from qbank.modules.ai.names import Provider
 from qbank.modules.ai.providers.anthropic import AnthropicProvider
 from qbank.modules.ai.providers.base import AIProvider
+from qbank.modules.ai.providers.demo import DemoProvider
 from qbank.modules.ai.providers.google import GoogleProvider
 from qbank.modules.ai.providers.http import Http
 from qbank.modules.ai.providers.openai import OpenAIProvider
@@ -28,3 +31,11 @@ def provider_for(provider: Provider, http: Http | None = None) -> AIProvider:
         Provider.OPENROUTER: OpenRouterProvider(shared),
     }
     return adapters[provider]
+
+
+def provider_factory(demo: bool) -> Callable[[Provider], AIProvider]:
+    """The adapters the app uses: the real ones, or (``demo``, local only) the stand-in for all."""
+    if demo:
+        stand_in = DemoProvider()
+        return lambda _provider: stand_in
+    return provider_for
