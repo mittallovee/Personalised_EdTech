@@ -16,6 +16,13 @@ router = APIRouter(prefix="/api/v1", tags=["ai"])
 _READ: dict[int | str, dict[str, Any]] = {404: {"description": "No such question or run"}}
 
 
+def _coarse(status: str) -> str:
+    """The v1 three-value state, so clients written before Economy runs keep working."""
+    if status in ("RUNNING", "QUEUED", "SUBMITTING", "SUBMITTED"):
+        return "RUNNING"
+    return "SUCCEEDED" if status == "SUCCEEDED" else "FAILED"
+
+
 def _out(view: orchestrator.RunView) -> RunOut:
     run = view.run
     return RunOut(
@@ -23,7 +30,8 @@ def _out(view: orchestrator.RunView) -> RunOut:
         question_id=run.question_id,
         operation=run.operation,
         mode=run.mode,
-        status=run.status,
+        status=_coarse(run.status),
+        phase=run.status,
         cancel_requested=run.cancel_requested_at is not None,
         apply_status=run.apply_status,
         is_test=run.is_test,

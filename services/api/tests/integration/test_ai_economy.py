@@ -96,7 +96,7 @@ def plant(world: World, worker_db: Database) -> Plant:
 
 def test_an_economy_run_is_reserved_queued_and_then_handed_over_once(plant: Plant) -> None:
     run = plant.start()
-    assert (run["mode"], run["status"], run["attempts"]) == ("ECONOMY", "QUEUED", [])
+    assert (run["mode"], run["phase"], run["attempts"]) == ("ECONOMY", "QUEUED", [])
     assert plant.kinds(run["id"]) == ["RESERVE"] and plant.world.provider.submit_calls == 0
     plant.one_round()  # claim, then submit (the collect job waits a minute)
     row = plant.run(run["id"])
@@ -157,7 +157,7 @@ def test_a_submission_that_never_shows_up_stays_unknown_and_reserved_until_an_ad
         headers=sign_in(admin, plant.world.admin.email),
     )
     assert resolved.status_code == 200, resolved.text
-    assert (resolved.json()["status"], resolved.json()["error_code"]) == (
+    assert (resolved.json()["phase"], resolved.json()["error_code"]) == (
         "FAILED",
         "AI_SUBMISSION_UNKNOWN",
     )
@@ -198,7 +198,7 @@ def test_a_result_is_settled_at_the_discounted_cost_applied_and_the_person_told(
     plant.world.provider.finish(batch, plant.world.answer())  # 1000 in, 200 out
     plant.jobs()
     done = plant.api("get", f"/api/v1/ai/runs/{run['id']}").json()
-    assert (done["status"], done["apply_status"], done["error_code"]) == (
+    assert (done["phase"], done["apply_status"], done["error_code"]) == (
         "SUCCEEDED",
         "APPLIED",
         None,
@@ -299,7 +299,7 @@ def test_cancelling_before_it_is_handed_over_ends_it_and_is_never_submitted(plan
     run = plant.start()
     cancelled = plant.api("post", f"/api/v1/ai/runs/{run['id']}/cancel")
     assert cancelled.status_code == 200, cancelled.text
-    assert (cancelled.json()["status"], cancelled.json()["cancel_requested"]) == ("CANCELLED", True)
+    assert (cancelled.json()["phase"], cancelled.json()["cancel_requested"]) == ("CANCELLED", True)
     plant.jobs()
     assert plant.world.provider.submit_calls == 0
     assert plant.kinds(run["id"]) == ["RESERVE", "RELEASE"]
@@ -311,7 +311,7 @@ def test_a_result_that_arrives_after_cancelling_is_kept_and_charged_but_never_ap
     run, batch = submitted(plant)
     before = plant.world.labels()
     cancelled = plant.api("post", f"/api/v1/ai/runs/{run['id']}/cancel")
-    assert cancelled.status_code == 200 and cancelled.json()["status"] == "SUBMITTED"
+    assert cancelled.status_code == 200 and cancelled.json()["phase"] == "SUBMITTED"
     assert plant.world.provider.cancelled == [batch]  # the provider was asked to stop...
     plant.world.provider.finish(batch, plant.world.answer())  # ...but it was too late
     plant.jobs()
@@ -395,7 +395,7 @@ def test_an_economy_solve_is_still_a_suggestion_applied_by_a_click(plant: Plant)
     )
     plant.jobs()
     done = plant.api("get", f"/api/v1/ai/runs/{run['id']}").json()
-    assert (done["status"], done["apply_status"]) == ("SUCCEEDED", "NOT_APPLIED")
+    assert (done["phase"], done["apply_status"]) == ("SUCCEEDED", "NOT_APPLIED")
     applied = plant.api("post", f"/api/v1/ai/runs/{run['id']}/apply")
     assert applied.status_code == 200 and applied.json()["apply_status"] == "APPLIED"
 
@@ -421,7 +421,7 @@ def test_the_operations_default_mode_applies_when_none_is_asked_for(plant: Plant
     plant.world.set_operation(plant.model, mode="ECONOMY")
     response = plant.world.run()
     assert response.status_code == 201, response.text
-    assert (response.json()["mode"], response.json()["status"]) == ("ECONOMY", "QUEUED")
+    assert (response.json()["mode"], response.json()["phase"]) == ("ECONOMY", "QUEUED")
     assert plant.world.run({"mode": "NOW"}).json()["mode"] == "NOW"
 
 
