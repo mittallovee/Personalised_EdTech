@@ -92,7 +92,15 @@ class World:
                 )
             )
 
-    def add_model(self, model_id: str, *, enabled: bool = True) -> UUID:
+    def add_model(
+        self,
+        model_id: str,
+        *,
+        enabled: bool = True,
+        batch: bool = False,
+        priced: bool = True,
+        discount: Decimal | None = None,
+    ) -> UUID:
         with self.owner_db.transaction(TenantContext(organization_id=self.org_id)) as session:
             row = AiModel(
                 organization_id=self.org_id,
@@ -100,15 +108,19 @@ class World:
                 model_id=model_id,
                 display_name=model_id,
                 supports_json=True,
-                overlay_price_in=D(1),
-                overlay_price_out=D(2),
+                overlay_price_in=D(1) if priced else None,
+                overlay_price_out=D(2) if priced else None,
+                overlay_batch_supported=batch or None,
+                overlay_batch_discount=discount,
                 enabled=enabled,
             )
             session.add(row)
             session.flush()
             return row.id
 
-    def set_operation(self, default: UUID | None, fallback: UUID | None = None) -> None:
+    def set_operation(
+        self, default: UUID | None, fallback: UUID | None = None, mode: str = "NOW"
+    ) -> None:
         with self.owner_db.transaction(TenantContext(organization_id=self.org_id)) as session:
             for row in session.scalars(select(OperationSetting)):
                 session.delete(row)
@@ -119,6 +131,7 @@ class World:
                         organization_id=self.org_id,
                         operation=operation,
                         default_model_id=default,
+                        default_mode=mode,
                         fallback_1_id=fallback,
                         updated_by=self.admin.user_id,
                     )

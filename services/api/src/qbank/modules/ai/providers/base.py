@@ -8,7 +8,7 @@ and an error it raises never contains the key or any text of the request or the 
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from qbank.modules.ai.names import Provider
 
@@ -100,3 +100,50 @@ class AIProvider(Protocol):
     def list_models(self, api_key: str) -> list[ModelInfo]: ...
 
     def generate_structured(self, api_key: str, request: StructuredRequest) -> StructuredResult: ...
+
+
+class BatchState(StrEnum):
+    """Where a provider says a batch is. ``DONE`` means it ended and an answer (or the reason there
+    is none) can be fetched; the others are endings without one."""
+
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE = "DONE"
+    FAILED = "FAILED"
+    EXPIRED = "EXPIRED"
+    CANCELLED = "CANCELLED"
+
+
+@dataclass(frozen=True, slots=True)
+class BatchAnswer:
+    """The answer of the one request in a batch: a result, or the kind of error the provider gave
+    for it. Exactly one of the two is set."""
+
+    result: StructuredResult | None = None
+    error: ProviderErrorKind | None = None
+
+
+@runtime_checkable
+class BatchProvider(Protocol):
+    """What an adapter adds when its provider has a batch service AND lets a batch be found again
+    by a tag we gave it (ADR-0009: Economy is offered only for such providers, so a submission whose
+    outcome is unknown can be reconciled and never sent twice).
+
+    Each run is one request in its own batch. ``tag`` is the run's id; it is the only identifier a
+    run has at the provider before the provider's own batch id comes back.
+    """
+
+    def submit_batch(self, api_key: str, *, tag: str, request: StructuredRequest) -> str:
+        """Hand the request to the provider's batch service; returns the provider's batch id."""
+        ...
+
+    def batch_status(self, api_key: str, batch_id: str) -> BatchState: ...
+
+    def fetch_batch_answer(self, api_key: str, batch_id: str, *, tag: str) -> BatchAnswer: ...
+
+    def cancel_batch(self, api_key: str, batch_id: str) -> None:
+        """Ask the provider to stop. It is not instant: an answer may still arrive."""
+        ...
+
+    def find_batches_by_tag(self, api_key: str, tag: str) -> list[str]:
+        """The ids of the provider's batches that carry ``tag`` (empty if none is visible yet)."""
+        ...

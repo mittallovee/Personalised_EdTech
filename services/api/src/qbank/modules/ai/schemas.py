@@ -436,6 +436,11 @@ class StartRun(BaseModel):
         pattern="^[a-z]{2,3}$",
         description="The language to translate into (`TRANSLATE` only), such as `hi`.",
     )
+    mode: Mode | None = Field(
+        default=None,
+        description="`NOW` (normal price, answered at once) or `ECONOMY` (a batch at about half"
+        " price, finished later, with a notification). The operation's default when omitted.",
+    )
     test: bool = Field(
         default=False,
         description="A test run: the same call and cost, but nothing is ever written to the"
@@ -456,7 +461,26 @@ class RunOut(BaseModel):
     id: UUID
     question_id: UUID
     operation: Operation
-    status: Literal["RUNNING", "SUCCEEDED", "FAILED"]
+    mode: Mode
+    status: Literal[
+        "RUNNING",
+        "QUEUED",
+        "SUBMITTING",
+        "SUBMITTED",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED",
+        "EXPIRED",
+        "SUBMISSION_UNKNOWN",
+    ] = Field(
+        description="`RUNNING` is a Now run in progress. An Economy run goes `QUEUED`,"
+        " `SUBMITTING`, `SUBMITTED` and ends `SUCCEEDED`, `FAILED`, `CANCELLED` or `EXPIRED`;"
+        " `SUBMISSION_UNKNOWN`"
+        " means the provider never confirmed it (an admin settles it)."
+    )
+    cancel_requested: bool = Field(
+        description="The person asked to cancel; whatever still arrives is never applied."
+    )
     apply_status: Literal["NOT_APPLIED", "APPLIED", "OUT_OF_DATE", "NEEDS_REVIEW"] = Field(
         description="What happened to the result: applied to the question, not applied (a test, a"
         " suggestion or a failure), out of date (the question changed meanwhile) or needing review"
@@ -478,3 +502,15 @@ class RunOut(BaseModel):
 
 class RunsOut(BaseModel):
     data: list[RunOut]
+
+
+class ResolveRun(BaseModel):
+    actual_usd: Decimal | None = Field(
+        default=None,
+        ge=0,
+        le=100000,
+        max_digits=12,
+        decimal_places=6,
+        description="What the provider's own billing shows this run cost, in US dollars; omit when"
+        " it cost nothing. Replaces the held reservation.",
+    )

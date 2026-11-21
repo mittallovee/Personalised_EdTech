@@ -273,7 +273,7 @@ class AiRun(Base):
     question_id: Mapped[UUID]
     operation: Mapped[str] = mapped_column(String(20))
     mode: Mapped[str] = mapped_column(String(10), default="NOW", server_default="NOW")
-    status: Mapped[str] = mapped_column(String(12), default="RUNNING", server_default="RUNNING")
+    status: Mapped[str] = mapped_column(String(20), default="RUNNING", server_default="RUNNING")
     apply_status: Mapped[str] = mapped_column(
         String(12), default="NOT_APPLIED", server_default="NOT_APPLIED"
     )
@@ -293,6 +293,12 @@ class AiRun(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Economy (batch) runs, migration 0042: what is kept to finish the run hours later.
+    request: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    provider_batch_id: Mapped[str | None]
+    submit_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    batch_discount: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
 
 
 class AiRunAttempt(Base):
