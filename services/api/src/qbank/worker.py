@@ -12,14 +12,18 @@ from qbank.core.metrics import start_metrics_server, watch_job_queue, watch_pool
 from qbank.core.secretbox import Keyring
 from qbank.core.telemetry import instrument_database, setup_tracing
 from qbank.modules.ai.jobs import register_jobs as register_ai_jobs
+from qbank.modules.ai.orchestrator import ProviderFactory
+from qbank.modules.ai.providers.registry import provider_factory, provider_for
 from qbank.modules.health.jobs import register_jobs as register_health_jobs
 
 
-def build_registry(ai_keyring: Keyring | None = None) -> JobRegistry:
+def build_registry(
+    ai_keyring: Keyring | None = None, ai_providers: ProviderFactory = provider_for
+) -> JobRegistry:
     """Every module that has background jobs registers them here."""
     registry = JobRegistry()
     register_health_jobs(registry)
-    register_ai_jobs(registry, ai_keyring)
+    register_ai_jobs(registry, ai_keyring, ai_providers)
     return registry
 
 
@@ -33,7 +37,8 @@ def main() -> int:
     watch_job_queue(database)
     if settings.metrics_port:
         start_metrics_server(settings.metrics_port)
-    worker = Worker(database, build_registry(settings.ai_keyring()))
+    registry = build_registry(settings.ai_keyring(), provider_factory(settings.ai_demo_provider))
+    worker = Worker(database, registry)
 
     def request_stop(_signum: int, _frame: FrameType | None) -> None:
         worker.stop()  # finish the current job, then exit
