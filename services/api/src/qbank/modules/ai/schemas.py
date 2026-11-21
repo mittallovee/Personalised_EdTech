@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from qbank.modules.ai.names import Mode, Operation, Provider
+from qbank.modules.ai.names import Mode, Operation, Provider, Scope
 
 
 class SetKey(BaseModel):
@@ -203,3 +203,206 @@ class SaveBudget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     monthly_inr: Rupees = Field(description="0 means this person may not use AI.")
+
+
+# --- Usage and cost (H-05, H-06) ----------------------------------------------------------------
+
+
+class UsageOut(BaseModel):
+    period: str = Field(description="The month, `YYYY-MM`, in India time.")
+    spent_usd: str = Field(
+        description="What providers billed (and what is reserved for runs in progress)."
+    )
+    spent_inr: str = Field(
+        description="The same in rupees, at the rate in force when each cost was recorded."
+    )
+    limit_inr: str | None = Field(
+        description="The person's monthly budget (their own, else the coaching's default);"
+        " null = none."
+    )
+    remaining_inr: str | None = Field(
+        description="What is left of the budget; null when there is no limit or no rate."
+    )
+    state: Literal["NO_LIMIT", "OK", "WARNING", "REACHED", "OFF"] = Field(
+        description="`WARNING` from 80 % of the budget, `REACHED` at 100 % (new runs are refused),"
+        " `OFF` when a budget is set but no dollar-to-rupee rate has been entered."
+    )
+
+
+class PersonUsageOut(UsageOut):
+    user_id: UUID
+    display_name: str | None
+
+
+class UsageListOut(BaseModel):
+    period: str
+    data: list[PersonUsageOut]
+
+
+class AdjustUsage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    amount_usd: Annotated[Decimal, Field(max_digits=12, decimal_places=6)] = Field(
+        description="US dollars to add (positive) or take off (negative) this month's usage."
+    )
+    note: str = Field(min_length=1, max_length=300, description="Why, e.g. the invoice it follows.")
+
+
+# --- The prompt library (H-13) --------------------------------------------------------------------
+
+Temperature = Annotated[Decimal, Field(ge=0, le=1, max_digits=3, decimal_places=2)]
+
+
+class VersionSummary(BaseModel):
+    id: UUID
+    version_no: int
+    change_note: str
+    author_id: UUID | None
+    author_name: str | None
+    created_at: datetime
+    temperature: str | None
+    content_hash: str
+
+
+class VersionOut(VersionSummary):
+    template_id: UUID
+    instructions: str = Field(description="The editable part: plain text with `{{placeholders}}`.")
+    operation: Operation
+    scope: Scope
+    is_active: bool
+
+
+class TemplateOut(BaseModel):
+    id: UUID
+    scope: Scope
+    operation: Operation
+    name: str
+    target_language: str | None
+    owner_user_id: UUID | None
+    revision: int = Field(description="Send as the ETag to activate, reset, adopt or dismiss.")
+    active_version: VersionSummary | None = Field(
+        description="The version in use (for a personal prompt, its latest). A coaching prompt with"
+        " none follows the platform default."
+    )
+    latest_version: VersionSummary | None
+    update_available: VersionSummary | None = Field(
+        description="A newer platform default this coaching's prompt has not looked at yet."
+    )
+
+
+class TemplatesOut(BaseModel):
+    data: list[TemplateOut]
+
+
+class LockedPartsOut(BaseModel):
+    operation: Operation
+    safety_preamble: str
+    required_placeholders: list[str]
+    optional_placeholders: list[str]
+    max_instruction_chars: int
+
+
+class LockedOut(BaseModel):
+    data: list[LockedPartsOut]
+
+
+class VersionsOut(BaseModel):
+    data: list[VersionSummary]
+
+
+class SaveVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Scope = Field(
+        description="Where the prompt lives: coaching, personal or (platform admin) platform."
+    )
+    operation: Operation
+    template_id: UUID | None = Field(
+        default=None, description="Add to this prompt; otherwise the prompt is found or started."
+    )
+    name: str | None = Field(
+        default=None, max_length=100, description="Required to start a personal prompt."
+    )
+    target_language: str | None = Field(
+        default=None,
+        max_length=3,
+        description="Translation only: a coaching prompt for one target language.",
+    )
+    instructions: str = Field(max_length=10000)
+    temperature: Temperature | None = None
+    change_note: str = Field(min_length=1, max_length=300)
+
+
+class SavedVersion(BaseModel):
+    template: TemplateOut
+    version: VersionOut
+
+
+class ActivateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_id: UUID
+
+
+class ValidateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation: Operation
+    instructions: str = Field(max_length=20000)
+
+
+class ProblemOut(BaseModel):
+    code: str
+    message: str
+
+
+class ValidateOut(BaseModel):
+    ok: bool
+    problems: list[ProblemOut]
+
+
+class PromptDiffLineOut(BaseModel):
+    op: Literal["same", "removed", "added"]
+    text: str
+
+
+class PromptDiffOut(BaseModel):
+    changed: bool
+    lines: list[PromptDiffLineOut]
+    temperature_from: str | None
+    temperature_to: str | None
+
+
+# --- The translation glossary (H-14) ------------------------------------------------------------
+
+
+class GlossaryEntryOut(BaseModel):
+    id: UUID
+    language: str
+    source_term: str
+    target_term: str
+    note: str | None
+    revision: int = Field(description="Send as the ETag to change or remove the entry.")
+    updated_at: datetime
+
+
+class GlossaryOut(BaseModel):
+    data: list[GlossaryEntryOut]
+
+
+class AddGlossaryEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    language: str = Field(max_length=3, description="The target language tag, e.g. `hi`.")
+    source_term: str = Field(min_length=1, max_length=200)
+    target_term: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=300)
+
+
+class ChangeGlossaryEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_term: str = Field(min_length=1, max_length=200)
+    target_term: str = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=300)

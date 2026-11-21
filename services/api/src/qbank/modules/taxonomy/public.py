@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from qbank.modules.taxonomy.catalogues import LANGUAGES
 from qbank.modules.taxonomy.models import Concept, Exam, Source, TaxonomyNode
 
 
@@ -63,3 +64,8 @@ def names_of(session: Session, ids: Iterable[UUID]) -> dict[UUID, str]:
     for source in session.scalars(select(Source).where(Source.id.in_(wanted))):
         names[source.id] = source.name
     return names
+
+
+def language_names() -> dict[str, str]:
+    """The question languages (tag to English name), the same for every coaching."""
+    return {language.tag: language.english_name for language in LANGUAGES}

@@ -1,9 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -137,6 +138,118 @@ class AiBudget(Base):
     monthly_inr: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class LedgerEntry(Base):
+    """One entry of the append-only usage ledger (migration 0037, M5 design note §7).
+
+    Entries are only ever added: a trigger refuses UPDATE, DELETE and TRUNCATE. ``period`` is the
+    first day of the month, in India time, in which the run began.
+    """
+
+    __tablename__ = "ai_ledger"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    run_id: Mapped[UUID | None] = mapped_column()
+    entry_kind: Mapped[str] = mapped_column(String(12))
+    period: Mapped[date] = mapped_column(Date)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(14, 6))
+    amount_inr: Mapped[Decimal | None] = mapped_column(Numeric(16, 4))
+    rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    cost_kind: Mapped[str | None] = mapped_column(String(10))
+    note: Mapped[str | None] = mapped_column(String(300))
+    created_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class PromptTemplate(Base):
+    """A prompt a person can pick, at platform, coaching or personal level (migration 0038).
+
+    ``active_version_id`` is the version in use (platform and coaching levels); a coaching template
+    with none follows the platform default. ``based_on_version_id`` is the platform version a
+    coaching prompt was last derived from or acknowledged.
+    """
+
+    __tablename__ = "prompt_templates"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"))
+    scope: Mapped[str] = mapped_column(String(10))
+    operation: Mapped[str] = mapped_column(String(20))
+    owner_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    name: Mapped[str] = mapped_column(String(100))
+    target_language: Mapped[str | None] = mapped_column(String(3))
+    active_version_id: Mapped[UUID | None] = mapped_column()
+    based_on_version_id: Mapped[UUID | None] = mapped_column()
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class PromptVersion(Base):
+    """One saved text of a prompt. Never changed after it is saved (a trigger refuses it)."""
+
+    __tablename__ = "prompt_versions"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"))
+    template_id: Mapped[UUID] = mapped_column(ForeignKey("prompt_templates.id"))
+    version_no: Mapped[int] = mapped_column(Integer)
+    instructions: Mapped[str] = mapped_column(String(8000))
+    temperature: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    change_note: Mapped[str] = mapped_column(String(300))
+    author_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class PromptActivation(Base):
+    """One switch of a template's active version: activate, rollback, reset or adopt a default."""
+
+    __tablename__ = "prompt_activations"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"))
+    template_id: Mapped[UUID] = mapped_column(ForeignKey("prompt_templates.id"))
+    version_id: Mapped[UUID | None] = mapped_column(ForeignKey("prompt_versions.id"))
+    action: Mapped[str] = mapped_column(String(15))
+    activated_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    activated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class GlossaryEntry(Base):
+    """A term a coaching wants translated one fixed way into one language (migration 0039)."""
+
+    __tablename__ = "translation_glossary"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    language: Mapped[str] = mapped_column(String(3))
+    source_term: Mapped[str] = mapped_column(String(200))
+    target_term: Mapped[str] = mapped_column(String(200))
+    note: Mapped[str | None] = mapped_column(String(300))
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    updated_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )

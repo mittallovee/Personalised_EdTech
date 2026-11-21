@@ -54,6 +54,10 @@ class Action(StrEnum):
     USE_NOTIFICATIONS = "USE_NOTIFICATIONS"
     # Provider keys, models, budgets and the other AI settings of the coaching (M5, H-02, H-03).
     MANAGE_AI_SETTINGS = "MANAGE_AI_SETTINGS"
+    # Run AI on questions, read the prompt library, keep personal prompts, see own usage (M5).
+    USE_AI = "USE_AI"
+    # Platform only: write the platform's default prompts (M5, H-13).
+    MANAGE_PLATFORM_PROMPTS = "MANAGE_PLATFORM_PROMPTS"
 
 
 _ADMINS = frozenset({Role.OWNER, Role.ADMIN})
@@ -75,10 +79,14 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.MANAGE_ANSWER_RULES: _ADMINS,
     Action.USE_NOTIFICATIONS: _EVERYONE,
     Action.MANAGE_AI_SETTINGS: _ADMINS,
+    Action.USE_AI: _EVERYONE,
+    Action.MANAGE_PLATFORM_PROMPTS: frozenset(),
 }
 
 # Platform admins may do these without acting in a coaching (they work on platform-level data).
-_PLATFORM_LEVEL = frozenset({Action.MANAGE_COACHINGS, Action.VIEW_AUDIT_LOG})
+_PLATFORM_LEVEL = frozenset(
+    {Action.MANAGE_COACHINGS, Action.VIEW_AUDIT_LOG, Action.MANAGE_PLATFORM_PROMPTS}
+)
 
 
 def is_allowed(principal: Principal, action: Action) -> bool:
