@@ -54,3 +54,17 @@ def lock_membership(session: Session, membership_id: UUID) -> None:
     """Hold the membership row until the transaction ends, so changes for one member (e.g. issuing
     a new link) run one after another. Needs its coaching in the tenant context."""
     session.execute(select(Membership.id).where(Membership.id == membership_id).with_for_update())
+
+
+def admin_user_ids(session: Session, organization_id: UUID) -> list[UUID]:
+    """The Owner and admins of a coaching, for notices that go to them. Needs that coaching in the
+    tenant context."""
+    return list(
+        session.scalars(
+            select(Membership.user_id).where(
+                Membership.organization_id == organization_id,
+                Membership.status == "ACTIVE",
+                Membership.role.in_(("OWNER", "ADMIN")),
+            )
+        )
+    )

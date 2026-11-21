@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from qbank.modules.ai.names import Mode, Operation, Provider
+from qbank.modules.ai.names import Mode, Operation, Provider, Scope
 
 
 class SetKey(BaseModel):
@@ -247,3 +247,128 @@ class AdjustUsage(BaseModel):
         description="US dollars to add (positive) or take off (negative) this month's usage."
     )
     note: str = Field(min_length=1, max_length=300, description="Why, e.g. the invoice it follows.")
+
+
+# --- The prompt library (H-13) --------------------------------------------------------------------
+
+Temperature = Annotated[Decimal, Field(ge=0, le=1, max_digits=3, decimal_places=2)]
+
+
+class VersionSummary(BaseModel):
+    id: UUID
+    version_no: int
+    change_note: str
+    author_id: UUID | None
+    author_name: str | None
+    created_at: datetime
+    temperature: str | None
+    content_hash: str
+
+
+class VersionOut(VersionSummary):
+    template_id: UUID
+    instructions: str = Field(description="The editable part: plain text with `{{placeholders}}`.")
+    operation: Operation
+    scope: Scope
+    is_active: bool
+
+
+class TemplateOut(BaseModel):
+    id: UUID
+    scope: Scope
+    operation: Operation
+    name: str
+    target_language: str | None
+    owner_user_id: UUID | None
+    revision: int = Field(description="Send as the ETag to activate, reset, adopt or dismiss.")
+    active_version: VersionSummary | None = Field(
+        description="The version in use (for a personal prompt, its latest). A coaching prompt with"
+        " none follows the platform default."
+    )
+    latest_version: VersionSummary | None
+    update_available: VersionSummary | None = Field(
+        description="A newer platform default this coaching's prompt has not looked at yet."
+    )
+
+
+class TemplatesOut(BaseModel):
+    data: list[TemplateOut]
+
+
+class LockedPartsOut(BaseModel):
+    operation: Operation
+    safety_preamble: str
+    required_placeholders: list[str]
+    optional_placeholders: list[str]
+    max_instruction_chars: int
+
+
+class LockedOut(BaseModel):
+    data: list[LockedPartsOut]
+
+
+class VersionsOut(BaseModel):
+    data: list[VersionSummary]
+
+
+class SaveVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Scope = Field(
+        description="Where the prompt lives: coaching, personal or (platform admin) platform."
+    )
+    operation: Operation
+    template_id: UUID | None = Field(
+        default=None, description="Add to this prompt; otherwise the prompt is found or started."
+    )
+    name: str | None = Field(
+        default=None, max_length=100, description="Required to start a personal prompt."
+    )
+    target_language: str | None = Field(
+        default=None,
+        max_length=3,
+        description="Translation only: a coaching prompt for one target language.",
+    )
+    instructions: str = Field(max_length=10000)
+    temperature: Temperature | None = None
+    change_note: str = Field(min_length=1, max_length=300)
+
+
+class SavedVersion(BaseModel):
+    template: TemplateOut
+    version: VersionOut
+
+
+class ActivateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version_id: UUID
+
+
+class ValidateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation: Operation
+    instructions: str = Field(max_length=20000)
+
+
+class ProblemOut(BaseModel):
+    code: str
+    message: str
+
+
+class ValidateOut(BaseModel):
+    ok: bool
+    problems: list[ProblemOut]
+
+
+class PromptDiffLineOut(BaseModel):
+    op: Literal["same", "removed", "added"]
+    text: str
+
+
+class PromptDiffOut(BaseModel):
+    changed: bool
+    lines: list[PromptDiffLineOut]
+    temperature_from: str | None
+    temperature_to: str | None

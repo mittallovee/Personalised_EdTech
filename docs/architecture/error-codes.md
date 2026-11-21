@@ -67,6 +67,14 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_FALLBACK_WITHOUT_DEFAULT` | 422 | Fallbacks were given without a first model | M5 |
 | `AI_ECONOMY_NEEDS_MODEL` | 422 | Economy was chosen without a model | M5 |
 | `AI_BUDGET_EXCEEDED` | 409 | A run would pass the person's monthly AI budget (or the budget is 0); `details` has `limit_inr` and `remaining_inr` | M5 |
+| `AI_PROMPT_INVALID` | 422 | Prompt instructions cannot be used; `details.problems` lists each (unknown or missing placeholder, too long, looks like a key, ...) | M5 |
+| `AI_PROMPT_NOTE_REQUIRED` | 422 | A new prompt version needs a change note | M5 |
+| `AI_PROMPT_NAME_REQUIRED` | 422 | A personal prompt needs a name | M5 |
+| `AI_PROMPT_LANGUAGE_INVALID` | 422 | A prompt language applies only to translation and must be a question language | M5 |
+| `AI_PROMPT_DIFF_MISMATCH` | 422 | Only versions of the same operation can be compared | M5 |
+| `AI_PROMPT_PERSONAL_NOT_ACTIVATED` | 409 | A personal prompt is picked when running; it has no active version | M5 |
+| `AI_PROMPT_NOT_RESETTABLE` | 409 | Only a coaching's own prompt can be reset to the platform default | M5 |
+| `AI_PROMPT_NO_UPDATE` | 409 | There is no newer platform default to adopt or dismiss | M5 |
 
 Feature modules add specific codes here (e.g. `QUESTION_NOT_EDITABLE`, `TWO_DECIMAL_PLACES_REQUIRED`) in the
 same pull request that introduces them.
