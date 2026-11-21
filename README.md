@@ -58,6 +58,7 @@ To try the syllabus, writing questions in all nine formats, equations, pictures,
 Useful addresses: API readiness http://localhost:8000/health/ready · API docs (local only)
 http://localhost:8000/api/docs. To open the app on your own domain, see
 [`docs/operations/remote-access.md`](docs/operations/remote-access.md).
+To watch the app with logs, traces and live graphs (off by default), follow [`docs/operations/observability.md`](docs/operations/observability.md).
 To let people sign in with Google, follow [`docs/operations/google-login.md`](docs/operations/google-login.md)
 (off until you do; the app works with passwords without it).
 

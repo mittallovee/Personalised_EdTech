@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks that the monitoring stack works end to end: a test trace and a test log line go in through
 # the Collector and come back out of Tempo and Loki through Grafana, Grafana knows its three data
-# sources, and refuses anonymous visitors.
+# sources, refuses anonymous visitors, and has both dashboards loaded.
 #
 # Run it after starting the stack (COMPOSE_PROFILES=observability docker compose up -d), and after
 # every upgrade of Grafana, Tempo, Loki, Prometheus or the Collector (their configuration formats
@@ -56,6 +56,8 @@ sources=$(curl -s -u "admin:$PW" "$G/api/datasources")
 for name in Prometheus Loki Tempo; do check "Grafana has the $name data source" "$(contains "$sources" "\"name\":\"$name\"")"; done
 anon=$(curl -s -o /dev/null -w "%{http_code}" "$G/api/datasources")
 check "Grafana refuses anonymous visitors" "$([ "$anon" = 401 ] && echo yes || echo no)"
+dash=$(curl -s -u "admin:$PW" "$G/api/search?tag=qbank")
+check "both dashboards are loaded" "$([ "$(contains "$dash" qbank-overview)$(contains "$dash" qbank-follow-request)" = yesyes ] && echo yes || echo no)"
 check "Prometheus answers a query through Grafana" "$(contains "$(curl -s -u "admin:$PW" -G "$G/api/datasources/proxy/uid/prometheus/api/v1/query" --data-urlencode 'query=vector(1)')" '"status":"success"')"
 
 [ "$fail" = 0 ] && echo "All checks passed." || echo "SOME CHECKS FAILED."
