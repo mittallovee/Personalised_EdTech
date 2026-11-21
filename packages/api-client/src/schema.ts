@@ -2432,7 +2432,7 @@ export interface paths {
         put?: never;
         /**
          * Run an AI operation on a question (H-04, H-07)
-         * @description Runs now and returns the finished run. **A run that failed is still a 201** with `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the working revision, only if the question has not changed since the run began (otherwise `apply_status` is OUT_OF_DATE and nothing is written). `test` never writes.
+         * @description Runs now and returns the finished run. With `mode` ECONOMY it returns at once with the run `QUEUED`: it is finished later in the background (about half price) and the person is notified. **A run that failed is still a 201** with `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the working revision, only if the question has not changed since the run began (otherwise `apply_status` is OUT_OF_DATE and nothing is written). `test` never writes.
          */
         post: operations["start_run_api_v1_questions__question_id__ai_runs_post"];
         delete?: never;
@@ -2475,6 +2475,46 @@ export interface paths {
          * @description Applies what a solve or verify run suggested, after the person has seen old and new. Only to the exact revision the run read: if the question has changed since, the run becomes `OUT_OF_DATE` and nothing is written. The person must still be able to edit the question. Written to the audit log.
          */
         post: operations["apply_run_api_v1_ai_runs__run_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an Economy run that is still waiting (H-18)
+         * @description Before it reaches the provider the run simply ends and its reservation is given back. After that the intent is recorded and the provider is asked to stop; **a result that still arrives is kept and charged but never applied**.
+         */
+        post: operations["cancel_run_api_v1_ai_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai/runs/{run_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle a run whose submission is unknown (H-18)
+         * @description Owner and admins. For a run in `SUBMISSION_UNKNOWN`: say what the provider's billing shows it cost (or nothing). Until then its whole reservation stays held.
+         */
+        post: operations["resolve_run_api_v1_ai_runs__run_id__resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4656,6 +4696,14 @@ export interface components {
              */
             expected_role: "OWNER" | "ADMIN" | "FACULTY";
         };
+        /** ResolveRun */
+        ResolveRun: {
+            /**
+             * Actual Usd
+             * @description What the provider's own billing shows this run cost, in US dollars; omit when it cost nothing. Replaces the held reservation.
+             */
+            actual_usd?: number | string | null;
+        };
         /**
          * ReturnIn
          * @description Why a question goes back to its author (E-06). The note is plain text.
@@ -4812,11 +4860,18 @@ export interface components {
              */
             question_id: string;
             operation: components["schemas"]["Operation"];
+            mode: components["schemas"]["Mode"];
             /**
              * Status
+             * @description `RUNNING` is a Now run in progress. An Economy run goes `QUEUED`, `SUBMITTING`, `SUBMITTED` and ends `SUCCEEDED`, `FAILED`, `CANCELLED` or `EXPIRED`; `SUBMISSION_UNKNOWN` means the provider never confirmed it (an admin settles it).
              * @enum {string}
              */
-            status: "RUNNING" | "SUCCEEDED" | "FAILED";
+            status: "RUNNING" | "QUEUED" | "SUBMITTING" | "SUBMITTED" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "SUBMISSION_UNKNOWN";
+            /**
+             * Cancel Requested
+             * @description The person asked to cancel; whatever still arrives is never applied.
+             */
+            cancel_requested: boolean;
             /**
              * Apply Status
              * @description What happened to the result: applied to the question, not applied (a test, a suggestion or a failure), out of date (the question changed meanwhile) or needing review (the person can no longer edit it).
@@ -5109,6 +5164,8 @@ export interface components {
              * @description The language to translate into (`TRANSLATE` only), such as `hi`.
              */
             target_language?: string | null;
+            /** @description `NOW` (normal price, answered at once) or `ECONOMY` (a batch at about half price, finished later, with a notification). The operation's default when omitted. */
+            mode?: components["schemas"]["Mode"] | null;
             /**
              * Test
              * @description A test run: the same call and cost, but nothing is ever written to the question.
@@ -15701,6 +15758,162 @@ export interface operations {
                 };
             };
             /** @description The run has nothing to apply or was already settled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_run_api_v1_ai_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not an Economy run, or already finished */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolve_run_api_v1_ai_runs__run_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRun"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such question or run */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The run is not in `SUBMISSION_UNKNOWN` */
             409: {
                 headers: {
                     [name: string]: unknown;

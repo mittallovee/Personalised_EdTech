@@ -8,6 +8,11 @@ The provider call is never made inside a transaction: nothing is held (no locks,
 use) while a slow provider answers. The budget is reserved in A and settled or released in C, so two
 runs cannot both pass the same budget, and a run that never reaches C (a crash) is found and closed
 by ``abandon_stale`` the next time the same person starts a run.
+
+An **Economy** run (``mode`` ECONOMY, H-18) takes only step A here: its reservation is made, its
+request and a snapshot of the question are kept on the run, and a job is queued. ``economy.py``
+hands it to the provider's batch service, waits, and then calls the same steps as C below
+(``conclude``), hours later and in a worker.
 """
 
 import hashlib
@@ -27,6 +32,7 @@ from sqlalchemy.orm import Session
 from qbank.core.auth import Principal
 from qbank.core.db import Database
 from qbank.core.errors import Conflict, NotFound, ValidationFailed
+from qbank.core.jobs import enqueue
 from qbank.core.permissions import Action, is_allowed, require
 from qbank.core.secretbox import Keyring, KeyUnreadable
 from qbank.modules.ai import budget, locked, prompts
@@ -44,6 +50,7 @@ from qbank.modules.ai.operations.base import (
 )
 from qbank.modules.ai.providers.base import (
     AIProvider,
+    BatchProvider,
     ProviderError,
     StructuredRequest,
     StructuredResult,
@@ -55,6 +62,12 @@ from qbank.modules.questions.public import QuestionForAi, read_for_ai
 log = structlog.get_logger("qbank.ai")
 
 ProviderFactory = Callable[[Provider], AIProvider]
+
+CLAIM_SUBMIT = "ai.claim_submit"  # QUEUED -> SUBMITTING, won by one worker (ADR-0009)
+SUBMIT_BATCH = "ai.submit_batch"  # the one call that hands the run to the provider
+COLLECT_BATCH = "ai.collect_batch"  # asks the provider again and again until it has ended
+SUBMIT_JOB_ATTEMPTS = 6  # the first submits; every later one only looks the batch up (reconcile)
+FIRST_COLLECT_AFTER = 60.0  # seconds
 
 STALE_AFTER = timedelta(minutes=15)  # three provider attempts of two minutes, with room to spare
 MOST_EXTRA_CHARS = 1000
@@ -107,6 +120,7 @@ class Started:
     user: str
     temperature: float | None
     chain: list[Candidate]
+    economy: bool = False  # queued for a batch: nothing more happens in this request
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,20 +129,33 @@ class RunView:
     attempts: list[AiRunAttempt]
 
 
-def _cost(model: AiModel, tokens_in: int, tokens_out: int) -> Decimal | None:
-    """Dollars for those tokens at the model's effective prices, or ``None`` if one is unknown."""
+def _cost(
+    model: AiModel, tokens_in: int, tokens_out: int, discount: Decimal | None = None
+) -> Decimal | None:
+    """Dollars for those tokens at the model's effective prices (less the batch ``discount``, a
+    fraction), or ``None`` if a price is unknown."""
     prices = effective(model)
     if prices.price_in is None or prices.price_out is None:
         return None
     usd = (Decimal(tokens_in) * prices.price_in + Decimal(tokens_out) * prices.price_out) / _MILLION
+    if discount is not None:
+        usd *= Decimal(1) - discount
     return usd.quantize(_MICRO, rounding=ROUND_UP)
 
 
-def _estimate(chain: list[Candidate], system: str, user: str, max_out: int) -> Decimal | None:
+def _estimate(
+    chain: list[Candidate],
+    system: str,
+    user: str,
+    max_out: int,
+    discount: Decimal | None = None,
+) -> Decimal | None:
     """The dearest model of the chain, so a fallback can never overspend the reservation. ``None``
     when no model of the chain has a known price."""
     tokens_in = math.ceil((len(system) + len(user)) / _CHARS_PER_TOKEN)
-    known = [cost for c in chain if (cost := _cost(c.row, tokens_in, max_out)) is not None]
+    known = [
+        cost for c in chain if (cost := _cost(c.row, tokens_in, max_out, discount)) is not None
+    ]
     return max(known) if known else None
 
 
@@ -220,10 +247,37 @@ def abandon_stale(session: Session, organization_id: UUID, user_id: UUID) -> int
     return len(stale)
 
 
+def _default_mode(session: Session, organization_id: UUID, operation: Operation) -> Mode:
+    setting = session.scalars(
+        select(OperationSetting).where(
+            OperationSetting.organization_id == organization_id,
+            OperationSetting.operation == operation.value,
+        )
+    ).first()
+    return Mode(setting.default_mode) if setting is not None else Mode.NOW
+
+
+def _economy_discount(candidate: Candidate, providers: ProviderFactory) -> Decimal | None:
+    """Check that this model may run as a batch and give the discount to reserve against. Economy
+    needs the admin to have marked the model as offering batch, a known price (the budget needs
+    something to reserve), and an adapter that can find a batch again by tag (ADR-0009)."""
+    prices = effective(candidate.row)
+    if not prices.batch_supported or not isinstance(providers(candidate.provider), BatchProvider):
+        raise Conflict(
+            "Economy is not available for this model.",
+            code="AI_ECONOMY_UNAVAILABLE",
+            details={"model": candidate.row.display_name},
+        )
+    if prices.price_in is None or prices.price_out is None:
+        raise Conflict("Economy needs a known price for the model.", code="AI_ECONOMY_NEEDS_PRICE")
+    return prices.batch_discount
+
+
 def _start(
     session: Session,
     principal: Principal,
     keyring: Keyring | None,
+    providers: ProviderFactory,
     *,
     question_id: UUID,
     operation: Operation,
@@ -232,7 +286,9 @@ def _start(
     personal_prompt_id: UUID | None,
     model_id: UUID | None,
     target_language: str | None,
+    mode: Mode | None,
     test: bool,
+    request_id: str | None,
 ) -> Started:
     """Steps 1 to 6: permission, inputs, prompt, model, estimate, and the budget reserved."""
     require(principal, Action.USE_AI)
@@ -251,6 +307,7 @@ def _start(
             " test, or withdraw the question first.",
             code="AI_QUESTION_NOT_EDITABLE",
         )
+    chosen_mode = mode or _default_mode(session, organization_id, operation)
     prepared = PREPARERS[operation](
         session, question, PrepareContext(organization_id, target_language)
     )
@@ -265,13 +322,20 @@ def _start(
     )
     system, user = compose(resolved.instructions, prepared.values, extra_instructions)
     chain = _chain(session, keyring, organization_id, operation, model_id)
+    economy = chosen_mode is Mode.ECONOMY
+    discount: Decimal | None = None
+    if economy:
+        chain = chain[:1]  # a batch has no fallback: it is one request to one model
+        discount = _economy_discount(chain[0], providers)
     abandon_stale(session, organization_id, principal.user_id)
+    temperature = float(resolved.temperature) if resolved.temperature is not None else None
     run = AiRun(
         organization_id=organization_id,
         user_id=principal.user_id,
         question_id=question.question_id,
         operation=operation.value,
-        mode=Mode.NOW.value,
+        mode=chosen_mode.value,
+        status="QUEUED" if economy else "RUNNING",
         is_test=test,
         question_revision_id=question.revision_id,
         question_revision=question.revision,
@@ -281,6 +345,27 @@ def _start(
         extra_instructions=extra_instructions,
         prompt_hash=hashlib.sha256(f"{system}\n{user}".encode()).hexdigest(),
         model_ref=chain[0].row.id,
+        batch_discount=discount if economy else None,
+        request=(
+            {
+                "system": system,
+                "user": user,
+                "schema_name": prepared.schema_name,
+                "schema": prepared.schema,
+                "max_output_tokens": prepared.max_output_tokens,
+                "temperature": temperature,
+                "target_language": target_language,
+                # What the result will be checked against hours from now, as it was today.
+                "question": {
+                    "content": question.content,
+                    "text": question.text,
+                    "metadata": question.metadata,
+                    "version_number": question.version_number,
+                },
+            }
+            if economy
+            else None
+        ),
     )
     session.add(run)
     session.flush()
@@ -289,10 +374,19 @@ def _start(
         organization_id=organization_id,
         user_id=principal.user_id,
         run_id=run.id,
-        estimate_usd=_estimate(chain, system, user, prepared.max_output_tokens),
+        estimate_usd=_estimate(chain, system, user, prepared.max_output_tokens, discount),
     )
-    temperature = float(resolved.temperature) if resolved.temperature is not None else None
-    return Started(run.id, organization_id, prepared, question, system, user, temperature, chain)
+    if economy:
+        enqueue(
+            session,
+            CLAIM_SUBMIT,
+            {"run_id": str(run.id)},
+            context=principal.tenant_context,
+            request_id=request_id,
+        )
+    return Started(
+        run.id, organization_id, prepared, question, system, user, temperature, chain, economy
+    )
 
 
 def _validate(
@@ -313,12 +407,36 @@ def _finish(
     test: bool,
     request_id: str | None,
 ) -> RunView:
-    """Steps 8 to 10: validate, record, settle or release, apply."""
+    """Steps 8 to 10 of a Now run."""
+    del test  # the run row knows whether it is a test
     run = session.scalars(select(AiRun).where(AiRun.id == started.run_id).with_for_update()).one()
+    base = RunBase(
+        started.question.question_id, started.question.revision_id, started.question.revision
+    )
+    return conclude(
+        session, principal, run, started.prepared, base, attempts, request_id=request_id
+    )
+
+
+def conclude(
+    session: Session,
+    principal: Principal | None,
+    run: AiRun,
+    prepared: Prepared,
+    base: RunBase,
+    attempts: list[Attempt],
+    *,
+    request_id: str | None,
+) -> RunView:
+    """Validate the answer, record the attempts, settle or release the budget and apply.
+
+    ``principal`` is who applies the result, as they are *now*; ``None`` (they no longer have access
+    to the coaching) keeps the result unapplied as ``NEEDS_REVIEW`` (B-10). A run that was asked
+    to be cancelled keeps whatever arrived, and is charged for it, but is never applied."""
     for position, attempt in enumerate(attempts, start=1):
         session.add(
             AiRunAttempt(
-                organization_id=started.organization_id,
+                organization_id=run.organization_id,
                 run_id=run.id,
                 position=position,
                 model_ref=attempt.candidate.row.id,
@@ -329,12 +447,13 @@ def _finish(
                 latency_ms=attempt.latency_ms,
             )
         )
+    cancelled = run.cancel_requested_at is not None
     answered = next((a for a in attempts if a.result is not None), None)
     run.finished_at = datetime.now(UTC)
     if answered is None or answered.result is None:
-        run.status = "FAILED"
+        run.status = "CANCELLED" if cancelled else "FAILED"
         run.error_code = f"AI_PROVIDER_{attempts[-1].outcome}"
-        budget.release(session, organization_id=started.organization_id, run_id=run.id)
+        budget.release(session, organization_id=run.organization_id, run_id=run.id)
         session.flush()
         return _view(session, run)
     result = answered.result
@@ -342,25 +461,25 @@ def _finish(
     run.answered_by = answered.candidate.row.model_id
     actual = result.cost_usd
     if actual is None and result.tokens_in is not None and result.tokens_out is not None:
-        actual = _cost(answered.candidate.row, result.tokens_in, result.tokens_out)
-    budget.settle(
-        session, organization_id=started.organization_id, run_id=run.id, actual_usd=actual
-    )
-    output, problem = _validate(started.prepared, result.data)
+        actual = _cost(
+            answered.candidate.row, result.tokens_in, result.tokens_out, run.batch_discount
+        )
+    budget.settle(session, organization_id=run.organization_id, run_id=run.id, actual_usd=actual)
+    output, problem = _validate(prepared, result.data)
     if output is None:
-        run.status = "FAILED"
+        run.status = "CANCELLED" if cancelled else "FAILED"
         run.error_code = problem
         session.flush()
         return _view(session, run)
-    run.status = "SUCCEEDED"
-    run.result = {"output": output, "before": started.prepared.before}
-    if not test and started.prepared.apply is not None:
-        base = RunBase(
-            started.question.question_id, started.question.revision_id, started.question.revision
-        )
-        run.apply_status = started.prepared.apply(session, principal, base, output)
-        if run.apply_status == "APPLIED":
-            _audit_applied(session, principal, run, request_id)
+    run.status = "CANCELLED" if cancelled else "SUCCEEDED"
+    run.result = {"output": output, "before": prepared.before}
+    if not run.is_test and not cancelled and prepared.apply is not None:
+        if principal is None:
+            run.apply_status = "NEEDS_REVIEW"
+        else:
+            run.apply_status = prepared.apply(session, principal, base, output)
+            if run.apply_status == "APPLIED":
+                _audit_applied(session, principal, run, request_id)
     session.flush()
     return _view(session, run)
 
@@ -389,16 +508,19 @@ def run_operation(
     personal_prompt_id: UUID | None = None,
     model_id: UUID | None = None,
     target_language: str | None = None,
+    mode: Mode | None = None,
     test: bool = False,
     request_id: str | None = None,
 ) -> RunView:
     """Run one operation on one question and return the finished run (it may have FAILED: a failed
-    run is a result, with its error code, not an exception)."""
+    run is a result, with its error code, not an exception). An Economy run returns at once, queued;
+    it finishes later in a worker."""
     with database.transaction(principal.tenant_context) as session:
         started = _start(
             session,
             principal,
             keyring,
+            providers,
             question_id=question_id,
             operation=operation,
             extra_instructions=extra_instructions,
@@ -406,8 +528,15 @@ def run_operation(
             personal_prompt_id=personal_prompt_id,
             model_id=model_id,
             target_language=target_language,
+            mode=mode,
             test=test,
+            request_id=request_id,
         )
+        if started.economy:
+            queued = session.get(AiRun, started.run_id)
+            if queued is None:  # cannot happen: it was added in this transaction
+                raise NotFound("No such run.")
+            return _view(session, queued)
     attempts = _ask_models(started, providers)
     with database.transaction(principal.tenant_context) as session:
         return _finish(session, principal, started, attempts, test=test, request_id=request_id)

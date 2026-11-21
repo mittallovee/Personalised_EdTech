@@ -91,9 +91,9 @@ class JobRegistry:
 
 _ENQUEUE = text(
     "INSERT INTO jobs (id, organization_id, created_by, type, payload, max_attempts,"
-    " idempotency_key, request_id, traceparent)"
+    " idempotency_key, request_id, traceparent, run_after)"
     " VALUES (:id, :organization_id, :created_by, :type, CAST(:payload AS jsonb), :max_attempts,"
-    " :idempotency_key, :request_id, :traceparent)"
+    " :idempotency_key, :request_id, :traceparent, now() + make_interval(secs => :delay))"
     " ON CONFLICT DO NOTHING"
 )
 _FIND_BY_KEY = text(
@@ -112,11 +112,13 @@ def enqueue(
     idempotency_key: str | None = None,
     request_id: str | None = None,
     max_attempts: int = 3,
+    delay_seconds: float = 0,
 ) -> UUID:
     """Add a job in the caller's transaction and coaching. Returns the job id.
 
     With an ``idempotency_key``, enqueueing the same job again returns the existing job's id;
     the same key with a different payload is a client error (409, API style guide §6).
+    ``delay_seconds`` holds the job back that long before a worker may take it.
     """
     job_id = new_id()
     session.execute(
@@ -131,6 +133,7 @@ def enqueue(
             "idempotency_key": idempotency_key,
             "request_id": request_id,
             "traceparent": current_traceparent(),  # the worker continues the request's trace
+            "delay": delay_seconds,
         },
     )
     if idempotency_key is None:

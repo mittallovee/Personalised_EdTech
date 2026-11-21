@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, Request, status
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
 from qbank.core.secretbox import Keyring
-from qbank.modules.ai import orchestrator
-from qbank.modules.ai.schemas import RunAttemptOut, RunOut, RunsOut, StartRun
+from qbank.modules.ai import economy, orchestrator
+from qbank.modules.ai.schemas import ResolveRun, RunAttemptOut, RunOut, RunsOut, StartRun
 
 router = APIRouter(prefix="/api/v1", tags=["ai"])
 
@@ -22,7 +22,9 @@ def _out(view: orchestrator.RunView) -> RunOut:
         id=run.id,
         question_id=run.question_id,
         operation=run.operation,
+        mode=run.mode,
         status=run.status,
+        cancel_requested=run.cancel_requested_at is not None,
         apply_status=run.apply_status,
         is_test=run.is_test,
         requested_by=run.user_id,
@@ -51,7 +53,9 @@ def _out(view: orchestrator.RunView) -> RunOut:
     "/questions/{question_id}/ai/runs",
     status_code=status.HTTP_201_CREATED,
     summary="Run an AI operation on a question (H-04, H-07)",
-    description="Runs now and returns the finished run. **A run that failed is still a 201** with"
+    description="Runs now and returns the finished run. With `mode` ECONOMY it returns at once with"
+    " the run `QUEUED`: it is finished later in the background (about half price) and the person"
+    " is notified. **A run that failed is still a 201** with"
     " `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and"
     " the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly"
     " budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the"
@@ -89,6 +93,7 @@ def start_run(
         personal_prompt_id=body.personal_prompt_id,
         model_id=body.model_id,
         target_language=body.target_language,
+        mode=body.mode,
         test=body.test,
         request_id=request.state.request_id,
     )
@@ -148,4 +153,55 @@ def apply_run(
     with database.transaction(principal.tenant_context) as session:
         return _out(
             orchestrator.apply_run(session, principal, run_id, request_id=request.state.request_id)
+        )
+
+
+@router.post(
+    "/ai/runs/{run_id}/cancel",
+    summary="Cancel an Economy run that is still waiting (H-18)",
+    description="Before it reaches the provider the run simply ends and its reservation is given"
+    " back. After that the intent is recorded and the provider is asked to stop; **a result that"
+    " still arrives is kept and charged but never applied**.",
+    responses={**_READ, 409: {"description": "Not an Economy run, or already finished"}},
+)
+def cancel_run(
+    run_id: UUID,
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> RunOut:
+    keyring: Keyring | None = request.app.state.ai_keyring
+    with database.transaction(principal.tenant_context) as session:
+        view, call = economy.cancel_run(
+            session, principal, keyring, run_id, request_id=request.state.request_id
+        )
+        out = _out(view)
+    if call is not None:  # after the intent is saved: a failure here cannot undo it
+        economy.ask_provider_to_stop(request.app.state.ai_providers, call)
+    return out
+
+
+@router.post(
+    "/ai/runs/{run_id}/resolve",
+    summary="Settle a run whose submission is unknown (H-18)",
+    description="Owner and admins. For a run in `SUBMISSION_UNKNOWN`: say what the provider's"
+    " billing shows it cost (or nothing). Until then its whole reservation stays held.",
+    responses={**_READ, 409: {"description": "The run is not in `SUBMISSION_UNKNOWN`"}},
+)
+def resolve_run(
+    run_id: UUID,
+    body: ResolveRun,
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> RunOut:
+    with database.transaction(principal.tenant_context) as session:
+        return _out(
+            economy.resolve_unknown(
+                session,
+                principal,
+                run_id,
+                actual_usd=body.actual_usd,
+                request_id=request.state.request_id,
+            )
         )

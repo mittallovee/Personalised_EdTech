@@ -14932,7 +14932,7 @@
           "ai"
         ],
         "summary": "Run an AI operation on a question (H-04, H-07)",
-        "description": "Runs now and returns the finished run. **A run that failed is still a 201** with `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the working revision, only if the question has not changed since the run began (otherwise `apply_status` is OUT_OF_DATE and nothing is written). `test` never writes.",
+        "description": "Runs now and returns the finished run. With `mode` ECONOMY it returns at once with the run `QUEUED`: it is finished later in the background (about half price) and the person is notified. **A run that failed is still a 201** with `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the working revision, only if the question has not changed since the run began (otherwise `apply_status` is OUT_OF_DATE and nothing is written). `test` never writes.",
         "operationId": "start_run_api_v1_questions__question_id__ai_runs_post",
         "security": [
           {
@@ -15271,6 +15271,216 @@
           },
           "409": {
             "description": "The run has nothing to apply or was already settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Cancel an Economy run that is still waiting (H-18)",
+        "description": "Before it reaches the provider the run simply ends and its reservation is given back. After that the intent is recorded and the provider is asked to stop; **a result that still arrives is kept and charged but never applied**.",
+        "operationId": "cancel_run_api_v1_ai_runs__run_id__cancel_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not an Economy run, or already finished",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/runs/{run_id}/resolve": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Settle a run whose submission is unknown (H-18)",
+        "description": "Owner and admins. For a run in `SUBMISSION_UNKNOWN`: say what the provider's billing shows it cost (or nothing). Until then its whole reservation stays held.",
+        "operationId": "resolve_run_api_v1_ai_runs__run_id__resolve_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run is not in `SUBMISSION_UNKNOWN`",
             "content": {
               "application/json": {
                 "schema": {
@@ -20012,6 +20222,29 @@
         ],
         "title": "RemoveMember"
       },
+      "ResolveRun": {
+        "properties": {
+          "actual_usd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Usd",
+            "description": "What the provider's own billing shows this run cost, in US dollars; omit when it cost nothing. Replaces the held reservation."
+          }
+        },
+        "type": "object",
+        "title": "ResolveRun"
+      },
       "ReturnIn": {
         "properties": {
           "reasons": {
@@ -20311,14 +20544,29 @@
           "operation": {
             "$ref": "#/components/schemas/Operation"
           },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
           "status": {
             "type": "string",
             "enum": [
               "RUNNING",
+              "QUEUED",
+              "SUBMITTING",
+              "SUBMITTED",
               "SUCCEEDED",
-              "FAILED"
+              "FAILED",
+              "CANCELLED",
+              "EXPIRED",
+              "SUBMISSION_UNKNOWN"
             ],
-            "title": "Status"
+            "title": "Status",
+            "description": "`RUNNING` is a Now run in progress. An Economy run goes `QUEUED`, `SUBMITTING`, `SUBMITTED` and ends `SUCCEEDED`, `FAILED`, `CANCELLED` or `EXPIRED`; `SUBMISSION_UNKNOWN` means the provider never confirmed it (an admin settles it)."
+          },
+          "cancel_requested": {
+            "type": "boolean",
+            "title": "Cancel Requested",
+            "description": "The person asked to cancel; whatever still arrives is never applied."
           },
           "apply_status": {
             "type": "string",
@@ -20428,7 +20676,9 @@
           "id",
           "question_id",
           "operation",
+          "mode",
           "status",
+          "cancel_requested",
           "apply_status",
           "is_test",
           "requested_by",
@@ -21028,6 +21278,17 @@
             ],
             "title": "Target Language",
             "description": "The language to translate into (`TRANSLATE` only), such as `hi`."
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Mode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`NOW` (normal price, answered at once) or `ECONOMY` (a batch at about half price, finished later, with a notification). The operation's default when omitted."
           },
           "test": {
             "type": "boolean",
