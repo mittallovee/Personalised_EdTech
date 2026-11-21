@@ -34,8 +34,14 @@ from qbank.modules.ai.catalogue import effective
 from qbank.modules.ai.keys import open_key
 from qbank.modules.ai.models import AiModel, AiRun, AiRunAttempt, OperationSetting
 from qbank.modules.ai.names import Mode, Operation, Provider
-from qbank.modules.ai.operations import solve, tag, verify
-from qbank.modules.ai.operations.base import ApplyStep, BadOutput, Prepared, RunBase
+from qbank.modules.ai.operations import solve, tag, translate, verify
+from qbank.modules.ai.operations.base import (
+    ApplyStep,
+    BadOutput,
+    PrepareContext,
+    Prepared,
+    RunBase,
+)
 from qbank.modules.ai.providers.base import (
     AIProvider,
     ProviderError,
@@ -57,24 +63,18 @@ _MILLION = Decimal(1_000_000)
 _MICRO = Decimal("0.000001")
 
 
-def _preparer(operation: Operation) -> Callable[[Session, QuestionForAi], Prepared]:
-    if operation is Operation.TAG:
-        return tag.prepare
-    if operation is Operation.SOLVE:
-        return solve.prepare
-    if operation is Operation.VERIFY:
-        return verify.prepare
-    raise Conflict(
-        "This operation is not available yet.",
-        code="AI_OPERATION_NOT_AVAILABLE",
-        details={"operation": operation.value},
-    )
-
+PREPARERS: dict[Operation, Callable[[Session, QuestionForAi, PrepareContext], Prepared]] = {
+    Operation.TAG: tag.prepare,
+    Operation.SOLVE: solve.prepare,
+    Operation.VERIFY: verify.prepare,
+    Operation.TRANSLATE: translate.prepare,
+}
 
 # Operations whose result is only a suggestion: applied by an explicit click, never by the run.
 ACCEPTORS: dict[Operation, ApplyStep] = {
     Operation.SOLVE: solve.accept,
     Operation.VERIFY: verify.accept,
+    Operation.TRANSLATE: translate.accept,
 }
 
 
@@ -231,6 +231,7 @@ def _start(
     one_off_instructions: str | None,
     personal_prompt_id: UUID | None,
     model_id: UUID | None,
+    target_language: str | None,
     test: bool,
 ) -> Started:
     """Steps 1 to 6: permission, inputs, prompt, model, estimate, and the budget reserved."""
@@ -244,18 +245,21 @@ def _start(
             code="AI_EXTRA_TOO_LONG",
         )
     question = read_for_ai(session, principal, question_id)
-    if not test and not question.editable:
+    if not test and operation is not Operation.TRANSLATE and not question.editable:
         raise Conflict(
             "This question cannot be edited now, so a result could not be applied. Run it as a"
             " test, or withdraw the question first.",
             code="AI_QUESTION_NOT_EDITABLE",
         )
-    prepared = _preparer(operation)(session, question)
+    prepared = PREPARERS[operation](
+        session, question, PrepareContext(organization_id, target_language)
+    )
     resolved = prompts.resolve(
         session,
         organization_id=organization_id,
         user_id=principal.user_id,
         operation=operation,
+        language=target_language,
         personal_template_id=personal_prompt_id,
         one_off=one_off_instructions,
     )
@@ -384,6 +388,7 @@ def run_operation(
     one_off_instructions: str | None = None,
     personal_prompt_id: UUID | None = None,
     model_id: UUID | None = None,
+    target_language: str | None = None,
     test: bool = False,
     request_id: str | None = None,
 ) -> RunView:
@@ -400,6 +405,7 @@ def run_operation(
             one_off_instructions=one_off_instructions,
             personal_prompt_id=personal_prompt_id,
             model_id=model_id,
+            target_language=target_language,
             test=test,
         )
     attempts = _ask_models(started, providers)
@@ -516,8 +522,11 @@ def apply_run(
         run.operation == Operation.VERIFY.value and "corrected_content" not in output
     ):
         raise Conflict("This run suggests no change.", code="AI_RUN_NOT_APPLICABLE")
-    base = RunBase(run.question_id, run.question_revision_id, run.question_revision)
+    base = RunBase(
+        run.question_id, run.question_revision_id, run.question_revision, request_id=request_id
+    )
     run.apply_status = accept(session, principal, base, output)
+    run.result = {**run.result, "output": output}  # a new dict: the acceptor may have added to it
     if run.apply_status == "APPLIED":
         _audit_applied(session, principal, run, request_id)
     session.flush()

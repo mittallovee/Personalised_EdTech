@@ -431,6 +431,11 @@ class StartRun(BaseModel):
     model_id: UUID | None = Field(
         default=None, description="A model of the coaching; the operation's default when omitted."
     )
+    target_language: str | None = Field(
+        default=None,
+        pattern="^[a-z]{2,3}$",
+        description="The language to translate into (`TRANSLATE` only), such as `hi`.",
+    )
     test: bool = Field(
         default=False,
         description="A test run: the same call and cost, but nothing is ever written to the"

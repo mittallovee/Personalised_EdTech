@@ -1,7 +1,7 @@
 # AI runs: how an operation runs on a question
 
-Part of M5 (see `docs/architecture/m5-design-note.md` §6). Tagging, solving and verifying are built;
-translating uses the same path (PR 5g).
+Part of M5 (see `docs/architecture/m5-design-note.md` §6). Tagging, solving, verifying and translating
+are built; Economy (batch) runs come later (PR 5h).
 
 ## Running tagging
 
@@ -33,6 +33,24 @@ suggestion and `result.before` what it would replace, so the screen can show old
 log (`AI_RUN_APPLIED`). It applies only to the exact revision the run read: if the question changed since, the run
 becomes `OUT_OF_DATE` and nothing is written. The person applying must still be able to edit the question, and
 must be the one who asked (or an admin). A test run can never be applied.
+
+## Translating
+
+`{"operation": "TRANSLATE", "target_language": "hi"}` on any question the person can open (it need not be
+editable: the source is never changed). The model gets the whole question without its labels, the two language
+names, and the coaching's glossary entries whose source term appears in the question (see `ai-prompts.md`).
+
+The answer must have **exactly the structure of the source**: the same keys, option ids, answer, equations
+and pictures, the same number of blocks. Only the words (text, picture captions and descriptions) may differ.
+The labels are carried over from the source, not taken from the model. It must also pass the question validator
+without new errors. Anything else is stored as `FAILED` (`AI_OUTPUT_INVALID`).
+
+It is a suggestion until a person applies it (`POST /api/v1/ai/runs/{id}/apply`). Applying creates a **new
+draft question** of that person, with its own code, linked to its source (`question_links`: the source and
+the *version* that was translated). It applies only if the source is still at the revision the run read.
+The new question carries `translation_of` when read, with `source_updated: true` once the source has published
+a version newer than the one translated (D-13): worked out on read, never stored. The translation then goes
+through the normal review workflow like any question; no AI run is ever a workflow step.
 
 ## Reading a run
 

@@ -4487,6 +4487,8 @@ export interface components {
              * @description Computed from the content on every read, never stored.
              */
             findings: components["schemas"]["FindingOut"][];
+            /** @description Null unless this question is a translation of another one (M5). */
+            translation_of?: components["schemas"]["TranslationOfOut"] | null;
         };
         /** QuestionPage */
         QuestionPage: {
@@ -5103,6 +5105,11 @@ export interface components {
              */
             model_id?: string | null;
             /**
+             * Target Language
+             * @description The language to translate into (`TRANSLATE` only), such as `hi`.
+             */
+            target_language?: string | null;
+            /**
              * Test
              * @description A test run: the same call and cost, but nothing is ever written to the question.
              * @default false
@@ -5184,6 +5191,31 @@ export interface components {
              * @description An active admin of this coaching, who becomes the Owner.
              */
             new_owner_membership_id: string;
+        };
+        /**
+         * TranslationOfOut
+         * @description Set on a question that was made by translating another one.
+         */
+        TranslationOfOut: {
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Source Code */
+            source_code: string;
+            /**
+             * Source Version Number
+             * @description The version of the source that was translated.
+             */
+            source_version_number: number;
+            /** Language */
+            language: string;
+            /**
+             * Source Updated
+             * @description The source has published a newer version since this was translated (D-13).
+             */
+            source_updated: boolean;
         };
         /** UnreadCount */
         UnreadCount: {

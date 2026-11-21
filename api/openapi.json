@@ -19635,6 +19635,17 @@
             "type": "array",
             "title": "Findings",
             "description": "Computed from the content on every read, never stored."
+          },
+          "translation_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranslationOfOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null unless this question is a translation of another one (M5)."
           }
         },
         "type": "object",
@@ -21005,6 +21016,19 @@
             "title": "Model Id",
             "description": "A model of the coaching; the operation's default when omitted."
           },
+          "target_language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Language",
+            "description": "The language to translate into (`TRANSLATE` only), such as `hi`."
+          },
           "test": {
             "type": "boolean",
             "title": "Test",
@@ -21208,6 +21232,43 @@
           "new_owner_membership_id"
         ],
         "title": "TransferOwnership"
+      },
+      "TranslationOfOut": {
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Source Id"
+          },
+          "source_code": {
+            "type": "string",
+            "title": "Source Code"
+          },
+          "source_version_number": {
+            "type": "integer",
+            "title": "Source Version Number",
+            "description": "The version of the source that was translated."
+          },
+          "language": {
+            "type": "string",
+            "title": "Language"
+          },
+          "source_updated": {
+            "type": "boolean",
+            "title": "Source Updated",
+            "description": "The source has published a newer version since this was translated (D-13)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_id",
+          "source_code",
+          "source_version_number",
+          "language",
+          "source_updated"
+        ],
+        "title": "TranslationOfOut",
+        "description": "Set on a question that was made by translating another one."
       },
       "UnreadCount": {
         "properties": {

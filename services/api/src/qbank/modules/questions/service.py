@@ -64,6 +64,7 @@ from qbank.modules.questions.passage_lookup import checkpoint_ids
 from qbank.modules.questions.picture_records import record_pictures
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.settings_service import load_overrides
+from qbank.modules.questions.translation import TranslationOf, translation_of
 from qbank.modules.questions.validate import validate_content
 from qbank.modules.taxonomy.public import look_up, names_of
 
@@ -86,6 +87,7 @@ class QuestionView:
     revision: QuestionRevision
     findings: list[Finding]
     review_revision: QuestionRevision | None = None
+    translation: TranslationOf | None = None  # set when this question is a translation (D-13)
 
     @property
     def shown(self) -> QuestionRevision:
@@ -288,7 +290,9 @@ def _load(
         else None
     )
     findings = _findings(session, (reviewed or revision).content, rules)
-    return QuestionView(master, version, revision, findings, reviewed)
+    return QuestionView(
+        master, version, revision, findings, reviewed, translation_of(session, master.id)
+    )
 
 
 def list_questions(

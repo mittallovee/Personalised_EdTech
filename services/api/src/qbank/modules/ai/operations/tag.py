@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
 from qbank.core.errors import ValidationFailed
-from qbank.modules.ai.operations.base import BadOutput, Prepared, RunBase
+from qbank.modules.ai.operations.base import BadOutput, PrepareContext, Prepared, RunBase
 from qbank.modules.questions.public import Applied, QuestionForAi, apply_labels
 from qbank.modules.taxonomy.public import SubjectSyllabus, bloom_keys, syllabus_of
 
@@ -105,7 +105,8 @@ def _apply(
     )
 
 
-def prepare(session: Session, question: QuestionForAi) -> Prepared:
+def prepare(session: Session, question: QuestionForAi, context: PrepareContext) -> Prepared:
+    del context
     subject = _uuid(question.metadata.get("subject_id"))
     syllabus = syllabus_of(session, subject) if subject is not None else None
     if syllabus is None:

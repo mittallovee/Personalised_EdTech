@@ -20,7 +20,7 @@ from qbank.core.db import Database
 from qbank.core.tenancy import TenantContext
 from qbank.main import create_app
 from qbank.modules.audit.models import AuditEvent
-from qbank.modules.questions.models import PublishedVersion, ReviewDecision
+from qbank.modules.questions.models import PublishedVersion, QuestionLink, ReviewDecision
 from tests.integration.conftest import (
     PLATFORM,
     Member,
@@ -533,3 +533,45 @@ def test_a_corrected_version_goes_through_review_and_replaces_the_published_one(
     third = act(client, team, "author", second, "start-correction")
     assert third.status_code == 201
     assert third.json()["version_number"] == 3
+
+
+def test_a_translation_flags_its_source_once_a_newer_version_is_published(
+    client: TestClient,
+    team: dict[str, Member],
+    catalogue: Catalogue,
+    published: dict[str, Any],
+    owner_db: Database,
+) -> None:
+    """D-13: the flag is worked out on read from the version that was translated (M5 5g). The link
+    is added directly here; making it through an AI run is tested in ``test_ai_translate.py``."""
+    translation = start(client, team, ready_for(catalogue))
+    with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
+        session.add(
+            QuestionLink(
+                organization_id=team["owner"].org_id,
+                kind="TRANSLATION",
+                source_master_id=UUID(published["id"]),
+                source_version_number=published["version_number"],
+                target_master_id=UUID(translation["id"]),
+                language="hi",
+                created_by=team["author"].user_id,
+            )
+        )
+
+    def flag() -> dict[str, Any]:
+        response = client.get(f"{PATH}/{translation['id']}", headers=as_(client, team, "author"))
+        body: dict[str, Any] = response.json()["translation_of"]
+        return body
+
+    assert flag() == {
+        "source_id": published["id"],
+        "source_code": published["code"],
+        "source_version_number": 1,
+        "language": "hi",
+        "source_updated": False,
+    }
+    correction = ok(act(client, team, "author", published, "start-correction"))
+    assert flag()["source_updated"] is False  # a correction in progress is not published yet
+    run_to(client, team, correction, "publish")
+    after = flag()
+    assert (after["source_version_number"], after["source_updated"]) == (1, True)

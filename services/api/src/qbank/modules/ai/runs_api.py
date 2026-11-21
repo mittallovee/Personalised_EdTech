@@ -88,6 +88,7 @@ def start_run(
         one_off_instructions=body.prompt,
         personal_prompt_id=body.personal_prompt_id,
         model_id=body.model_id,
+        target_language=body.target_language,
         test=body.test,
         request_id=request.state.request_id,
     )

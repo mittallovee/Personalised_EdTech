@@ -69,7 +69,6 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_BUDGET_EXCEEDED` | 409 | A run would pass the person's monthly AI budget (or the budget is 0); `details` has `limit_inr` and `remaining_inr` | M5 |
 | `AI_NO_MODEL` | 409 | No model is chosen for the operation (set one under Admin, AI) | M5 |
 | `AI_KEY_UNREADABLE` | 409 | The stored key cannot be opened (the master key changed); an admin enters it again | M5 |
-| `AI_OPERATION_NOT_AVAILABLE` | 409 | The operation is not built yet (`details.operation`) | M5 |
 | `AI_QUESTION_NOT_EDITABLE` | 409 | A real run needs an editable question; run it as a test, or withdraw the question | M5 |
 | `AI_EXTRA_TOO_LONG` | 422 | Extra instructions are longer than 1,000 characters | M5 |
 | `AI_TAG_NEEDS_SUBJECT` | 422 | Tagging needs the question's subject chosen first | M5 |
@@ -79,6 +78,8 @@ Clients branch on `code`, never on `message`. Codes are stable: once published, 
 | `AI_SOLVE_UNSUPPORTED` | 422 | The question's type is not known, so it cannot be solved | M5 |
 | `AI_SOLVE_NEEDS_OPTIONS` | 422 | Add the answer options before asking the AI to solve it | M5 |
 | `AI_RUN_NOT_APPLICABLE` | 409 | A run has nothing to apply (a test, a failure, a tag run, no correction) or was already settled; `details.apply_status` | M5 |
+| `AI_TRANSLATE_LANGUAGE_INVALID` | 422 | Translating needs a `target_language` that is one of the question languages | M5 |
+| `AI_TRANSLATE_SAME_LANGUAGE` | 422 | The question is already in the target language | M5 |
 | `AI_GLOSSARY_DUPLICATE` | 409 | That term already has a glossary entry in that language (ignoring case) | M5 |
 | `AI_GLOSSARY_FULL` | 409 | A language already holds the most glossary terms allowed | M5 |
 | `AI_GLOSSARY_LANGUAGE_INVALID` | 422 | The glossary language is not one of the question languages | M5 |

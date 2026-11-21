@@ -17,9 +17,11 @@ from qbank.core.auth import Principal
 from qbank.core.errors import AppError, Conflict, NotFound, PermissionDenied, PreconditionFailed
 from qbank.core.etag import etag
 from qbank.core.permissions import may_access_draft
+from qbank.modules.audit.public import record_event
 from qbank.modules.questions.bank_text import bank_text
 from qbank.modules.questions.domain.workflow import EDITABLE_STATES
-from qbank.modules.questions.service import get_question, save_working_revision
+from qbank.modules.questions.service import create_question, get_question, save_working_revision
+from qbank.modules.questions.translation import add_link
 
 Applied = Literal["APPLIED", "OUT_OF_DATE", "NEEDS_REVIEW"]
 
@@ -36,6 +38,7 @@ class QuestionForAi:
     question_id: UUID
     revision_id: UUID
     revision: int
+    version_number: int
     editable: bool
     content: dict[str, Any]
     text: str
@@ -51,6 +54,7 @@ def read_for_ai(session: Session, principal: Principal, question_id: UUID) -> Qu
         question_id=view.master.id,
         revision_id=revision.id,
         revision=revision.revision,
+        version_number=view.version.number,
         editable=(
             view.version.state in _EDITABLE
             and view.master.archived_at is None
@@ -118,3 +122,63 @@ def apply_labels(
     return apply_changes(
         session, principal, question_id, revision_id=revision_id, revision=revision, change=merge
     )
+
+
+@dataclass(frozen=True, slots=True)
+class CreatedQuestion:
+    id: UUID
+    code: str
+
+
+def create_translation(
+    session: Session,
+    principal: Principal,
+    source_id: UUID,
+    *,
+    revision_id: UUID,
+    revision: int,
+    language: str,
+    content: dict[str, Any],
+    request_id: str | None,
+) -> tuple[Applied, CreatedQuestion | None]:
+    """Make a translation of a question a new draft question of the person, linked to its source.
+
+    The source is never changed. It must still be at the revision the run read (else
+    ``OUT_OF_DATE``, so a translation of old text is not made), and the person must still be able
+    to open it and to create questions (else ``NEEDS_REVIEW``)."""
+    try:
+        source = read_for_ai(session, principal, source_id)
+    except NotFound, PermissionDenied:
+        return "NEEDS_REVIEW", None
+    if source.revision_id != revision_id or source.revision != revision:
+        return "OUT_OF_DATE", None
+    try:
+        view = create_question(
+            session, principal, content, idempotency_key=None, request_id=request_id
+        )
+    except NotFound, PermissionDenied:
+        return "NEEDS_REVIEW", None
+    organization_id = principal.tenant_context.organization_id
+    if organization_id is None:
+        return "NEEDS_REVIEW", None
+    add_link(
+        session,
+        principal,
+        organization_id=organization_id,
+        source_id=source_id,
+        source_version_number=source.version_number,
+        target_id=view.master.id,
+        language=language,
+    )
+    record_event(
+        session,
+        action="QUESTION_TRANSLATION_LINKED",
+        entity_type="question",
+        entity_id=view.master.id,
+        organization_id=organization_id,
+        actor_user_id=principal.user_id,
+        actor_is_platform=principal.acting_organization_id is not None,
+        request_id=request_id,
+        after={"source_id": str(source_id), "language": language},
+    )
+    return "APPLIED", CreatedQuestion(view.master.id, view.master.code)

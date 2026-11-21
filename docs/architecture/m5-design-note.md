@@ -250,7 +250,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 5d | Prompt library: tables, platform defaults, versions, validation, render, diff, activate, rollback, glossary; T46 |
 | 5e | Orchestrator, run and attempt tables, run routes, fallback, the tagging operation; T47, T49 (tag), T53. **Built:** Now mode only; Economy is 5h, and a stale-run sweeper runs when the same person starts their next run (no scheduler yet) |
 | 5f | Verify and solve with apply flows; T49. **Built:** the apply step is `POST /ai/runs/{id}/apply` |
-| 5g | Translate, `question_links`, "source updated"; T49 |
+| 5g | Translate, `question_links`, "source updated"; T49. **Built:** the result must keep the source's exact structure (only words differ); the target language is given per run |
 | 5h | Economy (batch) runs; T50 to T52 |
 | 5i | Web: Admin → AI |
 | 5j | Web: Prompt Library |
