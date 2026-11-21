@@ -1,9 +1,10 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   activate,
   actingPlatformAdmin,
   csrfOf,
+  inviteByApi,
   platformAdminContext,
   signedInOwner,
   unique,
@@ -13,26 +14,6 @@ import {
 function events(page: Page) {
   // Direct children only: each event also holds a nested list of its changes.
   return page.getByRole("list", { name: "Events" }).locator(":scope > li");
-}
-
-/** Invite someone through the API; returns what the tests need to change or activate them. */
-async function inviteByApi(
-  context: BrowserContext,
-  baseURL: string,
-  name: string,
-  role: "FACULTY" | "ADMIN" = "FACULTY",
-) {
-  const response = await context.request.post("/api/v1/members/invitations", {
-    headers: { Origin: baseURL, "X-CSRF-Token": await csrfOf(context) },
-    data: { email: `${role.toLowerCase()}-${unique()}@example.com`, display_name: name, role },
-  });
-  expect(response.status()).toBe(201);
-  const body = await response.json();
-  return {
-    membershipId: body.member.membership_id as string,
-    revision: body.member.revision as number,
-    link: `${baseURL}/activate#${body.activation.token as string}`,
-  };
 }
 
 test("the Owner sees who changed what, and when, with before and after", async ({
