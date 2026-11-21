@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 
+import { AiPanel } from "@/components/ai-panel";
 import { AppShell } from "@/components/app-shell";
 import { BlocksField } from "@/components/blocks-field";
 import { ConfirmPanel } from "@/components/confirm-panel";
@@ -205,13 +206,14 @@ function Loader({ id, myId }: { id: string; myId: string }) {
   return <Editor key={question.id} initial={question} myId={myId} />;
 }
 
-type Tab = "edit" | "preview" | "compare" | "history";
+type Tab = "edit" | "preview" | "compare" | "history" | "ai";
 
 const TABS: readonly { name: Tab; label: string }[] = [
   { name: "edit", label: "Edit" },
   { name: "preview", label: "Preview" },
   { name: "compare", label: "Compare" },
   { name: "history", label: "History" },
+  { name: "ai", label: "AI" },
 ];
 
 const STATE_TEXT: Record<SaveState, string> = {
@@ -582,6 +584,15 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
               className="grid gap-4"
             >
               <ComparePanel questionId={initial.id} />
+            </div>
+          ) : tab === "ai" ? (
+            <div role="tabpanel" id="panel-ai" aria-labelledby="tab-ai" className="grid gap-4">
+              <AiPanel
+                questionId={initial.id}
+                editable={editable && !archived}
+                beforeRun={() => save.flush()}
+                onApplied={() => void reload()}
+              />
             </div>
           ) : tab === "history" ? (
             <div
