@@ -4863,10 +4863,15 @@ export interface components {
             mode: components["schemas"]["Mode"];
             /**
              * Status
-             * @description `RUNNING` is a Now run in progress. An Economy run goes `QUEUED`, `SUBMITTING`, `SUBMITTED` and ends `SUCCEEDED`, `FAILED`, `CANCELLED` or `EXPIRED`; `SUBMISSION_UNKNOWN` means the provider never confirmed it (an admin settles it).
+             * @description The coarse state: `RUNNING` until the run has ended (an Economy run that is waiting is `RUNNING`), then `SUCCEEDED`, or `FAILED` when it ended without a result that was applied or offered (including cancelled, expired and unconfirmed runs). `phase` says exactly which.
              * @enum {string}
              */
-            status: "RUNNING" | "QUEUED" | "SUBMITTING" | "SUBMITTED" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "SUBMISSION_UNKNOWN";
+            status: "RUNNING" | "SUCCEEDED" | "FAILED";
+            /**
+             * Phase
+             * @description **Extensible: new values may be added, and a client must treat one it does not know as still in progress.** `RUNNING` (a Now run in progress); for an Economy run `QUEUED`, `SUBMITTING`, `SUBMITTED`, then an ending: `SUCCEEDED`, `FAILED`, `CANCELLED`, `EXPIRED`, or `SUBMISSION_UNKNOWN` (the provider never confirmed it; an admin must settle it).
+             */
+            phase: string;
             /**
              * Cancel Requested
              * @description The person asked to cancel; whatever still arrives is never applied.
