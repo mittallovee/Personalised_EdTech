@@ -14,11 +14,11 @@ from qbank.modules.ai.models import PromptTemplate, PromptVersion
 from qbank.modules.ai.names import Operation, Scope
 from qbank.modules.ai.schemas import (
     ActivateIn,
-    DiffLineOut,
-    DiffOut,
     LockedOut,
     LockedPartsOut,
     ProblemOut,
+    PromptDiffLineOut,
+    PromptDiffOut,
     SavedVersion,
     SaveVersion,
     TemplateOut,
@@ -161,12 +161,12 @@ def compare(
     database: Annotated[Database, Depends(get_database)],
     from_version: Annotated[UUID, Query(alias="from")],
     to_version: Annotated[UUID, Query(alias="to")],
-) -> DiffOut:
+) -> PromptDiffOut:
     with database.transaction(principal.tenant_context) as session:
         result = prompts.diff(session, principal, from_version, to_version)
-    return DiffOut(
+    return PromptDiffOut(
         changed=result.changed,
-        lines=[DiffLineOut(op=line.op, text=line.text) for line in result.lines],
+        lines=[PromptDiffLineOut(op=line.op, text=line.text) for line in result.lines],
         temperature_from=_temperature(result.temperature_from),
         temperature_to=_temperature(result.temperature_to),
     )
