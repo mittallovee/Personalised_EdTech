@@ -5189,6 +5189,206 @@
         }
       }
     },
+    "/api/v1/taxonomy/starter-syllabuses": {
+      "get": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "The built-in syllabuses a coaching can start from",
+        "description": "Owner and admins. Each one is a ready-made file in the import format; preview it with `POST /taxonomy/starter-syllabuses/{key}/imports`.",
+        "operationId": "list_starter_syllabuses_api_v1_taxonomy_starter_syllabuses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StarterSyllabusOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Starter Syllabuses Api V1 Taxonomy Starter Syllabuses Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/taxonomy/starter-syllabuses/{key}/imports": {
+      "post": {
+        "tags": [
+          "syllabus import"
+        ],
+        "summary": "See what a built-in syllabus would do",
+        "description": "Owner and admins. Makes the same preview as uploading the built-in file yourself: **nothing in the syllabus changes** until the preview is applied, and items the coaching already has are listed as unchanged. Counts towards the same upload limits (`429`, `RATE_LIMITED`). Send an `Idempotency-Key` so a retry returns the same preview.",
+        "operationId": "create_starter_import_api_v1_taxonomy_starter_syllabuses__key__imports_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]{1,40}$",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any unique string (e.g. a UUID). Retrying with the same key never creates twice.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Any unique string (e.g. a UUID). Retrying with the same key never creates twice."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Your role may not do this (`PERMISSION_DENIED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such starter syllabus (`NOT_FOUND`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Idempotency-Key was used for a different file (`IDEMPOTENCY_KEY_REUSED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many uploads in a short time, or the server is busy reading other files; see the Retry-After header (`RATE_LIMITED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/taxonomy/imports/{import_id}": {
       "get": {
         "tags": [
@@ -15647,6 +15847,41 @@
           "page"
         ],
         "title": "SourcePage"
+      },
+      "StarterSyllabusOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "examples": [
+              "jee-physics"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "examples": [
+              "JEE Physics (Class 11 and 12)"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows",
+            "description": "How many syllabus items and concepts the file has."
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "description",
+          "rows"
+        ],
+        "title": "StarterSyllabusOut"
       },
       "State": {
         "type": "string",

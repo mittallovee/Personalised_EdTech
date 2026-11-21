@@ -27,4 +27,5 @@ Status values: `Proposed` → `Accepted` (owner approved) → `Superseded by ADR
 | [0019](./0019-monitoring-stack-and-logging-rules.md) | Monitoring in practice: one log shape, never-log list, traces, metrics, opt-in local stack (extends 0010) | Proposed |
 | [0020](./0020-review-workflow-bound-to-a-frozen-revision.md) | The review workflow acts on one frozen revision; a published version never changes | **Accepted** |
 | [0021](./0021-offsite-backups-restic-to-cloudflare-r2.md) | Off-machine backups: restic (encrypted) to a Cloudflare R2 bucket, daily, including the pictures volume | **Accepted** |
+| [0022](./0022-built-in-starter-syllabus.md) | A built-in starter syllabus (JEE Physics, Chemistry, Mathematics) ships with the app and is loaded through the import preview | Proposed |
 | [0023](./0023-ai-keys-encryption-and-provider-access.md) | Coaching AI keys: AES-256-GCM with an outside master key, write-only; providers reached over plain HTTPS (refines 0009) | Proposed |
