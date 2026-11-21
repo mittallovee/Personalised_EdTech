@@ -7,7 +7,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { showsNotifications, showsReview } from "@/lib/review";
 
 // Modules arrive in later milestones (M5 AI, more admin screens).
-const UPCOMING = ["AI & prompts"];
+const UPCOMING = ["Prompt library"];
 
 /**
  * Whether to show the Users & grants link. Only a hint for the menu: the API refuses everyone
@@ -53,6 +53,7 @@ export type Page =
   | "exams-sources"
   | "import"
   | "answer-limits"
+  | "ai"
   | "profile";
 
 const ITEM = "block rounded-md px-3 py-2";
@@ -239,6 +240,17 @@ export function AppShell({
                   className={`${ITEM} ${current === "answer-limits" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
                 >
                   Answer limits
+                </Link>
+              </li>
+            )}
+            {showsUsers(me) && (
+              <li>
+                <Link
+                  href="/admin/ai"
+                  aria-current={current === "ai" ? "page" : undefined}
+                  className={`${ITEM} ${current === "ai" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  AI
                 </Link>
               </li>
             )}
