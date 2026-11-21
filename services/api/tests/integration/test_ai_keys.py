@@ -26,7 +26,15 @@ from tests.integration.conftest import Member, MigratedDatabase, make_member, si
 KEYS = "/api/v1/ai/keys"
 MASTER = base64.b64encode(bytes(range(32))).decode()
 SECOND = base64.b64encode(bytes(range(1, 33))).decode()
-CLEAR = "sk-ant-api03-ABCDEFGHIJKLMNOP-wXyZ"
+
+
+def fake_key(name: str, tail: str) -> str:
+    """A made-up key, too plain to look like a real one to the secret scanner."""
+    return f"fake-{name}-" + "a" * 16 + tail
+
+
+CLEAR = fake_key("anthropic", "wXyZ")
+OTHER_KEY = fake_key("openai", "cdef")
 
 
 def make_client(migrated_database: MigratedDatabase, master: str | None) -> Iterator[TestClient]:
@@ -123,7 +131,7 @@ def test_the_stored_column_never_holds_the_clear_key_and_the_server_can_open_it(
             {"org": team["owner"].org_id},
         ).one()
         assert CLEAR.encode() not in bytes(row.ciphertext)
-        assert b"ABCDEFGHIJ" not in bytes(row.ciphertext)
+        assert b"aaaaaaaaaa" not in bytes(row.ciphertext)
         assert len(bytes(row.nonce)) == 12
         assert (row.key_id, row.last4) == ("k1", CLEAR[-4:])
         # The server's own call path opens it; a wrong master key and a missing one do not.
@@ -139,8 +147,10 @@ def test_replacing_a_key_keeps_one_row_and_changes_what_opens(
     client: TestClient, team: dict[str, Member], owner_db: Database
 ) -> None:
     headers = sign_in(client, team["admin"].email)
-    client.put(f"{KEYS}/GOOGLE", json={"key": "AIza-first-key-0001"}, headers=headers)
-    replaced = client.put(f"{KEYS}/GOOGLE", json={"key": "AIza-second-key-0002"}, headers=headers)
+    client.put(f"{KEYS}/GOOGLE", json={"key": fake_key("google", "0001")}, headers=headers)
+    replaced = client.put(
+        f"{KEYS}/GOOGLE", json={"key": fake_key("google", "0002")}, headers=headers
+    )
     assert replaced.json()["last4"] == "0002"
     with owner_db.transaction(TenantContext(organization_id=team["owner"].org_id)) as session:
         assert (
@@ -158,14 +168,14 @@ def test_replacing_a_key_keeps_one_row_and_changes_what_opens(
             == 2
         )
         opened = open_key(session, keyring(), team["owner"].org_id, Provider.GOOGLE)
-    assert opened == "AIza-second-key-0002"
+    assert opened == fake_key("google", "0002")
 
 
 def test_deleting_a_key_removes_it_and_a_second_delete_is_not_found(
     client: TestClient, team: dict[str, Member]
 ) -> None:
     headers = sign_in(client, team["owner"].email)
-    client.put(f"{KEYS}/OPENROUTER", json={"key": "sk-or-v1-abcdef0123"}, headers=headers)
+    client.put(f"{KEYS}/OPENROUTER", json={"key": fake_key("openrouter", "0123")}, headers=headers)
     assert client.delete(f"{KEYS}/OPENROUTER", headers=headers).status_code == 204
     listed = client.get(KEYS, headers=headers).json()["data"]
     assert next(k for k in listed if k["provider"] == "OPENROUTER")["configured"] is False
@@ -214,7 +224,7 @@ def test_every_change_is_audited_with_the_last_four_characters_and_never_the_key
     assert found[1].before == {"configured": True, "last4": CLEAR[-4:]}
     assert found[1].after == {"provider": "ANTHROPIC", "configured": True, "last4": "9999"}
     dumped = " ".join(str(e.before) + str(e.after) for e in found)
-    assert "ABCDEFGH" not in dumped
+    assert "aaaaaaaa" not in dumped
     assert CLEAR not in dumped
 
 
@@ -299,7 +309,7 @@ def test_a_rotation_reseals_every_key_under_the_new_master_key(
 ) -> None:
     admin = sign_in(client, team["admin"].email)
     client.put(f"{KEYS}/ANTHROPIC", json={"key": CLEAR}, headers=admin)
-    client.put(f"{KEYS}/OPENAI", json={"key": "sk-proj-0123456789abcdef"}, headers=admin)
+    client.put(f"{KEYS}/OPENAI", json={"key": OTHER_KEY}, headers=admin)
     org = team["owner"].org_id
     rotated = keyring(SECOND, previous=f"k1={MASTER}", key_id="k2")
 
@@ -312,7 +322,7 @@ def test_a_rotation_reseals_every_key_under_the_new_master_key(
         assert open_key(session, rotated, org, Provider.ANTHROPIC) == CLEAR
         # The new master key alone now opens them: the old one can be removed.
         only_new = keyring(SECOND, key_id="k2")
-        assert open_key(session, only_new, org, Provider.OPENAI) == "sk-proj-0123456789abcdef"
+        assert open_key(session, only_new, org, Provider.OPENAI) == OTHER_KEY
         with pytest.raises(KeyUnreadable):
             open_key(session, keyring(), org, Provider.ANTHROPIC)
     # Running it again changes nothing.
