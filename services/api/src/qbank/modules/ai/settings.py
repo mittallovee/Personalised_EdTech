@@ -206,7 +206,7 @@ def list_operations(session: Session, principal: Principal) -> list[OperationVie
     ]
 
 
-def _usable_model(session: Session, organization_id: UUID, model_id: UUID) -> AiModel:
+def usable_model(session: Session, organization_id: UUID, model_id: UUID) -> AiModel:
     model = session.scalars(
         select(AiModel).where(AiModel.id == model_id, AiModel.organization_id == organization_id)
     ).first()
@@ -264,7 +264,7 @@ def save_operation(
         raise ValidationFailed(
             "Choose a model before choosing Economy.", code="AI_ECONOMY_NEEDS_MODEL"
         )
-    models = {model_id: _usable_model(session, organization_id, model_id) for model_id in chain}
+    models = {model_id: usable_model(session, organization_id, model_id) for model_id in chain}
     if mode is Mode.ECONOMY and default_model_id is not None:
         first = models[default_model_id]
         if not catalogue.effective(first).batch_supported:

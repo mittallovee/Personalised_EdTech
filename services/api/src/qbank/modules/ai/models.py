@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
@@ -13,6 +14,7 @@ from sqlalchemy import (
     String,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from qbank.core.db import Base
@@ -251,5 +253,64 @@ class GlossaryEntry(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+
+
+class AiRun(Base):
+    """One run of an operation on a question (migration 0040, M5 design note §6).
+
+    ``question_revision_id`` and ``question_revision`` pin the working revision the run read, so
+    the result is applied only to that exact text. ``prompt_version_id`` is ``None`` for a one-off
+    prompt, whose text is kept here and nowhere else. The run's cost is in the ledger, by run id.
+    """
+
+    __tablename__ = "ai_runs"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    question_id: Mapped[UUID]
+    operation: Mapped[str] = mapped_column(String(20))
+    mode: Mapped[str] = mapped_column(String(10), default="NOW", server_default="NOW")
+    status: Mapped[str] = mapped_column(String(12), default="RUNNING", server_default="RUNNING")
+    apply_status: Mapped[str] = mapped_column(
+        String(12), default="NOT_APPLIED", server_default="NOT_APPLIED"
+    )
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    question_revision_id: Mapped[UUID]
+    question_revision: Mapped[int] = mapped_column(Integer)
+    prompt_source: Mapped[str] = mapped_column(String(10))
+    prompt_version_id: Mapped[UUID | None]
+    one_off_instructions: Mapped[str | None]
+    extra_instructions: Mapped[str | None]
+    prompt_hash: Mapped[str] = mapped_column(String(64))
+    model_ref: Mapped[UUID | None]
+    answered_by: Mapped[str | None]
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error_code: Mapped[str | None]
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AiRunAttempt(Base):
+    """One call to a provider within a run: the first model and each fallback (migration 0040)."""
+
+    __tablename__ = "ai_run_attempts"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    run_id: Mapped[UUID]
+    position: Mapped[int] = mapped_column(Integer)
+    model_ref: Mapped[UUID | None]
+    provider_model: Mapped[str]
+    outcome: Mapped[str]
+    tokens_in: Mapped[int | None] = mapped_column(Integer)
+    tokens_out: Mapped[int | None] = mapped_column(Integer)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(14, 6))
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
     )

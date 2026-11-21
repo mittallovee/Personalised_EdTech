@@ -14925,6 +14925,272 @@
           }
         }
       }
+    },
+    "/api/v1/questions/{question_id}/ai/runs": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Run an AI operation on a question (H-04, H-07)",
+        "description": "Runs now and returns the finished run. **A run that failed is still a 201** with `status` FAILED and an `error_code`: the run is the record. The budget is reserved first and the request is refused with `AI_BUDGET_EXCEEDED` when it would pass the person's monthly budget. Tagging fills the chapter, topic, main concept, difficulty and Bloom level of the working revision, only if the question has not changed since the run began (otherwise `apply_status` is OUT_OF_DATE and nothing is written). `test` never writes.",
+        "operationId": "start_run_api_v1_questions__question_id__ai_runs_post",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refused: `ORIGIN_NOT_ALLOWED` (sent from another website), `CSRF_TOKEN_INVALID` (missing or wrong X-CSRF-Token)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No model or key for the operation (`AI_NO_MODEL`, `AI_KEY_MISSING`), the budget is used up (`AI_BUDGET_EXCEEDED`), or the question cannot be edited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The question lacks what the operation needs (`AI_TAG_NEEDS_SUBJECT`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "The AI runs on a question (AI history)",
+        "description": "The person's own runs on this question, newest first; admins see everyone's.",
+        "operationId": "list_runs_api_v1_questions__question_id__ai_runs_get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "question_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Question Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunsOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "One AI run",
+        "description": "The person's own run, or any run for an admin.",
+        "operationId": "get_run_api_v1_ai_runs__run_id__get",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid (`MALFORMED_REQUEST`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such question or run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -19859,6 +20125,229 @@
         ],
         "title": "RevisionSummary"
       },
+      "RunAttemptOut": {
+        "properties": {
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome",
+            "description": "`OK`, or the kind of failure (`TIMEOUT`, `RATE_LIMITED`...)."
+          },
+          "tokens_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokens In"
+          },
+          "tokens_out": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokens Out"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position",
+          "model",
+          "outcome",
+          "tokens_in",
+          "tokens_out",
+          "latency_ms"
+        ],
+        "title": "RunAttemptOut"
+      },
+      "RunOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "title": "Status"
+          },
+          "apply_status": {
+            "type": "string",
+            "enum": [
+              "NOT_APPLIED",
+              "APPLIED",
+              "OUT_OF_DATE",
+              "NEEDS_REVIEW"
+            ],
+            "title": "Apply Status",
+            "description": "What happened to the result: applied to the question, not applied (a test, a suggestion or a failure), out of date (the question changed meanwhile) or needing review (the person can no longer edit it)."
+          },
+          "is_test": {
+            "type": "boolean",
+            "title": "Is Test"
+          },
+          "requested_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requested By"
+          },
+          "prompt_source": {
+            "type": "string",
+            "enum": [
+              "ONE_OFF",
+              "PERSONAL",
+              "COACHING",
+              "PLATFORM"
+            ],
+            "title": "Prompt Source"
+          },
+          "prompt_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Version Id"
+          },
+          "answered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered By",
+            "description": "The model that answered, after any fallback."
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "`output`: what the model chose. `before`: what it replaced."
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/RunAttemptOut"
+            },
+            "type": "array",
+            "title": "Attempts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "question_id",
+          "operation",
+          "status",
+          "apply_status",
+          "is_test",
+          "requested_by",
+          "prompt_source",
+          "prompt_version_id",
+          "answered_by",
+          "result",
+          "error_code",
+          "started_at",
+          "finished_at",
+          "attempts"
+        ],
+        "title": "RunOut"
+      },
+      "RunsOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RunOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RunsOut"
+      },
       "SaveAnswerRules": {
         "properties": {
           "defaults": {
@@ -20358,6 +20847,76 @@
           "page"
         ],
         "title": "SourcePage"
+      },
+      "StartRun": {
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "extra_instructions": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Instructions",
+            "description": "A few more instructions for this run only, added after the locked safety preamble."
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt",
+            "description": "A one-off prompt for this run only. It is checked like any prompt and kept on the run, nowhere else."
+          },
+          "personal_prompt_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Personal Prompt Id",
+            "description": "One of the person's own prompts; its latest version is used."
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id",
+            "description": "A model of the coaching; the operation's default when omitted."
+          },
+          "test": {
+            "type": "boolean",
+            "title": "Test",
+            "description": "A test run: the same call and cost, but nothing is ever written to the question.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation"
+        ],
+        "title": "StartRun"
       },
       "StarterSyllabusOut": {
         "properties": {

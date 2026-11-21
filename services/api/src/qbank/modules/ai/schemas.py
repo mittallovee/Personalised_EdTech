@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -406,3 +406,70 @@ class ChangeGlossaryEntry(BaseModel):
     source_term: str = Field(min_length=1, max_length=200)
     target_term: str = Field(min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=300)
+
+
+# --- Runs (H-04, H-07) -------------------------------------------------------------------------
+
+
+class StartRun(BaseModel):
+    operation: Operation
+    extra_instructions: str | None = Field(
+        default=None,
+        max_length=1000,
+        description="A few more instructions for this run only, added after the locked safety"
+        " preamble.",
+    )
+    prompt: str | None = Field(
+        default=None,
+        max_length=8000,
+        description="A one-off prompt for this run only. It is checked like any prompt and kept on"
+        " the run, nowhere else.",
+    )
+    personal_prompt_id: UUID | None = Field(
+        default=None, description="One of the person's own prompts; its latest version is used."
+    )
+    model_id: UUID | None = Field(
+        default=None, description="A model of the coaching; the operation's default when omitted."
+    )
+    test: bool = Field(
+        default=False,
+        description="A test run: the same call and cost, but nothing is ever written to the"
+        " question.",
+    )
+
+
+class RunAttemptOut(BaseModel):
+    position: int
+    model: str
+    outcome: str = Field(description="`OK`, or the kind of failure (`TIMEOUT`, `RATE_LIMITED`...).")
+    tokens_in: int | None
+    tokens_out: int | None
+    latency_ms: int | None
+
+
+class RunOut(BaseModel):
+    id: UUID
+    question_id: UUID
+    operation: Operation
+    status: Literal["RUNNING", "SUCCEEDED", "FAILED"]
+    apply_status: Literal["NOT_APPLIED", "APPLIED", "OUT_OF_DATE", "NEEDS_REVIEW"] = Field(
+        description="What happened to the result: applied to the question, not applied (a test, a"
+        " suggestion or a failure), out of date (the question changed meanwhile) or needing review"
+        " (the person can no longer edit it)."
+    )
+    is_test: bool
+    requested_by: UUID
+    prompt_source: Literal["ONE_OFF", "PERSONAL", "COACHING", "PLATFORM"]
+    prompt_version_id: UUID | None
+    answered_by: str | None = Field(description="The model that answered, after any fallback.")
+    result: dict[str, Any] | None = Field(
+        description="`output`: what the model chose. `before`: what it replaced."
+    )
+    error_code: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    attempts: list[RunAttemptOut]
+
+
+class RunsOut(BaseModel):
+    data: list[RunOut]
