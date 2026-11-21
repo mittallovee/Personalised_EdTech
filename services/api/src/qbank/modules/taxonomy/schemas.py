@@ -195,6 +195,13 @@ ImportStatus = Literal["NEW", "CHANGED", "UNCHANGED", "ERROR"]
 ImportState = Literal["PREVIEWED", "APPLIED"]  # an expired preview is gone: 410, never shown
 
 
+class StarterSyllabusOut(BaseModel):
+    key: str = Field(examples=["jee-physics"])
+    title: str = Field(examples=["JEE Physics (Class 11 and 12)"])
+    description: str
+    rows: int = Field(description="How many syllabus items and concepts the file has.")
+
+
 class ImportCounts(BaseModel):
     new: int = Field(description="Rows that would add something.")
     changed: int = Field(description="Rows that would fill in or change something that exists.")
