@@ -23,6 +23,7 @@
    [M4 design note](./architecture/m4-design-note.md): review and bank: **approved**; being built.
 8. [M1 demo](./operations/m1-demo.md): check the foundation yourself; [M2 demo](./operations/m2-demo.md): check identity and coaching admin yourself; [M3 demo](./operations/m3-demo.md): check question authoring yourself; [remote access](./operations/remote-access.md) on your own domain;
    [Google login](./operations/google-login.md): one-time Google Cloud setup (M2).
+   [Watching the app](./operations/observability.md): logs, traces and live Grafana graphs; how to trace a failing request (K-06).
    [Backup and restore](./operations/backup-and-restore.md): taking and restoring database backups, targets, the restore drill (K-03).
    [GitHub settings checklist](./operations/github-settings.md): branch protection, required checks, secret scanning; applied by the owner (K-05).
    [Handoff to a local PC session](./operations/handoff-local-pc.md): current state, next steps and open owner items for a fresh Claude Code session.
