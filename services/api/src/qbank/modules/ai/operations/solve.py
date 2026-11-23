@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
 from qbank.core.errors import ValidationFailed
-from qbank.modules.ai.operations.base import BadOutput, Prepared, RunBase, question_json
+from qbank.modules.ai.operations.base import (
+    BadOutput,
+    PrepareContext,
+    Prepared,
+    RunBase,
+    question_json,
+)
 from qbank.modules.questions.public import (
     QUESTION_TYPES,
     Applied,
@@ -91,7 +97,8 @@ def _paragraphs(text: str) -> list[dict[str, str]]:
     ]
 
 
-def prepare(session: Session, question: QuestionForAi) -> Prepared:
+def prepare(session: Session, question: QuestionForAi, context: PrepareContext) -> Prepared:
+    del context
     del session
     content = question.content
     question_type = content.get("question_type")

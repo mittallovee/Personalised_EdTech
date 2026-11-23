@@ -43,6 +43,18 @@ class FindingCounts(BaseModel):
     warning: int
 
 
+class TranslationOfOut(BaseModel):
+    """Set on a question that was made by translating another one."""
+
+    source_id: UUID
+    source_code: str
+    source_version_number: int = Field(description="The version of the source that was translated.")
+    language: str
+    source_updated: bool = Field(
+        description="The source has published a newer version since this was translated (D-13)."
+    )
+
+
 class QuestionOut(BaseModel):
     id: UUID
     code: str = Field(description="The permanent 8-character code, never reused.")
@@ -67,6 +79,10 @@ class QuestionOut(BaseModel):
     content: dict[str, Any]
     findings: list[FindingOut] = Field(
         description="Computed from the content on every read, never stored."
+    )
+    translation_of: TranslationOfOut | None = Field(
+        default=None,
+        description="Null unless this question is a translation of another one (M5).",
     )
 
 

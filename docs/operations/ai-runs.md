@@ -1,7 +1,7 @@
 # AI runs: how an operation runs on a question
 
-Part of M5 (see `docs/architecture/m5-design-note.md` §6). Tagging, solving and verifying are built;
-translating uses the same path (PR 5g).
+Part of M5 (see `docs/architecture/m5-design-note.md` §6). Tagging, solving, verifying and translating
+are built, in Now and Economy modes.
 
 ## Running tagging
 
@@ -33,6 +33,60 @@ suggestion and `result.before` what it would replace, so the screen can show old
 log (`AI_RUN_APPLIED`). It applies only to the exact revision the run read: if the question changed since, the run
 becomes `OUT_OF_DATE` and nothing is written. The person applying must still be able to edit the question, and
 must be the one who asked (or an admin). A test run can never be applied.
+
+## Translating
+
+`{"operation": "TRANSLATE", "target_language": "hi"}` on any question the person can open (it need not be
+editable: the source is never changed). The model gets the whole question without its labels, the two language
+names, and the coaching's glossary entries whose source term appears in the question (see `ai-prompts.md`).
+
+The answer must have **exactly the structure of the source**: the same keys, option ids, answer, equations
+and pictures, the same number of blocks. Only the words (text, picture captions and descriptions) may differ.
+The labels are carried over from the source, not taken from the model. It must also pass the question validator
+without new errors. Anything else is stored as `FAILED` (`AI_OUTPUT_INVALID`).
+
+It is a suggestion until a person applies it (`POST /api/v1/ai/runs/{id}/apply`). Applying creates a **new
+draft question** of that person, with its own code, linked to its source (`question_links`: the source and
+the *version* that was translated). It applies only if the source is still at the revision the run read.
+The new question carries `translation_of` when read, with `source_updated: true` once the source has published
+a version newer than the one translated (D-13): worked out on read, never stored. The translation then goes
+through the normal review workflow like any question; no AI run is ever a workflow step.
+
+## Economy runs (about half price, done later)
+
+`"mode": "ECONOMY"` (or the operation's default mode, set under Admin, AI) hands the run to the provider's
+batch service instead of answering at once. The request returns immediately with the run `QUEUED`; the person
+keeps working and is notified (`AI_RUN_FINISHED`) when it ends.
+
+**Offered only** for a model the admin has marked as offering batch (with its discount), whose price is known,
+and whose provider adapter can find a batch again by a tag we give it (the run's id). Without that, a lost reply
+could not be told apart from a batch that was never made. Until the owner has tried it with `qbank ai-smoke`
+the adapters are unverified against the live providers, and Economy is available only where an adapter has
+proved the lookup.
+
+States: `QUEUED`, `SUBMITTING`, `SUBMITTED`, then `SUCCEEDED`, `FAILED`, `CANCELLED`, `EXPIRED` or
+`SUBMISSION_UNKNOWN`. Three background jobs do the work (the worker process must be running):
+
+- **claim**: one conditional database update moves `QUEUED` to `SUBMITTING`, so only one job can win a run;
+- **submit**: the provider is asked to make the batch **only on the job's first attempt**. After any error or
+  restart it never sends again: it looks the batch up by the run's id and adopts it. If it is still not there
+  after the last attempt (about ten minutes) the run becomes `SUBMISSION_UNKNOWN`;
+- **collect**: asks the provider every minute at first, then every five minutes, then hourly, and gives up
+  after 48 hours (providers promise 24).
+
+**Money.** The budget reserves the discounted estimate when the run is queued. A result replaces it with the
+real cost at the discounted price. A failed, expired or cancelled batch gives it back. `SUBMISSION_UNKNOWN`
+keeps the whole reservation held, so a batch that may be running is never undercounted, until an admin settles it
+with `POST /api/v1/ai/runs/{id}/resolve` (what the provider's billing shows, or nothing); that is audited.
+
+**Cancelling** (`POST /api/v1/ai/runs/{id}/cancel`): before it reaches the provider the run simply ends. After
+that the intent is recorded first and the provider is asked to stop; **a result that still arrives is kept and
+charged but never applied**.
+
+**Applying.** When the result arrives, the requester is loaded again: if they have left the coaching the result
+is kept as `NEEDS_REVIEW`; if the question changed meanwhile it is kept as `OUT_OF_DATE`; tagging otherwise
+applies by itself and solve, verify and translate stay suggestions applied by a click, exactly as for Now runs.
+The result is checked against a snapshot of the question taken when the run was queued.
 
 ## Reading a run
 
