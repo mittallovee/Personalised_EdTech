@@ -2,6 +2,10 @@
 
 > Status: **Draft for the owner's decision** · 2026-11-28 · Follows [ADR-0013](./adr/0013-cloud-neutral-deployment.md)
 > (cloud-neutral containers, choose at M7) · Phase plan: M7 "Hardening & cloud".
+> **Update 2026-11-28: the owner chose AWS, with about US$100 of credits and a wish to save cost. The cost-first design is in
+> [ADR-0025](./adr/0025-aws-single-host-with-rds.md) (one EC2 server + RDS + S3, about US$50 to 65 a month); the Fargate figures
+> below are the "growth" option, not the plan.**
+>
 > Once you choose, this becomes ADR-0025 and I write the Terraform (infrastructure as code: the cloud set-up kept as
 > reviewed text files, so it can be rebuilt and nothing is clicked together by hand).
 >
