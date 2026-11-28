@@ -52,7 +52,7 @@ export default function AiAdminPage() {
         {canManageCatalogues(me) ? (
           <>
             <AiKeysSection onChanged={() => setVersion((n) => n + 1)} />
-            <AiModelsSection version={version} />
+            <AiModelsSection version={version} onChanged={() => setVersion((n) => n + 1)} />
             <AiSettingsSection version={version} />
           </>
         ) : (

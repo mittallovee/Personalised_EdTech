@@ -90,6 +90,9 @@ services:
       AI_KEYS_MASTER_KEY: ${AI_KEYS_MASTER_KEY:-}
       AI_KEYS_MASTER_KEY_ID: ${AI_KEYS_MASTER_KEY_ID:-k1}
       AI_KEYS_PREVIOUS: ${AI_KEYS_PREVIOUS:-}
+      # true: every AI call is answered by the built-in demo provider (no real key, no network), for
+      # trying the AI screens and for the browser tests. Refused outside local development.
+      AI_DEMO_PROVIDER: ${AI_DEMO_PROVIDER:-false}
       # Monitoring (ADR-0019, docs/operations/observability.md). The metrics page is reachable only
       # inside the compose network; traces go out only when an endpoint is set (see the profile below).
       METRICS_PORT: 9100
@@ -123,6 +126,7 @@ services:
       AI_KEYS_MASTER_KEY: ${AI_KEYS_MASTER_KEY:-}
       AI_KEYS_MASTER_KEY_ID: ${AI_KEYS_MASTER_KEY_ID:-k1}
       AI_KEYS_PREVIOUS: ${AI_KEYS_PREVIOUS:-}
+      AI_DEMO_PROVIDER: ${AI_DEMO_PROVIDER:-false}  # as for the api: both must agree
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
       METRICS_PORT: 9101

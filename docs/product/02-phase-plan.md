@@ -133,9 +133,12 @@ hosting (K-06, K-16, K-19, M7), or give legal advice (K-15).
 
 ## 8. Open questions
 
-None blocking. M1, M2 and M3 are built. Next: the owner checks M3 with the [M3 demo](../operations/m3-demo.md)
-(and, if not yet done, M2 with the [M2 demo](../operations/m2-demo.md); Google login has its
-[setup guide](../operations/google-login.md)). M3's exit criterion (all nine formats: valid saves,
-invalid answers named) is covered by the tests listed in the M3 demo. Open owner items: set up the K-16
-backups (destination chosen: Cloudflare R2 with restic; follow [offsite-backups.md](../operations/offsite-backups.md), then do one real restore), and review the Dependabot PRs. Then
-M4 (review and bank): its [design note](../architecture/m4-design-note.md) is approved; M4 is being built in the pull requests of its section 14.
+M1 to M5 are built (28 Nov 2026). Check them with the demos: [M1](../operations/m1-demo.md), [M2](../operations/m2-demo.md),
+[M3](../operations/m3-demo.md), [M4](../operations/m4-demo.md) and [M5](../operations/m5-demo.md) (which can run every AI
+screen without a provider key). **Next: M6 (document ingestion).** Its [design note](../architecture/m6-design-note.md) and the
+[uploads threat model](../architecture/threat-model-uploads.md) (K-17) are drafts waiting for you: approve them or change them, and
+answer decisions D1 to D5 in the note. Nothing of M6 is built until you do.
+
+Open owner items: set up the K-16 backups (Cloudflare R2 with restic, [offsite-backups.md](../operations/offsite-backups.md), then one
+real restore); run `qbank ai-smoke` (and `--batch` for Economy) once per provider with your own key, because the real provider adapters
+are checked against the providers' documents only; review the Dependabot PRs; choose the cloud for M7.

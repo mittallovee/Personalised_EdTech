@@ -34,13 +34,25 @@ const PRIMARY =
  * The models each provider offers this coaching (H-03, H-17): refresh the list from the provider,
  * turn models on for faculty, and add the facts the provider does not give (a price, whether batch
  * is offered). A price that nobody knows is shown as unknown, never guessed. `version` changes when
- * a key was saved or removed, so the list is read again.
+ * a key was saved or removed, so the list is read again; `onChanged` tells the page when this list
+ * changed, so "What each operation uses" offers the models just turned on.
  */
-export function AiModelsSection({ version }: { version: number }) {
+export function AiModelsSection({
+  version,
+  onChanged,
+}: {
+  version: number;
+  /** The list of models changed (one was turned on or off, a price changed, a refresh arrived):
+   *  the sections that offer these models are read again. */
+  onChanged: () => void;
+}) {
   const [models, setModels] = useState<Models | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const reload = () => setAttempt((n) => n + 1);
+  const reload = () => {
+    setAttempt((n) => n + 1);
+    onChanged();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -322,7 +334,7 @@ function ModelRow({ model, reload }: { model: Model; reload: () => void }) {
           />
           <p className="text-xs text-zinc-600 sm:col-span-2 dark:text-zinc-400">
             Leave a box empty to use what the provider says. Economy also needs a known price and a
-            provider that can find a batch again, which today means OpenAI.
+            provider that can find a batch again, which today means OpenAI and Google.
           </p>
           <div className="flex gap-2 sm:col-span-2">
             <button type="submit" disabled={busy} className={PRIMARY}>

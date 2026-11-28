@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     ai_keys_master_key_id: str = "k1"
     ai_keys_previous: SecretStr | None = None
 
+    # Answer every AI call with the built-in demo provider instead of a real one (no network, no
+    # real key): for trying the screens and for the browser tests. Refused outside local development
+    # and tests, so a hosted system can never silently serve made-up answers.
+    ai_demo_provider: bool = False
+
     # Web addresses allowed to send changes (POST/PUT/PATCH/DELETE) from a browser; see
     # core/origin.py. JSON list, e.g. ALLOWED_ORIGINS='["https://app.example.com"]'.
     allowed_origins: list[str] = Field(default=["http://localhost:3000"], min_length=1)
@@ -161,6 +166,8 @@ class Settings(BaseSettings):
             raise ValueError("SESSION_COOKIE_SECURE must be true outside local development")
         if hosted and any(not origin.startswith("https://") for origin in self.allowed_origins):
             raise ValueError("ALLOWED_ORIGINS must use https outside local development")
+        if hosted and self.ai_demo_provider:
+            raise ValueError("AI_DEMO_PROVIDER must not be set outside local development")
         return self
 
 

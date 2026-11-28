@@ -95,7 +95,13 @@ jobs:
           # The tests sign in and use links from one address, far more often than a person would.
           LOGIN_ATTEMPTS_PER_IP: "1000"
           LOGIN_ATTEMPTS_PER_EMAIL: "1000"
+          # The AI journey (T55): the demo provider answers instead of a real one, and a throwaway master
+          # key (made here, used for this run only) lets the test store a fake provider key.
+          AI_DEMO_PROVIDER: "true"
         run: |
+          AI_KEYS_MASTER_KEY="$(python3 -c 'import base64,secrets;print(base64.b64encode(secrets.token_bytes(32)).decode())')"
+          echo "::add-mask::$AI_KEYS_MASTER_KEY"
+          export AI_KEYS_MASTER_KEY
           docker compose up --build -d
           deadline=$((SECONDS + 300))
           until curl -sf -o /dev/null --max-time 5 http://localhost:3000/login \

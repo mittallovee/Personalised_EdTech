@@ -5,7 +5,7 @@ solve and verify them, and reviewed questions are published into a versioned, se
 tests and papers, student apps, live exams, analytics, courses and personalized AI teaching on the same API.
 
 **Status:** Phase 1, milestones M1 (foundation), M2 (identity & coaching admin) and M3 (question authoring) built; check them yourself with the [M1 demo](docs/operations/m1-demo.md), the [M2 demo](docs/operations/m2-demo.md) and the [M3 demo](docs/operations/m3-demo.md).
-M4 (review and bank) is built; check it with the [M4 demo](docs/operations/m4-demo.md). Next: M5 (AI assist and prompt library), whose [design note](docs/architecture/m5-design-note.md) is a draft for you to read. Designs: [M1](docs/architecture/m1-design-note.md), [M2](docs/architecture/m2-design-note.md), [M3](docs/architecture/m3-design-note.md), [M4 (approved)](docs/architecture/m4-design-note.md).
+M4 (review and bank) is built; check it with the [M4 demo](docs/operations/m4-demo.md). M5 (AI assist and prompt library) is built; check it with the [M5 demo](docs/operations/m5-demo.md), which also shows how to try every AI screen without a provider key (`AI_DEMO_PROVIDER=true`). Next: M6 (document ingestion), whose [design note](docs/architecture/m6-design-note.md) is a draft for you to read. Designs: [M1](docs/architecture/m1-design-note.md), [M2](docs/architecture/m2-design-note.md), [M3](docs/architecture/m3-design-note.md), [M4 (approved)](docs/architecture/m4-design-note.md), [M5](docs/architecture/m5-design-note.md).
 
 ## Documentation
 - Start here: [`docs/README.md`](docs/README.md)

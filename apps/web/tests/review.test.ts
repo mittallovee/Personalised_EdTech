@@ -95,6 +95,51 @@ group("notifications", () => {
     expect(second.detail).toBe("Version 2 is now the one in use.");
   });
 
+  it("say an Economy run ended, in words, and whether it was applied", () => {
+    const done = describe(
+      note("AI_RUN_FINISHED", {
+        question_id: "q9",
+        operation: "VERIFY",
+        status: "SUCCEEDED",
+        apply_status: "NOT_APPLIED",
+      }),
+    );
+    expect(done.title).toBe("Your Economy verification has finished");
+    expect(done.detail).toBe("Open the question and its AI tab to see the result.");
+    expect(done.questionId).toBe("q9");
+    const tagged = describe(
+      note("AI_RUN_FINISHED", { operation: "TAG", status: "SUCCEEDED", apply_status: "APPLIED" }),
+    );
+    expect(tagged.detail).toBe("It was applied to the question.");
+    const failed = describe(note("AI_RUN_FINISHED", { operation: "SOLVE", status: "FAILED" }));
+    expect(failed.title).toBe("Your Economy solving did not finish");
+    expect(failed.detail).toBeNull();
+    expect(describe(note("AI_RUN_FINISHED", { status: "EXPIRED" })).title).toBe(
+      "Your Economy run ran out of time at the provider",
+    );
+  });
+
+  it("say a budget threshold was crossed, with the amounts", () => {
+    const warning = describe(note("AI_BUDGET_WARNING", { spent_inr: "410.00", limit_inr: "500" }));
+    expect(warning.title).toBe("You have used 80% of your monthly AI budget");
+    expect(warning.detail).toBe(
+      "Spent ₹410.00 of ₹500. Runs continue until the budget is reached.",
+    );
+    expect(warning.questionId).toBeNull();
+    const reached = describe(note("AI_BUDGET_REACHED", {}));
+    expect(reached.title).toBe("You have reached your monthly AI budget");
+    expect(reached.detail).toContain("refused until next month");
+  });
+
+  it("say a prompt was changed and a submission could not be confirmed", () => {
+    const prompt = describe(note("AI_PROMPT_ACTIVATED", { operation: "VERIFY", version_no: 4 }));
+    expect(prompt.detail).toBe("The verification prompt is now version 4.");
+    expect(describe(note("AI_PROMPT_ACTIVATED", { operation: "NOPE" })).detail).toBeNull();
+    const unknown = describe(note("AI_SUBMISSION_UNKNOWN", { question_id: "q3", run_id: "r" }));
+    expect(unknown.title).toBe("An Economy run could not be confirmed");
+    expect(unknown.questionId).toBe("q3");
+  });
+
   it("never fail on facts they do not expect", () => {
     const odd = describe(note("SOMETHING_NEW", { code: 5, question_id: ["x"] }));
     expect(odd.title).toBe("An update about a question");

@@ -96,9 +96,92 @@ export function describe(notification: Notification): {
       questionId,
     };
   }
+  const ai = describeAi(notification.kind, data, questionId);
+  if (ai !== null) return ai;
   return {
     title: code === null ? "An update about a question" : `An update about question ${code}`,
     detail: null,
     questionId,
   };
+}
+
+const AI_WORK: Record<string, string> = {
+  TAG: "tagging",
+  SOLVE: "solving",
+  VERIFY: "verification",
+  TRANSLATE: "translation",
+};
+
+const AI_ENDING: Record<string, string> = {
+  SUCCEEDED: "has finished",
+  FAILED: "did not finish",
+  CANCELLED: "was cancelled",
+  EXPIRED: "ran out of time at the provider",
+  SUBMISSION_UNKNOWN: "could not be confirmed by the provider",
+};
+
+/**
+ * The AI notifications (M5): an Economy run that ended, a budget threshold, a prompt that was
+ * changed, a run whose submission is unknown. Null for any other kind. Every fact is shown as text
+ * and a missing or odd one only makes the sentence plainer.
+ */
+function describeAi(
+  kind: string,
+  data: Record<string, unknown>,
+  questionId: string | null,
+): { title: string; detail: string | null; questionId: string | null } | null {
+  if (kind === "AI_RUN_FINISHED") {
+    const operation = text(data["operation"]);
+    const work = (operation && AI_WORK[operation]) || "run";
+    const status = text(data["status"]);
+    const ending = (status && AI_ENDING[status]) || "has ended";
+    const applied = text(data["apply_status"]) === "APPLIED";
+    return {
+      title: `Your Economy ${work} ${ending}`,
+      detail:
+        status === "SUCCEEDED"
+          ? applied
+            ? "It was applied to the question."
+            : "Open the question and its AI tab to see the result."
+          : null,
+      questionId,
+    };
+  }
+  if (kind === "AI_BUDGET_WARNING" || kind === "AI_BUDGET_REACHED") {
+    const spent = text(data["spent_inr"]);
+    const limit = text(data["limit_inr"]);
+    return {
+      title:
+        kind === "AI_BUDGET_WARNING"
+          ? "You have used 80% of your monthly AI budget"
+          : "You have reached your monthly AI budget",
+      detail:
+        (spent && limit ? `Spent ₹${spent} of ₹${limit}. ` : "") +
+        (kind === "AI_BUDGET_REACHED"
+          ? "New AI runs are refused until next month, or until an admin raises it."
+          : "Runs continue until the budget is reached."),
+      questionId: null,
+    };
+  }
+  if (kind === "AI_PROMPT_ACTIVATED") {
+    const operation = text(data["operation"]);
+    const version = typeof data["version_no"] === "number" ? data["version_no"] : null;
+    return {
+      title: "A coaching prompt was changed",
+      detail:
+        operation && AI_WORK[operation] && version !== null
+          ? `The ${AI_WORK[operation]} prompt is now version ${version}.`
+          : null,
+      questionId: null,
+    };
+  }
+  if (kind === "AI_SUBMISSION_UNKNOWN") {
+    return {
+      title: "An Economy run could not be confirmed",
+      detail:
+        "The provider never confirmed it was received. Its cost stays reserved until an admin settles it.",
+      questionId,
+    };
+  }
+  return null;
 }
