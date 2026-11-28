@@ -9465,7 +9465,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/qbank__modules__questions__duplicates_api__DuplicatesOut"
+                  "$ref": "#/components/schemas/DuplicatesOut"
                 }
               }
             }
@@ -15112,7 +15112,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/qbank__modules__ai__schemas__RunsOut"
+                  "$ref": "#/components/schemas/RunsOut"
                 }
               }
             }
@@ -16676,7 +16676,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/qbank__modules__ingestion__schemas__RunsOut"
+                  "$ref": "#/components/schemas/IngestRunsOut"
                 }
               }
             }
@@ -17465,7 +17465,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/qbank__modules__ingestion__schemas__DuplicatesOut"
+                  "$ref": "#/components/schemas/CandidateDuplicatesOut"
                 }
               }
             }
@@ -18324,6 +18324,56 @@
         ],
         "title": "BudgetsOut"
       },
+      "CandidateDuplicateOut": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "exact": {
+            "type": "boolean",
+            "title": "Exact"
+          },
+          "similarity_percent": {
+            "type": "integer",
+            "title": "Similarity Percent"
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "code",
+          "exact",
+          "similarity_percent",
+          "preview"
+        ],
+        "title": "CandidateDuplicateOut"
+      },
+      "CandidateDuplicatesOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateDuplicateOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "CandidateDuplicatesOut"
+      },
       "CandidateOut": {
         "properties": {
           "id": {
@@ -19113,6 +19163,105 @@
           "meaning"
         ],
         "title": "DifficultyLevelOut"
+      },
+      "DuplicateOut": {
+        "properties": {
+          "question_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Question Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "description": "The workflow state of the version the bank shows."
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "EXACT",
+              "NEAR"
+            ],
+            "title": "Match",
+            "description": "`EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text."
+          },
+          "similarity_percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Similarity Percent",
+            "description": "How alike the two texts are."
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview",
+            "description": "The beginning of the other question's stem (plain text)."
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DecisionOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest decision about this pair, for the text as it is now."
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_id",
+          "code",
+          "state",
+          "match",
+          "similarity_percent",
+          "preview",
+          "decision"
+        ],
+        "title": "DuplicateOut"
+      },
+      "DuplicatesOut": {
+        "properties": {
+          "checked_revision_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Checked Revision Id",
+            "description": "The text that was checked: the one under review or published, else the working copy of a draft."
+          },
+          "version_number": {
+            "type": "integer",
+            "title": "Version Number"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateOut"
+            },
+            "type": "array",
+            "title": "Data",
+            "description": "Exact matches first, then near ones, closest first."
+          },
+          "qc_blocked_by": {
+            "items": {
+              "$ref": "#/components/schemas/Blocker"
+            },
+            "type": "array",
+            "title": "Qc Blocked By",
+            "description": "What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of."
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked_revision_id",
+          "version_number",
+          "data",
+          "qc_blocked_by"
+        ],
+        "title": "DuplicatesOut"
       },
       "EditCandidate": {
         "properties": {
@@ -20110,6 +20259,22 @@
           "data"
         ],
         "title": "IngestPagesOut"
+      },
+      "IngestRunsOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/StartedRun"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "IngestRunsOut"
       },
       "IngestSettingsOut": {
         "properties": {
@@ -23182,6 +23347,22 @@
         ],
         "title": "RunOut"
       },
+      "RunsOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/RunOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "RunsOut"
+      },
       "SameAs": {
         "properties": {
           "question_id": {
@@ -24667,187 +24848,6 @@
           "data"
         ],
         "title": "VersionsOut"
-      },
-      "qbank__modules__ai__schemas__RunsOut": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/RunOut"
-            },
-            "type": "array",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "RunsOut"
-      },
-      "qbank__modules__ingestion__schemas__DuplicateOut": {
-        "properties": {
-          "question_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Question Id"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "exact": {
-            "type": "boolean",
-            "title": "Exact"
-          },
-          "similarity_percent": {
-            "type": "integer",
-            "title": "Similarity Percent"
-          },
-          "preview": {
-            "type": "string",
-            "title": "Preview"
-          }
-        },
-        "type": "object",
-        "required": [
-          "question_id",
-          "code",
-          "exact",
-          "similarity_percent",
-          "preview"
-        ],
-        "title": "DuplicateOut"
-      },
-      "qbank__modules__ingestion__schemas__DuplicatesOut": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/qbank__modules__ingestion__schemas__DuplicateOut"
-            },
-            "type": "array",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "DuplicatesOut"
-      },
-      "qbank__modules__ingestion__schemas__RunsOut": {
-        "properties": {
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/StartedRun"
-            },
-            "type": "array",
-            "title": "Data"
-          }
-        },
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "title": "RunsOut"
-      },
-      "qbank__modules__questions__duplicates_api__DuplicateOut": {
-        "properties": {
-          "question_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Question Id"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "state": {
-            "type": "string",
-            "title": "State",
-            "description": "The workflow state of the version the bank shows."
-          },
-          "match": {
-            "type": "string",
-            "enum": [
-              "EXACT",
-              "NEAR"
-            ],
-            "title": "Match",
-            "description": "`EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text."
-          },
-          "similarity_percent": {
-            "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
-            "title": "Similarity Percent",
-            "description": "How alike the two texts are."
-          },
-          "preview": {
-            "type": "string",
-            "title": "Preview",
-            "description": "The beginning of the other question's stem (plain text)."
-          },
-          "decision": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DecisionOut"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The newest decision about this pair, for the text as it is now."
-          }
-        },
-        "type": "object",
-        "required": [
-          "question_id",
-          "code",
-          "state",
-          "match",
-          "similarity_percent",
-          "preview",
-          "decision"
-        ],
-        "title": "DuplicateOut"
-      },
-      "qbank__modules__questions__duplicates_api__DuplicatesOut": {
-        "properties": {
-          "checked_revision_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Checked Revision Id",
-            "description": "The text that was checked: the one under review or published, else the working copy of a draft."
-          },
-          "version_number": {
-            "type": "integer",
-            "title": "Version Number"
-          },
-          "data": {
-            "items": {
-              "$ref": "#/components/schemas/qbank__modules__questions__duplicates_api__DuplicateOut"
-            },
-            "type": "array",
-            "title": "Data",
-            "description": "Exact matches first, then near ones, closest first."
-          },
-          "qc_blocked_by": {
-            "items": {
-              "$ref": "#/components/schemas/Blocker"
-            },
-            "type": "array",
-            "title": "Qc Blocked By",
-            "description": "What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of."
-          }
-        },
-        "type": "object",
-        "required": [
-          "checked_revision_id",
-          "version_number",
-          "data",
-          "qc_blocked_by"
-        ],
-        "title": "DuplicatesOut"
       }
     },
     "securitySchemes": {

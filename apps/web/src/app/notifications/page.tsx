@@ -91,13 +91,13 @@ function Notifications() {
     notificationsChanged();
   }
 
-  async function open(notification: Notification, questionId: string) {
+  async function open(notification: Notification, target: string) {
     try {
       await markRead(notification);
     } catch {
       // Opening the question matters more than the mark; it stays unread and can be marked later.
     }
-    router.push(`/questions/${questionId}`);
+    router.push(target);
   }
 
   async function readAll() {
@@ -156,13 +156,13 @@ function Notifications() {
             >
               <p className="font-medium">
                 {fresh && <span className="sr-only">Unread: </span>}
-                {told.questionId ? (
+                {told.questionId || told.href ? (
                   <Link
-                    href={`/questions/${told.questionId}`}
+                    href={told.href ?? `/questions/${told.questionId}`}
                     className="underline"
                     onClick={(event) => {
                       event.preventDefault();
-                      void open(notification, told.questionId!);
+                      void open(notification, told.href ?? `/questions/${told.questionId}`);
                     }}
                   >
                     {told.title}

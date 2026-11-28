@@ -70,7 +70,7 @@ class StartedRun(BaseModel):
     finished_at: datetime | None
 
 
-class RunsOut(BaseModel):
+class IngestRunsOut(BaseModel):
     data: list[StartedRun]
 
 
@@ -116,7 +116,7 @@ class SameAs(BaseModel):
     question_id: UUID
 
 
-class DuplicateOut(BaseModel):
+class CandidateDuplicateOut(BaseModel):
     question_id: UUID
     code: str
     exact: bool
@@ -124,8 +124,8 @@ class DuplicateOut(BaseModel):
     preview: str
 
 
-class DuplicatesOut(BaseModel):
-    data: list[DuplicateOut]
+class CandidateDuplicatesOut(BaseModel):
+    data: list[CandidateDuplicateOut]
 
 
 class IngestSettingsOut(BaseModel):

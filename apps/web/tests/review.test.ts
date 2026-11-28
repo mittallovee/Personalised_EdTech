@@ -140,6 +140,25 @@ group("notifications", () => {
     expect(unknown.questionId).toBe("q3");
   });
 
+  it("say a document has been read, how many questions, and lead to it", () => {
+    const done = describe(
+      note("INGEST_EXTRACTED", { file_id: "f1", state: "DONE", candidates: 3, pages_failed: 0 }),
+    );
+    expect(done.title).toBe("Your document has been read: 3 questions found");
+    expect(done.href).toBe("/uploads/f1");
+    expect(done.questionId).toBeNull();
+    expect(done.detail).toContain("nothing becomes a question until you accept it");
+    const one = describe(note("INGEST_EXTRACTED", { file_id: "f1", candidates: 1 }));
+    expect(one.title).toBe("Your document has been read: 1 question found");
+    const partly = describe(
+      note("INGEST_EXTRACTED", { file_id: "f1", candidates: 2, pages_failed: 1 }),
+    );
+    expect(partly.detail).toContain("1 page could not be read");
+    const failed = describe(note("INGEST_EXTRACTED", { file_id: "f1", state: "FAILED" }));
+    expect(failed.title).toBe("Reading your document did not finish");
+    expect(describe(note("INGEST_EXTRACTED", {})).href).toBeNull();
+  });
+
   it("never fail on facts they do not expect", () => {
     const odd = describe(note("SOMETHING_NEW", { code: 5, question_id: ["x"] }));
     expect(odd.title).toBe("An update about a question");

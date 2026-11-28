@@ -55,6 +55,7 @@ export type Page =
   | "answer-limits"
   | "ai"
   | "prompts"
+  | "uploads"
   | "usage"
   | "profile";
 
@@ -265,6 +266,17 @@ export function AppShell({
                 Prompt library
               </Link>
             </li>
+            {showsSyllabus(me) && (
+              <li>
+                <Link
+                  href="/uploads"
+                  aria-current={current === "uploads" ? "page" : undefined}
+                  className={`${ITEM} ${current === "uploads" ? CURRENT : "hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+                >
+                  Uploads
+                </Link>
+              </li>
+            )}
             <li>
               <Link
                 href="/usage"

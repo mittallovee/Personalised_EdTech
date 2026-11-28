@@ -16,14 +16,14 @@ from qbank.core.permissions import Action, require
 from qbank.modules.ingestion import candidates
 from qbank.modules.ingestion.models import IngestCandidate, IngestRun
 from qbank.modules.ingestion.schemas import (
+    CandidateDuplicateOut,
+    CandidateDuplicatesOut,
     CandidateOut,
     CandidatesOut,
-    DuplicateOut,
-    DuplicatesOut,
     EditCandidate,
+    IngestRunsOut,
     IngestSettingsOut,
     RejectCandidate,
-    RunsOut,
     SameAs,
     SaveIngestSettings,
     StartedRun,
@@ -173,10 +173,12 @@ def read_runs(
     file_id: UUID,
     principal: CurrentPrincipal,
     database: Annotated[Database, Depends(get_database)],
-) -> RunsOut:
+) -> IngestRunsOut:
     require(principal, Action.USE_INGEST)
     with database.transaction(principal.tenant_context) as session:
-        return RunsOut(data=[_run(r) for r in candidates.list_runs(session, principal, file_id)])
+        return IngestRunsOut(
+            data=[_run(r) for r in candidates.list_runs(session, principal, file_id)]
+        )
 
 
 @router.get(
@@ -318,13 +320,13 @@ def candidate_duplicates(
     request: Request,
     principal: CurrentPrincipal,
     database: Annotated[Database, Depends(get_database)],
-) -> DuplicatesOut:
+) -> CandidateDuplicatesOut:
     timeout: int = request.app.state.settings.search_timeout_ms
     with database.transaction(principal.tenant_context) as session:
         found = candidates.duplicates(session, principal, candidate_id, timeout_ms=timeout)
-        return DuplicatesOut(
+        return CandidateDuplicatesOut(
             data=[
-                DuplicateOut(
+                CandidateDuplicateOut(
                     question_id=d.master_id,
                     code=d.code,
                     exact=d.exact,

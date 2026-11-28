@@ -3247,6 +3247,27 @@ export interface components {
             /** Data */
             data: components["schemas"]["BudgetOut"][];
         };
+        /** CandidateDuplicateOut */
+        CandidateDuplicateOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /** Exact */
+            exact: boolean;
+            /** Similarity Percent */
+            similarity_percent: number;
+            /** Preview */
+            preview: string;
+        };
+        /** CandidateDuplicatesOut */
+        CandidateDuplicatesOut: {
+            /** Data */
+            data: components["schemas"]["CandidateDuplicateOut"][];
+        };
         /** CandidateOut */
         CandidateOut: {
             /**
@@ -3629,6 +3650,60 @@ export interface components {
             level: number;
             /** Meaning */
             meaning: string;
+        };
+        /** DuplicateOut */
+        DuplicateOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /**
+             * State
+             * @description The workflow state of the version the bank shows.
+             */
+            state: string;
+            /**
+             * Match
+             * @description `EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text.
+             * @enum {string}
+             */
+            match: "EXACT" | "NEAR";
+            /**
+             * Similarity Percent
+             * @description How alike the two texts are.
+             */
+            similarity_percent: number;
+            /**
+             * Preview
+             * @description The beginning of the other question's stem (plain text).
+             */
+            preview: string;
+            /** @description The newest decision about this pair, for the text as it is now. */
+            decision: components["schemas"]["DecisionOut"] | null;
+        };
+        /** DuplicatesOut */
+        DuplicatesOut: {
+            /**
+             * Checked Revision Id
+             * Format: uuid
+             * @description The text that was checked: the one under review or published, else the working copy of a draft.
+             */
+            checked_revision_id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Data
+             * @description Exact matches first, then near ones, closest first.
+             */
+            data: components["schemas"]["DuplicateOut"][];
+            /**
+             * Qc Blocked By
+             * @description What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of.
+             */
+            qc_blocked_by: components["schemas"]["Blocker"][];
         };
         /** EditCandidate */
         EditCandidate: {
@@ -4083,6 +4158,11 @@ export interface components {
         IngestPagesOut: {
             /** Data */
             data: components["schemas"]["IngestPageOut"][];
+        };
+        /** IngestRunsOut */
+        IngestRunsOut: {
+            /** Data */
+            data: components["schemas"]["StartedRun"][];
         };
         /** IngestSettingsOut */
         IngestSettingsOut: {
@@ -5479,6 +5559,11 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["RunAttemptOut"][];
         };
+        /** RunsOut */
+        RunsOut: {
+            /** Data */
+            data: components["schemas"]["RunOut"][];
+        };
         /** SameAs */
         SameAs: {
             /**
@@ -6078,91 +6163,6 @@ export interface components {
         VersionsOut: {
             /** Data */
             data: components["schemas"]["VersionSummary"][];
-        };
-        /** RunsOut */
-        qbank__modules__ai__schemas__RunsOut: {
-            /** Data */
-            data: components["schemas"]["RunOut"][];
-        };
-        /** DuplicateOut */
-        qbank__modules__ingestion__schemas__DuplicateOut: {
-            /**
-             * Question Id
-             * Format: uuid
-             */
-            question_id: string;
-            /** Code */
-            code: string;
-            /** Exact */
-            exact: boolean;
-            /** Similarity Percent */
-            similarity_percent: number;
-            /** Preview */
-            preview: string;
-        };
-        /** DuplicatesOut */
-        qbank__modules__ingestion__schemas__DuplicatesOut: {
-            /** Data */
-            data: components["schemas"]["qbank__modules__ingestion__schemas__DuplicateOut"][];
-        };
-        /** RunsOut */
-        qbank__modules__ingestion__schemas__RunsOut: {
-            /** Data */
-            data: components["schemas"]["StartedRun"][];
-        };
-        /** DuplicateOut */
-        qbank__modules__questions__duplicates_api__DuplicateOut: {
-            /**
-             * Question Id
-             * Format: uuid
-             */
-            question_id: string;
-            /** Code */
-            code: string;
-            /**
-             * State
-             * @description The workflow state of the version the bank shows.
-             */
-            state: string;
-            /**
-             * Match
-             * @description `EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text.
-             * @enum {string}
-             */
-            match: "EXACT" | "NEAR";
-            /**
-             * Similarity Percent
-             * @description How alike the two texts are.
-             */
-            similarity_percent: number;
-            /**
-             * Preview
-             * @description The beginning of the other question's stem (plain text).
-             */
-            preview: string;
-            /** @description The newest decision about this pair, for the text as it is now. */
-            decision: components["schemas"]["DecisionOut"] | null;
-        };
-        /** DuplicatesOut */
-        qbank__modules__questions__duplicates_api__DuplicatesOut: {
-            /**
-             * Checked Revision Id
-             * Format: uuid
-             * @description The text that was checked: the one under review or published, else the working copy of a draft.
-             */
-            checked_revision_id: string;
-            /** Version Number */
-            version_number: number;
-            /**
-             * Data
-             * @description Exact matches first, then near ones, closest first.
-             */
-            data: components["schemas"]["qbank__modules__questions__duplicates_api__DuplicateOut"][];
-            /**
-             * Qc Blocked By
-             * @description What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of.
-             */
-            qc_blocked_by: components["schemas"]["Blocker"][];
         };
     };
     responses: never;
@@ -12646,7 +12646,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["qbank__modules__questions__duplicates_api__DuplicatesOut"];
+                    "application/json": components["schemas"]["DuplicatesOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
@@ -16254,7 +16254,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["qbank__modules__ai__schemas__RunsOut"];
+                    "application/json": components["schemas"]["RunsOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
@@ -17454,7 +17454,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["qbank__modules__ingestion__schemas__RunsOut"];
+                    "application/json": components["schemas"]["IngestRunsOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
@@ -18013,7 +18013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["qbank__modules__ingestion__schemas__DuplicatesOut"];
+                    "application/json": components["schemas"]["CandidateDuplicatesOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */

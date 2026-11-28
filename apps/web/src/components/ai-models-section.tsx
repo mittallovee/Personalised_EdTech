@@ -209,6 +209,7 @@ function ModelRow({ model, reload }: { model: Model; reload: () => void }) {
   const [priceIn, setPriceIn] = useState(model.overlay.price_in ?? "");
   const [priceOut, setPriceOut] = useState(model.overlay.price_out ?? "");
   const [batch, setBatch] = useState(model.overlay.batch_supported === true);
+  const [vision, setVision] = useState(model.overlay.supports_vision === true);
   const [discount, setDiscount] = useState(model.overlay.batch_discount ?? "");
   const [problems, setProblems] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +258,7 @@ function ModelRow({ model, reload }: { model: Model; reload: () => void }) {
         price_in: parsedIn.value,
         price_out: parsedOut.value,
         batch_supported: batch ? true : null,
+        supports_vision: vision ? true : null,
         batch_discount: parsedDiscount.value,
       },
     });
@@ -325,6 +327,14 @@ function ModelRow({ model, reload }: { model: Model; reload: () => void }) {
               onChange={(event) => setBatch(event.target.checked)}
             />
             This model offers Economy (batch) runs
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={vision}
+              onChange={(event) => setVision(event.target.checked)}
+            />
+            This model reads pictures (needed to read uploaded papers)
           </label>
           <Amount
             label="Batch discount (0.5 means half price)"

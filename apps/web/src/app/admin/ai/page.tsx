@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AiKeysSection } from "@/components/ai-keys-section";
 import { AiModelsSection } from "@/components/ai-models-section";
 import { AiSettingsSection } from "@/components/ai-settings-section";
+import { IngestModelSection } from "@/components/ingest-model-section";
 import { AppShell } from "@/components/app-shell";
 import { canManageCatalogues } from "@/lib/syllabus";
 import { useMe } from "@/lib/use-me";
@@ -54,6 +55,7 @@ export default function AiAdminPage() {
             <AiKeysSection onChanged={() => setVersion((n) => n + 1)} />
             <AiModelsSection version={version} onChanged={() => setVersion((n) => n + 1)} />
             <AiSettingsSection version={version} />
+            <IngestModelSection version={version} />
           </>
         ) : (
           <p role="alert" className={ALERT}>

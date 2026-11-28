@@ -156,3 +156,12 @@ def test_set_grants_contract_does_not_cap_the_raw_list() -> None:
     from qbank.modules.organizations.schemas import SetGrants
 
     assert "maxItems" not in SetGrants.model_json_schema()["properties"]["grants"]
+
+
+def test_no_two_modules_share_a_schema_name() -> None:
+    """When two modules name a schema the same, FastAPI renames BOTH in the contract (to
+    ``qbank__modules__...``), which silently breaks every client built from it. Give a new schema a
+    name no other module uses."""
+    names = json.loads(render_openapi())["components"]["schemas"]
+    clashing = sorted(name for name in names if name.startswith("qbank__"))
+    assert clashing == [], f"These schema names are used by more than one module: {clashing}"

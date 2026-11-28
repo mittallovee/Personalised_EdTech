@@ -73,6 +73,8 @@ export function describe(notification: Notification): {
   title: string;
   detail: string | null;
   questionId: string | null;
+  /** Where the notification leads when it is not a question (an uploaded document). */
+  href: string | null;
 } {
   const data = notification.data as Record<string, unknown>;
   const code = text(data["code"]);
@@ -86,6 +88,7 @@ export function describe(notification: Notification): {
       title: `${named} was returned to you`,
       detail: parts.length > 0 ? parts.join(". ") : null,
       questionId,
+      href: null,
     };
   }
   if (notification.kind === "QUESTION_PUBLISHED") {
@@ -94,6 +97,7 @@ export function describe(notification: Notification): {
       title: `${named} was published`,
       detail: version !== null && version > 1 ? `Version ${version} is now the one in use.` : null,
       questionId,
+      href: null,
     };
   }
   const ai = describeAi(notification.kind, data, questionId);
@@ -102,6 +106,7 @@ export function describe(notification: Notification): {
     title: code === null ? "An update about a question" : `An update about question ${code}`,
     detail: null,
     questionId,
+    href: null,
   };
 }
 
@@ -129,7 +134,7 @@ function describeAi(
   kind: string,
   data: Record<string, unknown>,
   questionId: string | null,
-): { title: string; detail: string | null; questionId: string | null } | null {
+): { title: string; detail: string | null; questionId: string | null; href: string | null } | null {
   if (kind === "AI_RUN_FINISHED") {
     const operation = text(data["operation"]);
     const work = (operation && AI_WORK[operation]) || "run";
@@ -145,6 +150,7 @@ function describeAi(
             : "Open the question and its AI tab to see the result."
           : null,
       questionId,
+      href: null,
     };
   }
   if (kind === "AI_BUDGET_WARNING" || kind === "AI_BUDGET_REACHED") {
@@ -161,6 +167,7 @@ function describeAi(
           ? "New AI runs are refused until next month, or until an admin raises it."
           : "Runs continue until the budget is reached."),
       questionId: null,
+      href: null,
     };
   }
   if (kind === "AI_PROMPT_ACTIVATED") {
@@ -173,6 +180,7 @@ function describeAi(
           ? `The ${AI_WORK[operation]} prompt is now version ${version}.`
           : null,
       questionId: null,
+      href: null,
     };
   }
   if (kind === "AI_SUBMISSION_UNKNOWN") {
@@ -181,6 +189,29 @@ function describeAi(
       detail:
         "The provider never confirmed it was received. Its cost stays reserved until an admin settles it.",
       questionId,
+      href: null,
+    };
+  }
+  if (kind === "INGEST_EXTRACTED") {
+    const fileId = text(data["file_id"]);
+    const found = typeof data["candidates"] === "number" ? data["candidates"] : null;
+    const failed = typeof data["pages_failed"] === "number" ? data["pages_failed"] : 0;
+    const state = text(data["state"]);
+    return {
+      title:
+        state === "FAILED"
+          ? "Reading your document did not finish"
+          : found === null
+            ? "Your document has been read"
+            : `Your document has been read: ${found} ${found === 1 ? "question" : "questions"} found`,
+      detail:
+        state === "FAILED"
+          ? "Open it to see why and to try again."
+          : failed > 0
+            ? `${failed} ${failed === 1 ? "page" : "pages"} could not be read. Open it to review what was found.`
+            : "Open it to review them: nothing becomes a question until you accept it.",
+      questionId: null,
+      href: fileId ? `/uploads/${fileId}` : null,
     };
   }
   return null;
