@@ -3,7 +3,7 @@
 # COPY --from) can propose updates for it.
 FROM astral/uv:0.12 AS uv
 
-FROM python:3.14-slim AS build
+FROM python:3.15-slim AS build
 COPY --from=uv /uv /bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
@@ -13,7 +13,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY services/api/ ./
 RUN uv sync --frozen --no-dev
 
-FROM python:3.14-slim AS runtime
+FROM python:3.15-slim AS runtime
 RUN useradd --create-home --uid 10001 app \
  && mkdir -p /data/storage && chown app:app /data/storage  # uploaded files (ADR-0012)
 COPY --from=build --chown=app:app /app /app
