@@ -38,3 +38,20 @@ class IngestFileOut(BaseModel):
 class IngestFilePage(BaseModel):
     data: list[IngestFileOut]
     page: PageInfo
+
+
+class IngestPageOut(BaseModel):
+    page_no: int
+    state: Literal["READY", "FAILED"]
+    width: int | None
+    height: int | None
+    has_picture: bool = Field(description="False for a page of a Word file: it has text only.")
+    text_chars: int = Field(description="How much text the document itself carries on this page.")
+    text: str | None = Field(description="That text, as text (never markup).")
+    figures: int = Field(description="Pictures found inside a Word page.")
+    warnings: list[str] = Field(description="For example `EQUATION_AS_TEXT`: check it by eye.")
+    error_code: str | None
+
+
+class IngestPagesOut(BaseModel):
+    data: list[IngestPageOut]

@@ -25,6 +25,8 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
     "pillow>=13,<14",
     "cryptography>=50,<51",
+    "pypdfium2>=5.15.2,<6",
+    "pillow-heif>=1.9.0,<2",
 ]
 
 [project.scripts]
@@ -67,6 +69,11 @@ python_version = "3.14"
 mypy_path = "src"
 packages = ["qbank"]
 plugins = ["pydantic.mypy"]
+
+# pdfium's Python binding ships no type information.
+[[tool.mypy.overrides]]
+module = ["pypdfium2", "pypdfium2.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

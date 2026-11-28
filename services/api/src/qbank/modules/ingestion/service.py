@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
@@ -15,7 +15,7 @@ from qbank.core.permissions import Action, is_allowed
 from qbank.core.storage import Storage
 from qbank.modules.audit.public import record_event
 from qbank.modules.ingestion.filetype import Detected, clean_name
-from qbank.modules.ingestion.models import IngestFile
+from qbank.modules.ingestion.models import IngestFile, IngestPage
 from qbank.modules.ingestion.public import RENDER_JOB
 
 IN_FLIGHT_STATES = ("UPLOADED", "RENDERING", "EXTRACTING")
@@ -126,3 +126,86 @@ def list_files(
         query = query.where(tuple_(IngestFile.created_at, IngestFile.id) < after)
     rows = list(session.scalars(query.limit(limit + 1)))
     return rows[:limit], len(rows) > limit
+
+
+TERMINAL_STATES = ("DONE", "PARTIAL", "FAILED", "CANCELLED")
+
+
+def list_pages(session: Session, principal: Principal, file_id: UUID) -> list[IngestPage]:
+    get_file(session, principal, file_id)  # the same visibility as the file
+    return list(
+        session.scalars(
+            select(IngestPage).where(IngestPage.file_id == file_id).order_by(IngestPage.page_no)
+        )
+    )
+
+
+def get_page(session: Session, principal: Principal, file_id: UUID, page_no: int) -> IngestPage:
+    get_file(session, principal, file_id)
+    page = session.scalars(
+        select(IngestPage).where(IngestPage.file_id == file_id, IngestPage.page_no == page_no)
+    ).one_or_none()
+    if page is None:
+        raise NotFound("No such page.")
+    return page
+
+
+def cancel_file(
+    session: Session, principal: Principal, file_id: UUID, *, request_id: str | None
+) -> IngestFile:
+    """Stop a file that is waiting or being read. What is already made is kept."""
+    row = get_file(session, principal, file_id)
+    if row.state in TERMINAL_STATES:
+        raise Conflict("This document has already finished.", code="INGEST_ALREADY_FINISHED")
+    session.execute(
+        update(IngestFile)
+        .where(IngestFile.id == file_id, IngestFile.state.not_in(TERMINAL_STATES))
+        .values(state="CANCELLED", error_code=None, updated_at=func.now())
+    )
+    session.refresh(row)
+    record_event(
+        session,
+        action="INGEST_FILE_CANCELLED",
+        entity_type="ingest_file",
+        entity_id=file_id,
+        organization_id=row.organization_id,
+        actor_user_id=principal.user_id,
+        request_id=request_id,
+    )
+    return row
+
+
+def retry_file(
+    session: Session, principal: Principal, file_id: UUID, *, request_id: str | None
+) -> IngestFile:
+    """Read a failed or cancelled file again. Pages already made are kept and not made twice."""
+    row = get_file(session, principal, file_id)
+    if row.state not in ("FAILED", "CANCELLED"):
+        raise Conflict(
+            "Only a failed or cancelled document can be tried again.", code="INGEST_NOT_RETRYABLE"
+        )
+    session.execute(
+        update(IngestFile)
+        .where(IngestFile.id == file_id)
+        .values(state="UPLOADED", error_code=None, updated_at=func.now())
+    )
+    session.refresh(row)
+    enqueue(
+        session,
+        RENDER_JOB,
+        {"file_id": str(file_id)},
+        context=principal.tenant_context,
+        idempotency_key=f"{file_id}-retry-{new_id()}",
+        request_id=request_id,
+        max_attempts=3,
+    )
+    record_event(
+        session,
+        action="INGEST_FILE_RETRIED",
+        entity_type="ingest_file",
+        entity_id=file_id,
+        organization_id=row.organization_id,
+        actor_user_id=principal.user_id,
+        request_id=request_id,
+    )
+    return row

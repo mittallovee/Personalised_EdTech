@@ -5,11 +5,11 @@ queues a job. It never parses a document: that happens in the sandboxed worker (
 """
 
 import math
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from starlette.concurrency import run_in_threadpool
 
 from qbank.core.auth import CurrentPrincipal
@@ -27,7 +27,13 @@ from qbank.modules.ingestion.filetype import (
     sniff,
 )
 from qbank.modules.ingestion.models import IngestFile
-from qbank.modules.ingestion.schemas import IngestFileOut, IngestFilePage, State
+from qbank.modules.ingestion.schemas import (
+    IngestFileOut,
+    IngestFilePage,
+    IngestPageOut,
+    IngestPagesOut,
+    State,
+)
 
 router = APIRouter(prefix="/api/v1/ingest", tags=["ingestion"])
 
@@ -228,3 +234,122 @@ def read_original(
             "ETag": f'"{sha}"',
         },
     )
+
+
+def _page_out(page: Any) -> IngestPageOut:
+    return IngestPageOut(
+        page_no=page.page_no,
+        state=page.state,
+        width=page.width,
+        height=page.height,
+        has_picture=page.image_key is not None,
+        text_chars=len(page.text or ""),
+        text=page.text,
+        figures=len(page.figures or []),
+        warnings=list(page.warnings or []),
+        error_code=page.error_code,
+    )
+
+
+@router.get(
+    "/files/{file_id}/pages",
+    summary="The pages made from a document",
+    description="Same visibility as the file. An unreadable page is listed with its code.",
+    responses={**_DENIED, **_NOT_FOUND},
+)
+def read_pages(
+    file_id: UUID,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> IngestPagesOut:
+    require(principal, Action.USE_INGEST)
+    with database.transaction(principal.tenant_context) as session:
+        return IngestPagesOut(
+            data=[_page_out(p) for p in service.list_pages(session, principal, file_id)]
+        )
+
+
+@router.get(
+    "/files/{file_id}/pages/{page_no}/image",
+    summary="A page as a picture",
+    description=(
+        "Same visibility as the file. Always the server's own re-encoded JPEG (`size=full`, or a"
+        " small `thumb`), never the original, so it is safe to show. 404 for a page with no"
+        " picture (a Word page)."
+    ),
+    responses={**_DENIED, **_NOT_FOUND, 200: {"content": {"image/jpeg": {}}}},
+)
+def read_page_image(
+    file_id: UUID,
+    page_no: Annotated[int, Path(ge=1, le=10_000)],
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+    size: Annotated[Literal["full", "thumb"], Query()] = "full",
+) -> Response:
+    require(principal, Action.USE_INGEST)
+    with database.transaction(principal.tenant_context) as session:
+        page = service.get_page(session, principal, file_id, page_no)
+        key = page.thumb_key if size == "thumb" else page.image_key
+    if key is None:
+        raise NotFound("This page has no picture.")
+    storage: Storage = request.app.state.storage
+    try:
+        data = storage.get(key)
+    except Missing as exc:
+        raise NotFound("The picture is no longer available.") from exc
+    return Response(
+        content=data,
+        media_type="image/jpeg",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "Cache-Control": "private, no-cache",
+        },
+    )
+
+
+@router.post(
+    "/files/{file_id}/cancel",
+    summary="Stop reading a document (G-03)",
+    description=(
+        "The person who sent it, or the Owner and admins. Pages already made are kept; no new page"
+        " is started. A document that has already finished is refused (`INGEST_ALREADY_FINISHED`)."
+    ),
+    responses={**_DENIED, **_NOT_FOUND, 409: {"description": "Already finished"}},
+)
+def cancel_file(
+    file_id: UUID,
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> IngestFileOut:
+    require(principal, Action.USE_INGEST)
+    with database.transaction(principal.tenant_context) as session:
+        row = service.cancel_file(
+            session, principal, file_id, request_id=getattr(request.state, "request_id", None)
+        )
+        return _out(row)
+
+
+@router.post(
+    "/files/{file_id}/retry",
+    summary="Read a failed or cancelled document again (G-03)",
+    description=(
+        "Same visibility as the file. Pages already made are kept and are not made twice."
+        " Any other state is refused (`INGEST_NOT_RETRYABLE`)."
+    ),
+    responses={**_DENIED, **_NOT_FOUND, 409: {"description": "Not failed or cancelled"}},
+)
+def retry_file(
+    file_id: UUID,
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> IngestFileOut:
+    require(principal, Action.USE_INGEST)
+    with database.transaction(principal.tenant_context) as session:
+        row = service.retry_file(
+            session, principal, file_id, request_id=getattr(request.state, "request_id", None)
+        )
+        return _out(row)
