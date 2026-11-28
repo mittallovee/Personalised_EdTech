@@ -1,7 +1,8 @@
 # M6 Design Note: Document ingestion v1
 
-> Status: **Approved by the owner on 2026-11-28.** D1 = option A (read Word files directly); D2, D3 and D5 follow the
-> recommendations below; D4 (sample files) is asked again at 6j. Milestone M6 of Phase 1
+> Status: **Approved by the owner on 2026-11-28; built (6a to 6k).** D1 = option A (read Word files directly); D2, D3 and D5 follow the
+> recommendations below; D4 (sample files) is still **yours to provide**: real-model quality is measured with
+> `qbank ingest-measure` ([M6 demo §6](../operations/m6-demo.md#measure)). **Deferred:** Economy for whole files (6f's "Economy variant"), a golden-set screen. Milestone M6 of Phase 1
 > ([phase plan](../product/02-phase-plan.md)).
 > Requirements: G-01, G-03, G-04, G-05 (best effort), G-06, G-09, G-11, D-16 (duplicate check on candidates),
 > I-01 (in-app notices) · Hardening: **K-17** (uploads threat model and a separate low-resource parsing worker; the

@@ -133,11 +133,11 @@ hosting (K-06, K-16, K-19, M7), or give legal advice (K-15).
 
 ## 8. Open questions
 
-M1 to M5 are built (28 Nov 2026). Check them with the demos: [M1](../operations/m1-demo.md), [M2](../operations/m2-demo.md),
-[M3](../operations/m3-demo.md), [M4](../operations/m4-demo.md) and [M5](../operations/m5-demo.md) (which can run every AI
-screen without a provider key). **Next: M6 (document ingestion).** Its [design note](../architecture/m6-design-note.md) and the
-[uploads threat model](../architecture/threat-model-uploads.md) (K-17) are drafts waiting for you: approve them or change them, and
-answer decisions D1 to D5 in the note. Nothing of M6 is built until you do.
+M1 to M6 are built (28 Nov 2026). Check them with the demos: [M1](../operations/m1-demo.md), [M2](../operations/m2-demo.md),
+[M3](../operations/m3-demo.md), [M4](../operations/m4-demo.md), [M5](../operations/m5-demo.md) and [M6](../operations/m6-demo.md) (which run
+every AI screen without a provider key). M6's exit criterion "extraction quality measured on your sample pages" needs **your** real
+sample papers: see [M6 demo §6](../operations/m6-demo.md#measure). **Next: M7 (hardening and cloud),** which needs your decision on the
+cloud (AWS or Google Cloud) and your accounts; Economy for whole-file extraction and a golden-set screen are deferred from M6.
 
 Open owner items: set up the K-16 backups (Cloudflare R2 with restic, [offsite-backups.md](../operations/offsite-backups.md), then one
 real restore); run `qbank ai-smoke` (and `--batch` for Economy) once per provider with your own key, because the real provider adapters
