@@ -234,6 +234,7 @@ the live services**, and each adapter PR says so.
 | **Accept ADR-0009** (providers, live catalogue, prompt library) | Proposed | **You** |
 | The **USD→INR rate** and the default monthly budget | Set in Admin → AI | **You** |
 | Run `qbank ai-smoke` once per configured provider | After 5a-2 | **You** |
+| Run `qbank ai-smoke --batch --model <id>` once for OpenAI and for Google before using Economy | After 5h-2 | **You** |
 | Provider spend limits set in each provider's own console as a second safety net | Recommended | **You** |
 
 ## 14. Work plan (pull requests)
@@ -252,7 +253,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 5f | Verify and solve with apply flows; T49. **Built:** the apply step is `POST /ai/runs/{id}/apply` |
 | 5g | Translate, `question_links`, "source updated"; T49. **Built:** the result must keep the source's exact structure (only words differ); the target language is given per run |
 | 5h-1 | Economy (batch) runs: the state machine, jobs, cancel, resolve and the fake provider's batch service; T50 to T52. **Built** |
-| 5h-2 | The real batch adapters (OpenAI, Google) and `qbank ai-smoke` for batch; until then Economy is offered only where an adapter exists |
+| 5h-2 | The real batch adapters (OpenAI, Google) and `qbank ai-smoke --batch`. **Built:** written from the providers' batch documents (read 28 Nov 2026) and checked with recorded answers; **not yet tried against the live services**. Anthropic and OpenRouter have no Economy adapter, so their models never offer it |
 | 5i | Web: Admin → AI |
 | 5j | Web: Prompt Library |
 | 5k | Web: AI actions, result panel, AI history, Usage. **Built:** the run form sits under an **AI** tab of the question page instead of a pop-up dialog; faculty read `GET /ai/options` because the admin model and operation lists are admin-only; the cost of one run is not estimated before it starts (the dialog shows the model's price and the budget left); the Usage page shows one row per person, because the API does not report cost by operation or model |

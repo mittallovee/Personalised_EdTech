@@ -60,9 +60,24 @@ keeps working and is notified (`AI_RUN_FINISHED`) when it ends.
 
 **Offered only** for a model the admin has marked as offering batch (with its discount), whose price is known,
 and whose provider adapter can find a batch again by a tag we give it (the run's id). Without that, a lost reply
-could not be told apart from a batch that was never made. Until the owner has tried it with `qbank ai-smoke`
-the adapters are unverified against the live providers, and Economy is available only where an adapter has
-proved the lookup.
+could not be told apart from a batch that was never made. **OpenAI and Google** have such an adapter; **Anthropic
+and OpenRouter do not yet**, so their models never offer Economy, whatever an admin ticks. The adapters are written
+from the providers' published batch documents and checked with recorded answers only: try them for real with
+`qbank ai-smoke --batch` (see `ai-keys.md`) before relying on Economy.
+
+How each provider is used (one request per batch, so one run is one batch):
+
+| | OpenAI (Batch API) | Google (Gemini Batch Mode) |
+|---|---|---|
+| Sent as | the request is one line of a JSONL file, uploaded with purpose `batch`; a batch for `/v1/responses` is made from it (`completion_window` 24h) | `models/{model}:batchGenerateContent` with the request inline |
+| Run id kept as | the batch's `metadata` (`qbank_run`) and the line's `custom_id` | the batch's `displayName` and the request's `metadata.key` |
+| Found again by | listing batches (the newest 1,000) and reading `metadata` | listing batches (the newest 1,000) and reading `metadata.displayName` |
+| Answer read from | the batch's output file (a failed request is in its error file) | `response` of the batch (several documented places are read) |
+| Ended before finishing | `cancelled` or `expired` with a completed request is still **read and charged**; with none it ends as cancelled or expired | the same, for `CANCELLED` and `EXPIRED` |
+| What stays at the provider | the uploaded request file (the provider's default: 30 days) and the answer file (**7 days**, asked for with `output_expires_after`). Nothing is deleted by us | the batch record, until the provider drops it |
+
+The question text is sent to the provider in the batch as it is in a Now run. Because OpenAI keeps the uploaded
+file for its default 30 days, an Economy run leaves a copy there for that long.
 
 States: `QUEUED`, `SUBMITTING`, `SUBMITTED`, then `SUCCEEDED`, `FAILED`, `CANCELLED`, `EXPIRED` or
 `SUBMISSION_UNKNOWN`. Three background jobs do the work (the worker process must be running):
@@ -133,4 +148,4 @@ back, the next time the same person starts a run.
 ## Not verified against a real provider
 
 The orchestrator is tested with a scripted fake provider. Until the owner has run `qbank ai-smoke` for a
-provider (see `ai-keys.md`), the real adapters are unverified against the live service.
+provider (see `ai-keys.md`; add `--batch` for Economy), the real adapters are unverified against the live service.

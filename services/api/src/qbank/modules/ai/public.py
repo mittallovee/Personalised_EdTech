@@ -5,6 +5,7 @@ from qbank.modules.ai.keys import open_key, reseal_all
 from qbank.modules.ai.names import Provider
 from qbank.modules.ai.providers.base import (
     AIProvider,
+    BatchProvider,
     ModelInfo,
     ProviderError,
     ProviderErrorKind,
@@ -12,10 +13,11 @@ from qbank.modules.ai.providers.base import (
     StructuredResult,
 )
 from qbank.modules.ai.providers.registry import provider_for
-from qbank.modules.ai.providers.smoke import smoke
+from qbank.modules.ai.providers.smoke import smoke, smoke_batch
 
 __all__ = [
     "AIProvider",
+    "BatchProvider",
     "KeyUnreadable",
     "Keyring",
     "ModelInfo",
@@ -28,4 +30,5 @@ __all__ = [
     "provider_for",
     "reseal_all",
     "smoke",
+    "smoke_batch",
 ]

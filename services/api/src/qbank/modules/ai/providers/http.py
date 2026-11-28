@@ -24,7 +24,8 @@ def default_client() -> httpx2.Client:
     )
 
 
-def _kind_for(status: int) -> ProviderErrorKind:
+def kind_for_status(status: int) -> ProviderErrorKind:
+    """The failure kind an HTTP status stands for (also used for a status inside a batch result)."""
     if status in (401, 403):
         return ProviderErrorKind.AUTH
     if status == 429:
@@ -46,7 +47,7 @@ def _retry_after(headers: Any) -> float | None:
 
 
 class Http:
-    """Sends one request and returns the answer as a JSON object."""
+    """Sends one request and returns the answer as a JSON object (or, for a results file, text)."""
 
     def __init__(self, client: httpx2.Client | None = None) -> None:
         self._client = client or default_client()
@@ -54,12 +55,44 @@ class Http:
     def get(
         self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        return self._send("GET", url, headers=headers, params=params)
+        return _json_object(*self._send("GET", url, headers=headers, params=params))
 
     def post(self, url: str, *, headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
-        return self._send("POST", url, headers=headers, json=body)
+        return _json_object(*self._send("POST", url, headers=headers, json=body))
 
-    def _send(self, method: str, url: str, **options: Any) -> dict[str, Any]:
+    def get_text(
+        self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None
+    ) -> str:
+        """A file the provider serves as text (a batch's results are one JSON object per line)."""
+        status, body = self._send("GET", url, headers=headers, params=params)
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ProviderError(ProviderErrorKind.BAD_OUTPUT, status=status) from None
+
+    def post_file(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        fields: dict[str, str],
+        file_name: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict[str, Any]:
+        """A multipart upload of one file with some plain fields. The content type of the whole
+        request (with its boundary) is made here, so ``headers`` must not carry one."""
+        return _json_object(
+            *self._send(
+                "POST",
+                url,
+                headers=headers,
+                data=fields,
+                files={"file": (file_name, content, content_type)},
+            )
+        )
+
+    def _send(self, method: str, url: str, **options: Any) -> tuple[int, bytes]:
         try:
             with self._client.stream(method, url, **options) as response:
                 status = response.status_code
@@ -81,14 +114,18 @@ class Http:
         except httpx2.TransportError:
             raise ProviderError(ProviderErrorKind.UNAVAILABLE) from None
         if status >= 300:  # a redirect is never followed, so it is a failure too
-            raise ProviderError(_kind_for(status), status=status, retry_after_seconds=retry)
-        try:
-            parsed = json.loads(bytes(body))
-        except ValueError:
-            raise ProviderError(ProviderErrorKind.BAD_OUTPUT, status=status) from None
-        if not isinstance(parsed, dict):
-            raise ProviderError(ProviderErrorKind.BAD_OUTPUT, status=status)
-        return parsed
+            raise ProviderError(kind_for_status(status), status=status, retry_after_seconds=retry)
+        return status, bytes(body)
+
+
+def _json_object(status: int, body: bytes) -> dict[str, Any]:
+    try:
+        parsed = json.loads(body)
+    except ValueError:
+        raise ProviderError(ProviderErrorKind.BAD_OUTPUT, status=status) from None
+    if not isinstance(parsed, dict):
+        raise ProviderError(ProviderErrorKind.BAD_OUTPUT, status=status)
+    return parsed
 
 
 def bad_output() -> ProviderError:

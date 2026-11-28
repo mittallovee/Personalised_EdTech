@@ -23,12 +23,14 @@ from qbank.core.errors import Conflict
 from qbank.core.secretbox import build_keyring
 from qbank.core.tenancy import TenantContext
 from qbank.modules.ai.public import (
+    BatchProvider,
     KeyUnreadable,
     Provider,
     open_key,
     provider_for,
     reseal_all,
     smoke,
+    smoke_batch,
 )
 from qbank.modules.identity.service import create_platform_admin
 from qbank.modules.questions.public import reindex_bank
@@ -195,7 +197,17 @@ def _ai_smoke(args: argparse.Namespace) -> int:
     if key is None:
         print(f"This coaching has no {provider.value} key stored.", file=sys.stderr)
         return 1
-    worked, lines = smoke(provider_for(provider), key, args.model)
+    adapter = provider_for(provider)
+    if args.batch:
+        if not isinstance(adapter, BatchProvider):
+            print(f"{provider.value} has no batch service we can use: Economy is not offered.")
+            return 1
+        if not args.model:
+            print("Name the model to try with --model.", file=sys.stderr)
+            return 2
+        worked, lines = smoke_batch(adapter, key, args.model, wait_seconds=args.wait)
+    else:
+        worked, lines = smoke(adapter, key, args.model)
     print(f"{provider.value}:")
     for line in lines:
         print(f"  {line}")
@@ -248,6 +260,18 @@ def main(argv: list[str] | None = None) -> int:
         "--provider", required=True, help="anthropic, openai, google or openrouter"
     )
     smoke_check.add_argument("--model", help="Also ask this model for a tiny answer")
+    smoke_check.add_argument(
+        "--batch",
+        action="store_true",
+        help="Try Economy instead: send one tiny batch (needs --model), find it, read its state",
+    )
+    smoke_check.add_argument(
+        "--wait",
+        type=int,
+        default=0,
+        metavar="SECONDS",
+        help="With --batch: wait up to this long for the answer, else cancel the batch",
+    )
     smoke_check.set_defaults(handler=_ai_smoke)
 
     openapi = commands.add_parser("export-openapi", help="Write the API contract (OpenAPI JSON)")

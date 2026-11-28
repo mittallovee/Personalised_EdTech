@@ -104,6 +104,20 @@ been sealed again.
   fraction of a cent). Until you have run this once per provider, the adapters are checked only against
   the providers' published documents.
 
+  **Economy (batch) runs have their own check**, for OpenAI and Google. It sends one tiny batch, finds it again
+  by its tag, reads its state and, unless you say to wait, cancels it (a batch takes minutes to hours, so
+  waiting is optional):
+
+  ```powershell
+  docker compose run --rm migrate qbank ai-smoke --organization <coaching id> --provider openai --model <model id> --batch
+  docker compose run --rm migrate qbank ai-smoke --organization <coaching id> --provider google --model <model id> --batch --wait 600
+  ```
+
+  `--wait 600` waits up to ten minutes for the answer and cancels the batch if it is not there. Expect four
+  lines saying "worked" (send, find by tag, state, cancel). A line that says FAILED names the step: "find it
+  again by its tag" is the one Economy cannot work without. Anthropic and OpenRouter have no Economy adapter yet,
+  and the command says so.
+
 ## 6. Defaults, the rate and budgets
 
 Admins set these (`/api/v1/ai/settings`, `/operations`, `/budgets`; the Admin → AI screen comes with
