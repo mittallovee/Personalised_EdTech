@@ -12,6 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from qbank.core.auth import Principal
@@ -114,7 +115,11 @@ def add_case(
         created_by=principal.user_id,
     )
     session.add(row)
-    session.flush()
+    try:
+        with session.begin_nested():
+            session.flush()
+    except IntegrityError:  # a simultaneous add of the same question won the race
+        raise Conflict("This question is already in the set.", code="GOLDEN_CASE_EXISTS") from None
     record_event(
         session,
         action="GOLDEN_CASE_ADDED",

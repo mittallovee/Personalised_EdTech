@@ -89,7 +89,10 @@ def compare(key: dict[str, Any], read: dict[str, Any]) -> CaseResult:
 
 
 def _alike(key: dict[str, Any], read: dict[str, Any]) -> float:
-    return SequenceMatcher(None, _text_of(key), _text_of(read)).ratio()
+    a, b = _text_of(key), _text_of(read)
+    if not a or not b:
+        return 0.0  # two blank texts are not "the same question"
+    return SequenceMatcher(None, a, b).ratio()
 
 
 def score_page(

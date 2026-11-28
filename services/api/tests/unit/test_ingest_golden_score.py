@@ -89,3 +89,9 @@ def test_the_report_counts_and_prints_honestly() -> None:
 def test_an_empty_key_does_not_divide_by_zero() -> None:
     report = summarise([], extra=0, pages_failed=0, tokens_in=0, tokens_out=0)
     assert "none to score" in "\n".join(report.lines())
+
+
+def test_blank_texts_never_match_each_other() -> None:
+    blank = {"question_type": "SCQ", "stem": paragraph("")}
+    results, extra = score_page([blank], [blank])
+    assert results[0].found is False and extra == 1

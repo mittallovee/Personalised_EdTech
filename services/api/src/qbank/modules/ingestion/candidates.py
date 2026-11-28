@@ -109,6 +109,9 @@ def start_run(
     require(principal, Action.USE_AI)
     organization_id = _org(principal)
     file = get_file(session, principal, file_id)
+    # Lock the file's row: two simultaneous starts must queue up, and the second then sees
+    # EXTRACTING and is refused (otherwise both would read, and be charged for, every page).
+    session.refresh(file, with_for_update=True)
     settings = session.get(IngestSettings, organization_id)
     if settings is None or settings.model_id is None:
         raise Conflict(

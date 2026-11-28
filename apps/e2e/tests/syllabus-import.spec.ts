@@ -228,7 +228,7 @@ test("the Owner loads a built-in syllabus, and loading it again adds nothing", a
 
   await page.getByRole("button", { name: "Apply the import" }).click();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("added");
+  await expect(page.getByRole("status")).toContainText("added", { timeout: 30_000 }); // 1,100+ rows
   await page.getByRole("link", { name: "Syllabus" }).click();
   await expect(page.getByRole("list", { name: "Syllabus items" })).toContainText("Class 11");
 
