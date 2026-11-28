@@ -32,6 +32,15 @@ about a month. That is too much for one coaching's first months.
 - **Safety on a small budget:** an AWS Budget with email alerts at 50%, 80% and 100% of a monthly limit, created before anything
   else; MFA on the root user; root not used for daily work.
 
+## The sandbox in the cloud (to be built and proved in 7c)
+On the PC the sandbox sits on an internal-only Docker network next to a PostgreSQL container. In AWS the database is RDS and the
+files are in S3, so a network with *no* route out cannot reach either. The rule stays "no route to the internet": the sandbox
+joins an internal network that holds one small **gate** container, and the gate forwards only (a) TCP port 5432 to the RDS
+address and (b) HTTPS to this region's S3 address, by name (a filtering proxy, which boto3 supports natively). Anything else the
+sandbox tries is refused by the gate. The sandbox holds **no AWS credentials of its own beyond a role limited to the
+`ingest` part of the bucket** (the gate cannot be a way around the server's role). A test (`compose`-level plus a live check on
+the first deployment) must show that the sandbox can read an original, write page pictures, and cannot fetch any other site.
+
 ## Rough monthly cost (my estimate, not a quote; confirm in the AWS Pricing Calculator)
 | Item | US$ |
 |---|---|

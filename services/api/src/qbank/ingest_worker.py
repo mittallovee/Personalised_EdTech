@@ -13,7 +13,7 @@ from qbank.core.config import get_settings
 from qbank.core.db import Database
 from qbank.core.jobs import JobRegistry, Worker
 from qbank.core.logging import configure_logging
-from qbank.core.storage import LocalDiskStorage, Storage
+from qbank.core.storage import Storage
 from qbank.modules.ingestion.public import SANDBOX_JOB_TYPES
 from qbank.modules.ingestion.render.jobs import register_jobs
 
@@ -32,7 +32,7 @@ def main() -> int:
     database = Database(settings.database_url)
     worker = Worker(
         database,
-        build_registry(LocalDiskStorage(settings.storage_dir)),
+        build_registry(settings.storage()),
         only_types=SANDBOX_JOB_TYPES,
     )
 

@@ -64,3 +64,15 @@ def test_the_sandbox_connects_with_its_own_restricted_role(sandbox: dict[str, An
 def test_the_sandbox_gets_no_secrets_it_does_not_need(sandbox: dict[str, Any]) -> None:
     names = set(sandbox["environment"])
     assert not {n for n in names if n.startswith(("AI_", "GOOGLE_"))}
+
+
+@pytest.mark.parametrize("name", ["api", "worker", "ingest-worker"])
+def test_every_service_that_touches_uploaded_files_sees_the_same_storage(
+    compose: dict[str, Any], name: str
+) -> None:
+    """The api stores originals, the sandbox makes page pictures, the worker sends them to the AI:
+    all three must share one place (a worker without it would find every picture missing)."""
+    service = compose["services"][name]
+    assert service["environment"]["STORAGE_DIR"] == "/data/storage"
+    assert "assetdata:/data/storage" in service["volumes"]
+    assert "STORAGE_BACKEND" in service["environment"]

@@ -16,3 +16,9 @@
 
 ## Consequences
 + Same code locally and in cloud. − Signed-URL behaviour differs per backend (covered by adapter tests).
+
+## Cloud backend (M7 7b)
+`S3Storage` (`core/storage.py`) keeps the same promises with a private S3 bucket: keys are checked before any call, `put` uses
+S3's conditional write (`If-None-Match: *`) so an existing key is refused (`AlreadyExists`), a missing object is `Missing`, and
+anything else is a `StorageError`. `STORAGE_BACKEND=s3`, `STORAGE_S3_BUCKET` and `STORAGE_S3_REGION` choose it; credentials are
+the server's role ([ADR-0025](./0025-aws-single-host-with-rds.md)). `presign` is still not needed: the API serves files itself.

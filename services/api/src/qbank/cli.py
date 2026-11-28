@@ -21,7 +21,6 @@ from sqlalchemy import text
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
 from qbank.core.secretbox import build_keyring
-from qbank.core.storage import LocalDiskStorage
 from qbank.core.tenancy import TenantContext
 from qbank.modules.ai.public import (
     BatchProvider,
@@ -264,7 +263,7 @@ def _ingest_measure(args: argparse.Namespace) -> int:
                 return 1
             reader = live_reader(
                 session,
-                LocalDiskStorage(get_settings().storage_dir),
+                get_settings().storage(),
                 provider_for(provider),
                 key,
                 args.model,

@@ -15,7 +15,6 @@ from qbank.core.migrations import migration_heads
 from qbank.core.openapi import install_openapi
 from qbank.core.origin import install_origin_check
 from qbank.core.ratelimit import ConcurrencyGate, LoginRateLimiter, SlidingWindowLimiter
-from qbank.core.storage import LocalDiskStorage
 from qbank.core.telemetry import install_request_tracing, instrument_database, setup_tracing
 from qbank.modules.ai.api import router as ai_router
 from qbank.modules.ai.glossary_api import router as ai_glossary_router
@@ -97,7 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.import_uploads_per_user, settings.import_upload_window_seconds
     )
     app.state.import_parse_gate = ConcurrencyGate(settings.import_parses_at_once)
-    app.state.storage = LocalDiskStorage(settings.storage_dir)
+    app.state.storage = settings.storage()
     app.state.asset_upload_limiter = SlidingWindowLimiter(
         settings.asset_uploads_per_user, settings.asset_upload_window_seconds
     )

@@ -27,6 +27,7 @@ dependencies = [
     "cryptography>=50,<51",
     "pypdfium2>=5.15.2,<6",
     "pillow-heif>=1.9.0,<2",
+    "boto3>=1.40,<2",
 ]
 
 [project.scripts]
@@ -72,7 +73,7 @@ plugins = ["pydantic.mypy"]
 
 # pdfium's Python binding ships no type information.
 [[tool.mypy.overrides]]
-module = ["pypdfium2", "pypdfium2.*"]
+module = ["pypdfium2", "pypdfium2.*", "boto3", "boto3.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

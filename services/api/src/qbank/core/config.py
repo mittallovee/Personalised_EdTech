@@ -5,11 +5,13 @@ from enum import StrEnum
 from functools import lru_cache
 from ipaddress import IPv4Network, IPv6Network
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from qbank.core.secretbox import Keyring, build_keyring
+from qbank.core.storage import LocalDiskStorage, S3Storage, Storage
 
 # services/api/ — the folder holding alembic.ini and migrations/.
 SERVICE_ROOT = Path(__file__).resolve().parents[3]
@@ -84,6 +86,11 @@ class Settings(BaseSettings):
     # uploads (D-07) are limited per signed-in user, and pictures decoded at the same time (one
     # decode costs a processor for up to about a second and up to 160 MB for a 40-megapixel one).
     storage_dir: Path = SERVICE_ROOT / ".storage"
+    # "local" (the folder above) or "s3" (a private bucket, ADR-0025; credentials come from the
+    # server's role, never from settings).
+    storage_backend: Literal["local", "s3"] = "local"
+    storage_s3_bucket: str | None = None
+    storage_s3_region: str | None = None
     asset_uploads_per_user: int = Field(default=60, ge=1)
     asset_upload_window_seconds: int = Field(default=600, ge=1)
     image_decodes_at_once: int = Field(default=2, ge=1)
@@ -158,6 +165,18 @@ class Settings(BaseSettings):
             self.ai_keys_master_key_id,
             previous.get_secret_value() if previous else None,
         )
+
+    def storage(self) -> Storage:
+        """Where uploaded files live: the folder, or the S3 bucket when so configured."""
+        if self.storage_backend == "s3":
+            return S3Storage(self.storage_s3_bucket or "", self.storage_s3_region)
+        return LocalDiskStorage(self.storage_dir)
+
+    @model_validator(mode="after")
+    def _s3_needs_a_bucket(self) -> Settings:
+        if self.storage_backend == "s3" and not self.storage_s3_bucket:
+            raise ValueError("STORAGE_S3_BUCKET must be set when STORAGE_BACKEND=s3")
+        return self
 
     @model_validator(mode="after")
     def _google_needs_both_values(self) -> Settings:

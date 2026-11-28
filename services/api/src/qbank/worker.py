@@ -10,7 +10,7 @@ from qbank.core.jobs import JobRegistry, Worker
 from qbank.core.logging import configure_logging
 from qbank.core.metrics import start_metrics_server, watch_job_queue, watch_pool
 from qbank.core.secretbox import Keyring
-from qbank.core.storage import LocalDiskStorage, Storage
+from qbank.core.storage import Storage
 from qbank.core.telemetry import instrument_database, setup_tracing
 from qbank.modules.ai.jobs import register_jobs as register_ai_jobs
 from qbank.modules.ai.providers.registry import provider_for, use_demo_provider
@@ -49,7 +49,7 @@ def main() -> int:
     registry = build_registry(
         settings.ai_keyring(),
         database=database,
-        storage=LocalDiskStorage(settings.storage_dir),
+        storage=settings.storage(),
     )
     worker = Worker(database, registry, skip_types=SANDBOX_JOB_TYPES)
 
