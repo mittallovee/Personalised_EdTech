@@ -29,3 +29,4 @@ Status values: `Proposed` → `Accepted` (owner approved) → `Superseded by ADR
 | [0021](./0021-offsite-backups-restic-to-cloudflare-r2.md) | Off-machine backups: restic (encrypted) to a Cloudflare R2 bucket, daily, including the pictures volume | **Accepted** |
 | [0022](./0022-built-in-starter-syllabus.md) | A built-in starter syllabus (JEE Physics, Chemistry, Mathematics) ships with the app and is loaded through the import preview | Proposed |
 | [0023](./0023-ai-keys-encryption-and-provider-access.md) | Coaching AI keys: AES-256-GCM with an outside master key, write-only; providers reached over plain HTTPS (refines 0009) | Proposed |
+| [0024](./0024-untrusted-documents-parsed-only-in-a-sandboxed-worker.md) | Untrusted documents are parsed only in a sandboxed worker with a restricted database role (K-17) | **Accepted** |

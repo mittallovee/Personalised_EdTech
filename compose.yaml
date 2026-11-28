@@ -13,6 +13,7 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"
+    networks: [default, ingest]   # the sandboxed document worker reaches only this, nothing else
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -30,6 +31,7 @@ services:
       PGDATABASE: ${POSTGRES_DB:-qbank_dev}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-change-me-app-local}
       WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:-change-me-worker-local}
+      INGEST_DB_PASSWORD: ${INGEST_DB_PASSWORD:-change-me-ingest-local}
     volumes:
       - ./infra/db:/scripts:ro
     depends_on:
@@ -137,6 +139,41 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Document parsing (M6, ADR-0024, K-17). Untrusted files are opened ONLY here: no route to the internet
+  # (the only network it joins is internal and holds just the database), a read-only filesystem with a
+  # small scratch space, no extra privileges, capped memory, processes and processor, and its own
+  # database role (qbank_ingest) that can claim document jobs and touch only the upload tables.
+  # tests/unit/test_ingest_sandbox_service.py checks these settings on every change.
+  ingest-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["python", "-m", "qbank.ingest_worker"]
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: postgresql+psycopg://qbank_ingest:${INGEST_DB_PASSWORD:-change-me-ingest-local}@postgres:5432/${POSTGRES_DB:-qbank_dev}
+      STORAGE_DIR: /data/storage
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      ALLOWED_ORIGINS: '${ALLOWED_ORIGINS:-["http://localhost:3000"]}'
+    networks: [ingest]
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 128
+    volumes:
+      - assetdata:/data/storage
+    stop_grace_period: 30s
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   web:
     build:
       context: .
@@ -205,6 +242,11 @@ services:
       - ./infra/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafanadata:/var/lib/grafana
     depends_on: [prometheus, loki, tempo]
+
+networks:
+  # No route out: only the database is on it (ADR-0024). `internal` means containers on it cannot reach the internet.
+  ingest:
+    internal: true
 
 volumes:
   pgdata:

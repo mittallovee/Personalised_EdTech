@@ -3,6 +3,8 @@
 # `docker compose up`, before migrations, so it works for new and already-existing database volumes.
 #
 # - qbank_app:    used by the API.
+# - qbank_ingest: used by the sandboxed document worker (ADR-0024). NOT a member of qbank_app: it can run the
+#                 job functions and touch only the upload tables its own migration grants it.
 # - qbank_worker: used by the background worker. A member of qbank_app (same tenant-restricted table
 #                 access) plus, granted by migrations, the cross-coaching jobs_* functions the API
 #                 must not have.
@@ -13,16 +15,18 @@
 # Connection comes from the standard PG* environment variables (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
 set -eu
 psql -v ON_ERROR_STOP=1 \
-    -v app_password="$APP_DB_PASSWORD" -v worker_password="$WORKER_DB_PASSWORD" <<'SQL'
+    -v app_password="$APP_DB_PASSWORD" -v worker_password="$WORKER_DB_PASSWORD" \
+    -v ingest_password="$INGEST_DB_PASSWORD" <<'SQL'
 SELECT format(
     CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r.name) THEN 'ALTER' ELSE 'CREATE' END
     || ' ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE',
     r.name, r.password)
-FROM (VALUES ('qbank_app', :'app_password'), ('qbank_worker', :'worker_password'))
+FROM (VALUES ('qbank_app', :'app_password'), ('qbank_worker', :'worker_password'),
+             ('qbank_ingest', :'ingest_password'))
     AS r (name, password)
 \gexec
 SELECT 'GRANT qbank_app TO qbank_worker'
 WHERE NOT pg_has_role('qbank_worker', 'qbank_app', 'MEMBER')
 \gexec
 SQL
-echo "qbank_app and qbank_worker roles ready"
+echo "qbank_app, qbank_worker and qbank_ingest roles ready"

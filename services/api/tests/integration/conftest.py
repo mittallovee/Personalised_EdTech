@@ -42,6 +42,8 @@ APP_PASSWORD = os.environ.get("QBANK_TEST_APP_PASSWORD", "change-me-app-local")
 APP_ROLE = "qbank_app"
 WORKER_PASSWORD = os.environ.get("QBANK_TEST_WORKER_PASSWORD", "change-me-worker-local")
 WORKER_ROLE = "qbank_worker"
+INGEST_PASSWORD = os.environ.get("QBANK_TEST_INGEST_PASSWORD", "change-me-ingest-local")
+INGEST_ROLE = "qbank_ingest"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -74,6 +76,7 @@ def create_database(name: str) -> tuple[str, str, str]:
     with _admin_connection() as conn:
         _ensure_role(conn, APP_ROLE, APP_PASSWORD)
         _ensure_role(conn, WORKER_ROLE, WORKER_PASSWORD)
+        _ensure_role(conn, INGEST_ROLE, INGEST_PASSWORD)
         conn.execute(
             sql.SQL("GRANT {} TO {}").format(sql.Identifier(APP_ROLE), sql.Identifier(WORKER_ROLE))
         )
@@ -107,6 +110,12 @@ class MigratedDatabase:
     owner_url: str
     app_url: str
     worker_url: str
+
+    @property
+    def ingest_url(self) -> str:
+        """The sandboxed document worker's connection (its own restricted role)."""
+        url = make_url(self.owner_url).set(username=INGEST_ROLE, password=INGEST_PASSWORD)
+        return url.render_as_string(hide_password=False)
 
 
 @pytest.fixture(scope="session")

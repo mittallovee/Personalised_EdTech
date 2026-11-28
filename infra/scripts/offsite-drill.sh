@@ -49,6 +49,7 @@ psql_owner() { docker exec -i "$run-pg" psql -X -q -v ON_ERROR_STOP=1 -U qbank_o
 psql_owner -d postgres << 'SQL'
 CREATE ROLE qbank_app NOLOGIN;
 CREATE ROLE qbank_worker NOLOGIN;
+CREATE ROLE qbank_ingest NOLOGIN;
 GRANT qbank_app TO qbank_worker;
 SQL
 psql_owner -d qbank_dev << 'SQL'

@@ -88,6 +88,7 @@ modules = [
     "qbank.modules.audit",
     "qbank.modules.health",
     "qbank.modules.identity",
+    "qbank.modules.ingestion",
     "qbank.modules.notifications",
     "qbank.modules.organizations",
     "qbank.modules.questions",
@@ -98,6 +99,30 @@ modules = [
 ignore_imports = [
     "qbank.modules.** -> qbank.modules.*.public",
 ]
+
+[[tool.importlinter.contracts]]
+name = "only the sandboxed worker opens documents (ADR-0024, K-17)"
+type = "forbidden"
+source_modules = [
+    "qbank.main",
+    "qbank.worker",
+    "qbank.cli",
+    "qbank.contract",
+    "qbank.core",
+    "qbank.modules.ai",
+    "qbank.modules.assets",
+    "qbank.modules.audit",
+    "qbank.modules.health",
+    "qbank.modules.identity",
+    "qbank.modules.notifications",
+    "qbank.modules.organizations",
+    "qbank.modules.questions",
+    "qbank.modules.review",
+    "qbank.modules.search",
+    "qbank.modules.taxonomy",
+    "qbank.modules.ingestion.public",
+]
+forbidden_modules = ["qbank.modules.ingestion.render"]
 
 [[tool.importlinter.contracts]]
 name = "core must not depend on feature modules"

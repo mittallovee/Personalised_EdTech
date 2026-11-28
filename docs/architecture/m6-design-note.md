@@ -1,12 +1,13 @@
 # M6 Design Note: Document ingestion v1
 
-> Status: **Draft for the owner. Not approved; nothing in it is built.** Milestone M6 of Phase 1
+> Status: **Approved by the owner on 2026-11-28.** D1 = option A (read Word files directly); D2, D3 and D5 follow the
+> recommendations below; D4 (sample files) is asked again at 6j. Milestone M6 of Phase 1
 > ([phase plan](../product/02-phase-plan.md)).
 > Requirements: G-01, G-03, G-04, G-05 (best effort), G-06, G-09, G-11, D-16 (duplicate check on candidates),
 > I-01 (in-app notices) · Hardening: **K-17** (uploads threat model and a separate low-resource parsing worker; the
 > [threat model](./threat-model-uploads.md) is drafted with this note), K-14 (evaluation harness applies to
 > extraction prompts too)
-> · ADRs 0005, 0007, 0009, 0012, 0016, 0020, 0023 · **ADR-0024 (new, proposed below): untrusted documents are
+> · ADRs 0005, 0007, 0009, 0012, 0016, 0020, 0023 · **ADR-0024 (new, accepted): untrusted documents are
 > parsed only in a sandboxed worker**
 > Not in M6 (Phase 2): separate answer-key and solution files paired to a paper (G-07), adaptive layout patterns
 > (G-08), original deletion and storage dashboard (G-10), legacy `.DOC` (G-02), diagram generation, semantic

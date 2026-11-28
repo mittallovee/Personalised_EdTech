@@ -5,7 +5,7 @@
 #
 # Never overwrites: it stops if the database already exists, so a restore can never destroy data.
 # To replace a database, restore beside it, check the copy, then switch over (the document says how).
-# The roles qbank_app and qbank_worker must already exist (infra/db/ensure-app-role.sh creates them).
+# The roles qbank_app, qbank_worker and qbank_ingest must already exist (infra/db/ensure-app-role.sh creates them).
 # Set PG_DOCKER_IMAGE (e.g. postgres:17) to use a matching client from Docker.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -50,7 +50,7 @@ if [ -n "$roles" ]; then
   if [ -n "$missing" ]; then
     echo "The backup grants privileges to roles that do not exist on this server:" >&2
     printf '  %s\n' $missing >&2
-    echo "Create them first (infra/db/ensure-app-role.sh does qbank_app and qbank_worker), then restore again." >&2
+    echo "Create them first (infra/db/ensure-app-role.sh does qbank_app, qbank_worker and qbank_ingest), then restore again." >&2
     exit 1
   fi
   # qbank_worker reaches the application tables only as a member of qbank_app (ensure-app-role.sh), and

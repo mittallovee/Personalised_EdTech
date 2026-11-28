@@ -177,11 +177,17 @@ class Worker:
         lease: timedelta = timedelta(minutes=5),
         poll_interval: float = 1.0,
         worker_id: str | None = None,
+        only_types: frozenset[str] | None = None,
+        skip_types: frozenset[str] = frozenset(),
     ) -> None:
         self._database = database
         self._registry = registry
         self._lease = lease
         self._poll_interval = poll_interval
+        # Which jobs this worker may take: only these types, or all except those. The sandboxed
+        # document worker takes only its own; the normal worker never takes its jobs (ADR-0024).
+        self._only = sorted(only_types) if only_types is not None else None
+        self._skip = sorted(skip_types)
         self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}:{new_id().hex[-6:]}"
         self._stopping = False
 
@@ -240,8 +246,16 @@ class Worker:
     def _claim(self) -> Job | None:
         with self._database.transaction(TenantContext()) as session:
             row = session.execute(
-                text("SELECT * FROM jobs_claim(:worker, :lease)"),
-                {"worker": self.worker_id, "lease": self._lease},
+                text(
+                    "SELECT * FROM jobs_claim_for(:worker, :lease,"
+                    " CAST(:only AS text[]), CAST(:skip AS text[]))"
+                ),
+                {
+                    "worker": self.worker_id,
+                    "lease": self._lease,
+                    "only": self._only,
+                    "skip": self._skip,
+                },
             ).first()
         if row is None:
             return None

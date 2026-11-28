@@ -14,6 +14,7 @@ from qbank.core.telemetry import instrument_database, setup_tracing
 from qbank.modules.ai.jobs import register_jobs as register_ai_jobs
 from qbank.modules.ai.providers.registry import use_demo_provider
 from qbank.modules.health.jobs import register_jobs as register_health_jobs
+from qbank.modules.ingestion.public import SANDBOX_JOB_TYPES
 
 
 def build_registry(ai_keyring: Keyring | None = None) -> JobRegistry:
@@ -36,7 +37,7 @@ def main() -> int:
         start_metrics_server(settings.metrics_port)
     if settings.ai_demo_provider:
         use_demo_provider()
-    worker = Worker(database, build_registry(settings.ai_keyring()))
+    worker = Worker(database, build_registry(settings.ai_keyring()), skip_types=SANDBOX_JOB_TYPES)
 
     def request_stop(_signum: int, _frame: FrameType | None) -> None:
         worker.stop()  # finish the current job, then exit
