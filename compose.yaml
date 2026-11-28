@@ -152,7 +152,7 @@ services:
   # Logs and traces are kept 7 days, metrics 15 days (ADR-0019).
   otel-collector:
     profiles: ["observability"]
-    image: otel/opentelemetry-collector-contrib:0.164.0-386
+    image: otel/opentelemetry-collector-contrib:0.165.0-386
     command: ["--config=/etc/otel-collector.yaml"]
     volumes:
       - ./infra/observability/otel-collector.yaml:/etc/otel-collector.yaml:ro
@@ -168,7 +168,7 @@ services:
 
   loki:
     profiles: ["observability"]
-    image: grafana/loki:3.7.9
+    image: grafana/loki:3.7.10
     command: ["-config.file=/etc/loki.yaml"]
     volumes:
       - ./infra/observability/loki.yaml:/etc/loki.yaml:ro
@@ -176,7 +176,7 @@ services:
 
   prometheus:
     profiles: ["observability"]
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
@@ -186,7 +186,7 @@ services:
 
   grafana:
     profiles: ["observability"]
-    image: grafana/grafana:13.3.0
+    image: grafana/grafana:13.3.1
     environment:
       # Local-only default like the database passwords above; set your own in .env.
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-local}
