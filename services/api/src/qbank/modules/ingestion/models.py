@@ -126,3 +126,27 @@ class IngestCandidateEvent(Base):
     action: Mapped[str]
     detail: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GoldenSet(Base):
+    __tablename__ = "golden_sets"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    name: Mapped[str]
+    created_by: Mapped[UUID]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GoldenCase(Base):
+    __tablename__ = "golden_cases"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    set_id: Mapped[UUID]
+    file_id: Mapped[UUID]
+    page_no: Mapped[int]
+    candidate_id: Mapped[UUID]
+    expected: Mapped[dict[str, object]] = mapped_column(JSONB)
+    created_by: Mapped[UUID]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

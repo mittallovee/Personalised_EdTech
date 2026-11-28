@@ -21,6 +21,7 @@ from sqlalchemy import text
 from qbank.core.db import Database
 from qbank.core.errors import Conflict
 from qbank.core.secretbox import build_keyring
+from qbank.core.storage import LocalDiskStorage
 from qbank.core.tenancy import TenantContext
 from qbank.modules.ai.public import (
     BatchProvider,
@@ -33,6 +34,8 @@ from qbank.modules.ai.public import (
     smoke_batch,
 )
 from qbank.modules.identity.service import create_platform_admin
+from qbank.modules.ingestion.golden import live_reader, measure
+from qbank.modules.ingestion.models import GoldenCase, GoldenSet
 from qbank.modules.questions.public import reindex_bank
 
 MIN_PASSWORD_LENGTH = 12
@@ -214,6 +217,67 @@ def _ai_smoke(args: argparse.Namespace) -> int:
     return 0 if worked else 1
 
 
+def _ingest_measure(args: argparse.Namespace) -> int:
+    """Score a model's reading of the pages in a golden set against the key (M6 6j, K-14). Run it
+    before and after a change to the prompt or the model; it calls the real provider with the
+    coaching's stored key and prints what it found, never the key."""
+    from sqlalchemy import select
+
+    from qbank.core.config import get_settings
+
+    owner_url = os.environ.get("MIGRATION_DATABASE_URL")
+    if not owner_url:
+        print("Set MIGRATION_DATABASE_URL (table-owner connection).", file=sys.stderr)
+        return 2
+    try:
+        organization_id = UUID(args.organization)
+        provider = Provider(args.provider.upper())
+        keyring = build_keyring(
+            os.environ.get("AI_KEYS_MASTER_KEY"),
+            os.environ.get("AI_KEYS_MASTER_KEY_ID", "k1"),
+            os.environ.get("AI_KEYS_PREVIOUS"),
+        )
+    except ValueError as problem:
+        print(f"Cannot use those values: {problem}", file=sys.stderr)
+        return 2
+    database = Database(owner_url)
+    try:
+        with database.transaction(TenantContext(organization_id=organization_id)) as session:
+            golden = session.scalar(select(GoldenSet).where(GoldenSet.name == args.set))
+            if golden is None:
+                print(f"This coaching has no golden set called {args.set!r}.", file=sys.stderr)
+                return 1
+            cases = list(session.scalars(select(GoldenCase).where(GoldenCase.set_id == golden.id)))
+            if not cases:
+                print("That set has no questions yet.", file=sys.stderr)
+                return 1
+            try:
+                key = open_key(session, keyring, organization_id, provider)
+            except KeyUnreadable:
+                print(
+                    "The stored key could not be opened with the master keys given.",
+                    file=sys.stderr,
+                )
+                return 1
+            if key is None:
+                print(f"This coaching has no {provider.value} key stored.", file=sys.stderr)
+                return 1
+            reader = live_reader(
+                session,
+                LocalDiskStorage(get_settings().storage_dir),
+                provider_for(provider),
+                key,
+                args.model,
+            )
+            report = measure(cases, reader)
+    finally:
+        database.dispose()
+    print(f"Golden set {args.set!r}, model {args.model} ({provider.value}):")
+    for line in report.lines():
+        print(f"  {line}")
+    return 0
+
+
 def _export_openapi(args: argparse.Namespace) -> int:
     # Builds the whole app, so it is imported only when this command runs.
     from qbank.contract import OPENAPI_FILE, render_openapi
@@ -273,6 +337,18 @@ def main(argv: list[str] | None = None) -> int:
         help="With --batch: wait up to this long for the answer, else cancel the batch",
     )
     smoke_check.set_defaults(handler=_ai_smoke)
+
+    measure_cmd = commands.add_parser(
+        "ingest-measure",
+        help="Score a model's reading of a golden set (calls the real provider; not run in CI)",
+    )
+    measure_cmd.add_argument("--organization", required=True, help="The coaching's id")
+    measure_cmd.add_argument("--set", required=True, help="The golden set's name")
+    measure_cmd.add_argument(
+        "--provider", required=True, help="anthropic, openai, google or openrouter"
+    )
+    measure_cmd.add_argument("--model", required=True, help="The provider's model id")
+    measure_cmd.set_defaults(handler=_ingest_measure)
 
     openapi = commands.add_parser("export-openapi", help="Write the API contract (OpenAPI JSON)")
     openapi.add_argument("--output", help="Default: api/openapi.json in the repository")

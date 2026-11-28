@@ -137,3 +137,30 @@ class SaveIngestSettings(BaseModel):
     model_config = {"extra": "forbid"}
 
     model_id: UUID | None
+
+
+class GoldenSetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class GoldenSetOut(BaseModel):
+    id: UUID
+    name: str
+    cases: int = Field(description="How many questions are in the key.")
+    created_at: datetime
+
+
+class GoldenSetsOut(BaseModel):
+    data: list[GoldenSetOut]
+
+
+class GoldenCaseIn(BaseModel):
+    candidate_id: UUID = Field(description="A candidate that was accepted.")
+
+
+class GoldenCaseOut(BaseModel):
+    id: UUID
+    set_id: UUID
+    file_id: UUID
+    page_no: int
+    candidate_id: UUID
