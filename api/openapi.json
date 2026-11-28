@@ -14926,6 +14926,53 @@
         }
       }
     },
+    "/api/v1/ai/options": {
+      "get": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "The models and starting choices for the run dialog (H-03, H-17)",
+        "description": "Any member. Only what a run would accept today: models that are enabled, still listed by their provider, able to return structured answers and with a key stored, and the model and mode offered first for each operation. Keys, fallbacks and admin entries are not shown.",
+        "operationId": "run_options_api_v1_ai_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOptionsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in (`UNAUTHENTICATED`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error (`INTERNAL_ERROR`); quote the request_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/questions/{question_id}/ai/runs": {
       "post": {
         "tags": [
@@ -18230,6 +18277,61 @@
         "title": "Mode",
         "description": "Now runs at once; Economy is a batch run at the provider's lower price, finished later."
       },
+      "ModelChoiceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "price_in_per_mtok": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price In Per Mtok",
+            "description": "US dollars per million input tokens; null = unknown."
+          },
+          "price_out_per_mtok": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Out Per Mtok",
+            "description": "US dollars per million output tokens; null = unknown."
+          },
+          "economy": {
+            "type": "boolean",
+            "title": "Economy",
+            "description": "Whether an Economy (batch) run is possible with this model."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "display_name",
+          "price_in_per_mtok",
+          "price_out_per_mtok",
+          "economy"
+        ],
+        "title": "ModelChoiceOut"
+      },
       "ModelOut": {
         "properties": {
           "id": {
@@ -18685,6 +18787,36 @@
         ],
         "title": "Operation",
         "description": "What the AI can be asked to do to a question (M5 design note §8)."
+      },
+      "OperationChoiceOut": {
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation"
+          },
+          "default_model_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model Id",
+            "description": "The model offered first, or null when none is set or it cannot be used now."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation",
+          "default_model_id",
+          "mode"
+        ],
+        "title": "OperationChoiceOut"
       },
       "OperationOut": {
         "properties": {
@@ -20528,6 +20660,30 @@
           "latency_ms"
         ],
         "title": "RunAttemptOut"
+      },
+      "RunOptionsOut": {
+        "properties": {
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/OperationChoiceOut"
+            },
+            "type": "array",
+            "title": "Operations"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelChoiceOut"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operations",
+          "models"
+        ],
+        "title": "RunOptionsOut"
       },
       "RunOut": {
         "properties": {

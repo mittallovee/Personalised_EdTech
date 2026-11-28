@@ -511,3 +511,29 @@ class ResolveRun(BaseModel):
         description="What the provider's own billing shows this run cost, in US dollars; omit when"
         " it cost nothing. Replaces the held reservation.",
     )
+
+
+class ModelChoiceOut(BaseModel):
+    id: UUID
+    provider: Provider
+    display_name: str
+    price_in_per_mtok: str | None = Field(
+        description="US dollars per million input tokens; null = unknown."
+    )
+    price_out_per_mtok: str | None = Field(
+        description="US dollars per million output tokens; null = unknown."
+    )
+    economy: bool = Field(description="Whether an Economy (batch) run is possible with this model.")
+
+
+class OperationChoiceOut(BaseModel):
+    operation: Operation
+    default_model_id: UUID | None = Field(
+        description="The model offered first, or null when none is set or it cannot be used now."
+    )
+    mode: Mode
+
+
+class RunOptionsOut(BaseModel):
+    operations: list[OperationChoiceOut]
+    models: list[ModelChoiceOut]

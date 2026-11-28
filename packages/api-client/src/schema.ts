@@ -2417,6 +2417,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The models and starting choices for the run dialog (H-03, H-17)
+         * @description Any member. Only what a run would accept today: models that are enabled, still listed by their provider, able to return structured answers and with a key stored, and the model and mode offered first for each operation. Keys, fallbacks and admin entries are not shown.
+         */
+        get: operations["run_options_api_v1_ai_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/questions/{question_id}/ai/runs": {
         parameters: {
             query?: never;
@@ -3798,6 +3818,32 @@ export interface components {
          * @enum {string}
          */
         Mode: "NOW" | "ECONOMY";
+        /** ModelChoiceOut */
+        ModelChoiceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            provider: components["schemas"]["Provider"];
+            /** Display Name */
+            display_name: string;
+            /**
+             * Price In Per Mtok
+             * @description US dollars per million input tokens; null = unknown.
+             */
+            price_in_per_mtok: string | null;
+            /**
+             * Price Out Per Mtok
+             * @description US dollars per million output tokens; null = unknown.
+             */
+            price_out_per_mtok: string | null;
+            /**
+             * Economy
+             * @description Whether an Economy (batch) run is possible with this model.
+             */
+            economy: boolean;
+        };
         /** ModelOut */
         ModelOut: {
             /**
@@ -4006,6 +4052,16 @@ export interface components {
          * @enum {string}
          */
         Operation: "TAG" | "TRANSLATE" | "SOLVE" | "VERIFY";
+        /** OperationChoiceOut */
+        OperationChoiceOut: {
+            operation: components["schemas"]["Operation"];
+            /**
+             * Default Model Id
+             * @description The model offered first, or null when none is set or it cannot be used now.
+             */
+            default_model_id: string | null;
+            mode: components["schemas"]["Mode"];
+        };
         /** OperationOut */
         OperationOut: {
             operation: components["schemas"]["Operation"];
@@ -4846,6 +4902,13 @@ export interface components {
             tokens_out: number | null;
             /** Latency Ms */
             latency_ms: number | null;
+        };
+        /** RunOptionsOut */
+        RunOptionsOut: {
+            /** Operations */
+            operations: components["schemas"]["OperationChoiceOut"][];
+            /** Models */
+            models: components["schemas"]["ModelChoiceOut"][];
         };
         /** RunOut */
         RunOut: {
@@ -15492,6 +15555,44 @@ export interface operations {
             };
             /** @description `If-Match` is missing (`IF_MATCH_REQUIRED`) */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    run_options_api_v1_ai_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOptionsOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

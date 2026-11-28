@@ -1,5 +1,6 @@
 """Routes to run an AI operation on a question and read its runs (M5 design note §6; H-04)."""
 
+from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -8,8 +9,18 @@ from fastapi import APIRouter, Depends, Request, status
 from qbank.core.auth import CurrentPrincipal
 from qbank.core.db import Database, get_database
 from qbank.core.secretbox import Keyring
-from qbank.modules.ai import economy, orchestrator
-from qbank.modules.ai.schemas import ResolveRun, RunAttemptOut, RunOut, RunsOut, StartRun
+from qbank.modules.ai import economy, options, orchestrator
+from qbank.modules.ai.names import Provider
+from qbank.modules.ai.schemas import (
+    ModelChoiceOut,
+    OperationChoiceOut,
+    ResolveRun,
+    RunAttemptOut,
+    RunOptionsOut,
+    RunOut,
+    RunsOut,
+    StartRun,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["ai"])
 
@@ -55,6 +66,46 @@ def _out(view: orchestrator.RunView) -> RunOut:
             for a in view.attempts
         ],
     )
+
+
+def _price(value: Decimal | None) -> str | None:
+    return None if value is None else format(value.normalize(), "f")
+
+
+@router.get(
+    "/ai/options",
+    summary="The models and starting choices for the run dialog (H-03, H-17)",
+    description="Any member. Only what a run would accept today: models that are enabled, still"
+    " listed by their provider, able to return structured answers and with a key stored, and the"
+    " model and mode offered first for each operation. Keys, fallbacks and admin entries are not"
+    " shown.",
+)
+def run_options(
+    request: Request,
+    principal: CurrentPrincipal,
+    database: Annotated[Database, Depends(get_database)],
+) -> RunOptionsOut:
+    with database.transaction(principal.tenant_context) as session:
+        found = options.read_options(session, principal, request.app.state.ai_providers)
+        return RunOptionsOut(
+            operations=[
+                OperationChoiceOut(
+                    operation=o.operation, default_model_id=o.default_model_id, mode=o.mode
+                )
+                for o in found.operations
+            ],
+            models=[
+                ModelChoiceOut(
+                    id=m.model.id,
+                    provider=Provider(m.model.provider),
+                    display_name=m.model.display_name,
+                    price_in_per_mtok=_price(m.price_in),
+                    price_out_per_mtok=_price(m.price_out),
+                    economy=m.economy,
+                )
+                for m in found.models
+            ],
+        )
 
 
 @router.post(
