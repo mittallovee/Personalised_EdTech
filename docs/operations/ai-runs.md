@@ -88,6 +88,32 @@ is kept as `NEEDS_REVIEW`; if the question changed meanwhile it is kept as `OUT_
 applies by itself and solve, verify and translate stay suggestions applied by a click, exactly as for Now runs.
 The result is checked against a snapshot of the question taken when the run was queued.
 
+## Using AI on a question in the app
+
+Open a question and choose the **AI** tab. The four buttons (Tag, Solve, Verify, Translate) open a form:
+
+- **Prompt**: the coaching default, one of *your* saved prompts, or a one-off prompt for this run only
+  (a prompt the server cannot use is refused with the reasons listed).
+- **Extra instructions**: up to 1,000 characters, added to this run only.
+- **Model**: only models that are enabled, still listed by the provider, able to return structured answers
+  and with a key stored, with their price per million tokens ("price unknown" when none is known). The model
+  and mode set for the operation under Admin, AI are offered first. These come from `GET /api/v1/ai/options`,
+  which any member may read (the admin lists stay admin-only).
+- **How fast**: shown only for a model that allows Economy.
+- **Test run**: the same call and cost, but nothing is ever written to the question.
+- **Budget left this month**, from `GET /api/v1/ai/usage/me`. The cost of *this* run is not shown in advance:
+  the server works it out when the run starts, and refuses the run if it would pass the budget.
+
+What you press is saved first (a run reads the saved text), and the text is kept still while the run is going.
+Solve, Verify and Translate show old and new side by side and wait for **Apply**; tagging fills the labels
+directly. Translation never changes the question: it makes a new linked draft and links to it. A question under
+review, or published, can only be translated or test-run. The **AI history** list on the same tab shows the
+question's runs (yours; an admin sees everyone's) and refreshes by itself while an Economy run is waiting. If an
+Economy tagging run writes to the question while you are typing, nothing you typed is thrown away: the screen is
+marked out of date and you choose when to reload.
+
+The **AI usage** page (menu) shows your month against your budget; the Owner and admins also see everyone's.
+
 ## Reading a run
 
 `status` is `SUCCEEDED` or `FAILED`; a failed run is still returned (201) because the run is the record.

@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { AiPanel } from "@/components/ai-panel";
 import { BlocksField } from "@/components/blocks-field";
 import { ConfirmPanel } from "@/components/confirm-panel";
 import { DuplicatesPanel } from "@/components/duplicates-panel";
@@ -205,11 +206,12 @@ function Loader({ id, myId }: { id: string; myId: string }) {
   return <Editor key={question.id} initial={question} myId={myId} />;
 }
 
-type Tab = "edit" | "preview" | "compare" | "history";
+type Tab = "edit" | "preview" | "ai" | "compare" | "history";
 
 const TABS: readonly { name: Tab; label: string }[] = [
   { name: "edit", label: "Edit" },
   { name: "preview", label: "Preview" },
+  { name: "ai", label: "AI" },
   { name: "compare", label: "Compare" },
   { name: "history", label: "History" },
 ];
@@ -227,6 +229,10 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
   const save = useAutosave(initial);
   const passage = usePinnedPassage(pinOf(save.content));
   const [tab, setTab] = useState<Tab>("edit");
+  // The AI tab is built the first time it is opened and then kept, so its result and history stay
+  // while the person looks at the preview. `aiBusy`: a run is going, so the text stays still.
+  const [aiOpened, setAiOpened] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   // Counts the review steps taken, so the duplicates panel checks again after each one.
   const [steps, setSteps] = useState(0);
   const [reveal, setReveal] = useState(false);
@@ -247,7 +253,7 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
   const typed = ["INTEGER", "SINGLE_DIGIT", "NUMERICAL"].includes(
     String(save.content.question_type),
   );
-  const locked = archived || save.state === "conflict" || !editable;
+  const locked = archived || save.state === "conflict" || !editable || aiBusy;
 
   /**
    * Run one of the buttons: only one at a time, and the text cannot be edited meanwhile, so
@@ -398,7 +404,7 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
             <button
               type="button"
               className={BUTTON}
-              disabled={busy || save.state === "conflict"}
+              disabled={busy || aiBusy || save.state === "conflict"}
               onClick={() => void setArchived(!archived)}
             >
               {archived ? "Restore" : "Archive"}
@@ -415,7 +421,7 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
         <div className="mt-3">
           <WorkflowBar
             allowed={flow.allowed_steps}
-            disabled={busy || asking !== null || save.state === "conflict"}
+            disabled={busy || aiBusy || asking !== null || save.state === "conflict"}
             onStep={chooseStep}
           />
         </div>
@@ -482,7 +488,10 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
                 aria-selected={tab === name}
                 aria-controls={`panel-${name}`}
                 id={`tab-${name}`}
-                onClick={() => setTab(name)}
+                onClick={() => {
+                  if (name === "ai") setAiOpened(true);
+                  setTab(name);
+                }}
                 className={`rounded-md px-3 py-1 text-sm ${
                   tab === name
                     ? "bg-zinc-100 font-medium dark:bg-zinc-800"
@@ -574,7 +583,7 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
                 The preview shows what is saved so far.
               </p>{" "}
             </div>
-          ) : tab === "compare" ? (
+          ) : tab === "ai" ? null : tab === "compare" ? (
             <div
               role="tabpanel"
               id="panel-compare"
@@ -614,6 +623,33 @@ function Editor({ initial, myId }: { initial: Question; myId: string }) {
                   passage={passage.state === "ready" ? passage.revision.content : undefined}
                 />
               </div>
+            </div>
+          )}
+          {aiOpened && (
+            <div
+              role="tabpanel"
+              id="panel-ai"
+              aria-labelledby="tab-ai"
+              hidden={tab !== "ai"}
+              className="grid gap-4"
+            >
+              <AiPanel
+                questionId={initial.id}
+                myId={myId}
+                sourceLanguage={
+                  typeof save.content.language === "string" ? save.content.language : null
+                }
+                editable={editable && !archived}
+                prepare={save.flush}
+                onQuestionChanged={reload}
+                onChangedInBackground={() => {
+                  // Typing in progress is never replaced behind the person's back: the screen is marked
+                  // out of date instead, and they choose when to reload.
+                  if (save.unsaved()) save.markConflict();
+                  else void reload();
+                }}
+                onWorking={setAiBusy}
+              />
             </div>
           )}
         </div>

@@ -255,7 +255,7 @@ Each PR is one requirement, about 400 changed lines at most, with its own tests 
 | 5h-2 | The real batch adapters (OpenAI, Google) and `qbank ai-smoke` for batch; until then Economy is offered only where an adapter exists |
 | 5i | Web: Admin → AI |
 | 5j | Web: Prompt Library |
-| 5k | Web: AI actions, result panel, AI history, Usage |
+| 5k | Web: AI actions, result panel, AI history, Usage. **Built:** the run form sits under an **AI** tab of the question page instead of a pop-up dialog; faculty read `GET /ai/options` because the admin model and operation lists are admin-only; the cost of one run is not estimated before it starts (the dialog shows the model's price and the budget left); the Usage page shows one row per person, because the API does not report cost by operation or model |
 | 5l | M5 demo notes, T55 browser journey, review pass |
 
 ## 15. Decisions taken in this note (change them by editing the note)
