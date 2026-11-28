@@ -46,3 +46,83 @@ class IngestPage(Base):
     warnings: Mapped[list[str]] = mapped_column(JSONB, default=list)
     error_code: Mapped[str | None]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IngestSettings(Base):
+    __tablename__ = "ingest_settings"
+
+    organization_id: Mapped[UUID] = mapped_column(primary_key=True)
+    model_id: Mapped[UUID | None]
+    revision: Mapped[int] = mapped_column(default=1)
+    updated_by: Mapped[UUID]
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IngestRun(Base):
+    __tablename__ = "ingest_runs"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    file_id: Mapped[UUID]
+    requested_by: Mapped[UUID]
+    model_ref: Mapped[UUID]
+    prompt_version: Mapped[str]
+    prompt_hash: Mapped[str]
+    state: Mapped[str] = mapped_column(String(10), default="RUNNING")
+    pages_total: Mapped[int]
+    pages_done: Mapped[int] = mapped_column(default=0)
+    pages_failed: Mapped[int] = mapped_column(default=0)
+    error_code: Mapped[str | None]
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IngestRunPage(Base):
+    __tablename__ = "ingest_run_pages"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    run_id: Mapped[UUID]
+    page_no: Mapped[int]
+    state: Mapped[str] = mapped_column(String(8))
+    ledger_id: Mapped[UUID]
+    error_code: Mapped[str | None]
+    candidate_count: Mapped[int] = mapped_column(default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IngestCandidate(Base):
+    __tablename__ = "ingest_candidates"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    file_id: Mapped[UUID]
+    run_id: Mapped[UUID]
+    page_no: Mapped[int]
+    ordinal: Mapped[int]
+    region: Mapped[dict[str, float] | None] = mapped_column(JSONB)
+    raw: Mapped[dict[str, object]] = mapped_column(JSONB)
+    content: Mapped[dict[str, object]] = mapped_column(JSONB)
+    findings: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list)
+    confidence: Mapped[str] = mapped_column(String(6))
+    warnings: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    state: Mapped[str] = mapped_column(String(10), default="NEW")
+    question_id: Mapped[UUID | None]
+    reject_reason: Mapped[str | None]
+    revision: Mapped[int] = mapped_column(default=1)
+    decided_by: Mapped[UUID | None]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IngestCandidateEvent(Base):
+    __tablename__ = "ingest_candidate_events"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=new_id)
+    organization_id: Mapped[UUID]
+    candidate_id: Mapped[UUID]
+    actor_user_id: Mapped[UUID | None]
+    action: Mapped[str]
+    detail: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

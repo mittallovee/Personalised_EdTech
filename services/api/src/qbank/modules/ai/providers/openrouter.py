@@ -16,6 +16,7 @@ from qbank.modules.ai.providers.base import (
     ProviderErrorKind,
     StructuredRequest,
     StructuredResult,
+    jpeg_base64,
 )
 from qbank.modules.ai.providers.http import Http, bad_output, count, json_object
 
@@ -44,6 +45,18 @@ def _cost(value: object) -> Decimal | None:
     except InvalidOperation:
         return None
     return cost if cost.is_finite() and cost >= 0 else None
+
+
+def _content(request: StructuredRequest) -> str | list[dict[str, Any]]:
+    """The user's text, or the text and the pictures as parts of one message."""
+    if not request.images:
+        return request.user
+    parts: list[dict[str, Any]] = [{"type": "text", "text": request.user}]
+    parts += [
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{jpeg_base64(data)}"}}
+        for data in request.images
+    ]
+    return parts
 
 
 class OpenRouterProvider:
@@ -93,7 +106,7 @@ class OpenRouterProvider:
             "model": request.model_id,
             "messages": [
                 {"role": "system", "content": request.system},
-                {"role": "user", "content": request.user},
+                {"role": "user", "content": _content(request)},
             ],
             "max_tokens": request.max_output_tokens,
             "response_format": {

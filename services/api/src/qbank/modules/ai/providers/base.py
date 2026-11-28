@@ -5,6 +5,7 @@ coaching's clear API key for one call and keeps nothing: it never stores, logs o
 and an error it raises never contains the key or any text of the request or the response.
 """
 
+import base64
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -40,6 +41,15 @@ class StructuredRequest:
     schema: dict[str, Any]
     max_output_tokens: int
     temperature: float | None = None
+    # Pictures the model is shown with the data: JPEGs made by us (M6, G-04). Empty for every
+    # operation that only reads text. Only a model whose catalogue entry says it can read pictures
+    # may be given any (the orchestrator checks); each adapter puts them in its provider's shape.
+    images: tuple[bytes, ...] = ()
+
+
+def jpeg_base64(data: bytes) -> str:
+    """A JPEG as base64 text, for the providers that take pictures inline."""
+    return base64.b64encode(data).decode("ascii")
 
 
 @dataclass(frozen=True, slots=True)

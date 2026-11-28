@@ -10,18 +10,27 @@ from qbank.core.jobs import JobRegistry, Worker
 from qbank.core.logging import configure_logging
 from qbank.core.metrics import start_metrics_server, watch_job_queue, watch_pool
 from qbank.core.secretbox import Keyring
+from qbank.core.storage import LocalDiskStorage, Storage
 from qbank.core.telemetry import instrument_database, setup_tracing
 from qbank.modules.ai.jobs import register_jobs as register_ai_jobs
-from qbank.modules.ai.providers.registry import use_demo_provider
+from qbank.modules.ai.providers.registry import provider_for, use_demo_provider
 from qbank.modules.health.jobs import register_jobs as register_health_jobs
+from qbank.modules.ingestion.extract.job import register_jobs as register_extract_jobs
 from qbank.modules.ingestion.public import SANDBOX_JOB_TYPES
 
 
-def build_registry(ai_keyring: Keyring | None = None) -> JobRegistry:
+def build_registry(
+    ai_keyring: Keyring | None = None,
+    *,
+    database: Database | None = None,
+    storage: Storage | None = None,
+) -> JobRegistry:
     """Every module that has background jobs registers them here."""
     registry = JobRegistry()
     register_health_jobs(registry)
     register_ai_jobs(registry, ai_keyring)
+    if database is not None and storage is not None:  # reading uploaded pages with AI (M6)
+        register_extract_jobs(registry, database, ai_keyring, provider_for, storage)
     return registry
 
 
@@ -37,7 +46,12 @@ def main() -> int:
         start_metrics_server(settings.metrics_port)
     if settings.ai_demo_provider:
         use_demo_provider()
-    worker = Worker(database, build_registry(settings.ai_keyring()), skip_types=SANDBOX_JOB_TYPES)
+    registry = build_registry(
+        settings.ai_keyring(),
+        database=database,
+        storage=LocalDiskStorage(settings.storage_dir),
+    )
+    worker = Worker(database, registry, skip_types=SANDBOX_JOB_TYPES)
 
     def request_stop(_signum: int, _frame: FrameType | None) -> None:
         worker.stop()  # finish the current job, then exit

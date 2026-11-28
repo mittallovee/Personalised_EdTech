@@ -20,8 +20,10 @@ from qbank.core.permissions import may_access_draft
 from qbank.modules.audit.public import record_event
 from qbank.modules.questions.bank_text import bank_text
 from qbank.modules.questions.domain.workflow import EDITABLE_STATES
+from qbank.modules.questions.duplicate_key import duplicate_key
 from qbank.modules.questions.service import create_question, get_question, save_working_revision
 from qbank.modules.questions.translation import add_link
+from qbank.modules.search.public import DuplicateCandidate, find_duplicates
 
 Applied = Literal["APPLIED", "OUT_OF_DATE", "NEEDS_REVIEW"]
 
@@ -182,3 +184,34 @@ def create_translation(
         after={"source_id": str(source_id), "language": language},
     )
     return "APPLIED", CreatedQuestion(view.master.id, view.master.code)
+
+
+def create_question_from_content(
+    session: Session,
+    principal: Principal,
+    content: dict[str, Any],
+    *,
+    request_id: str | None,
+) -> CreatedQuestion:
+    """Start a new draft question holding ``content`` (accepted from an uploaded page).
+
+    The person must be allowed to create questions; the content is stored as it is, and the question
+    checks show what is still to fix, exactly as for a question typed by hand. Nothing is submitted
+    or published: the question starts its normal life as a draft of this person."""
+    view = create_question(session, principal, content, idempotency_key=None, request_id=request_id)
+    return CreatedQuestion(view.master.id, view.master.code)
+
+
+def duplicates_of_content(
+    session: Session, principal: Principal, content: dict[str, Any], *, timeout_ms: int
+) -> list[DuplicateCandidate]:
+    """Questions this person can see that read like ``content``: exact copies, then near ones. Used
+    for an uploaded candidate that is not a question yet (D-16)."""
+    return find_duplicates(
+        session,
+        principal,
+        master_id=UUID(int=0),  # no question of its own to leave out
+        key=duplicate_key(content),
+        text_to_match=bank_text(content).match_text,
+        timeout_ms=timeout_ms,
+    )

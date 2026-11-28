@@ -14,6 +14,7 @@ from qbank.modules.ai.providers.base import (
     ProviderErrorKind,
     StructuredRequest,
     StructuredResult,
+    jpeg_base64,
 )
 from qbank.modules.ai.providers.http import Http, bad_output, count, json_object
 
@@ -21,6 +22,24 @@ BASE_URL = "https://api.anthropic.com"
 API_VERSION = "2023-06-01"
 _MAX_PAGES = 10
 _PAGE = 1000
+
+
+def _content(request: StructuredRequest) -> str | list[dict[str, Any]]:
+    """The user's text, or the pictures and then the text as content blocks."""
+    if not request.images:
+        return request.user
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/jpeg",
+                "data": jpeg_base64(data),
+            },
+        }
+        for data in request.images
+    ]
+    return [*blocks, {"type": "text", "text": request.user}]
 
 
 class AnthropicProvider:
@@ -69,7 +88,7 @@ class AnthropicProvider:
             "model": request.model_id,
             "max_tokens": request.max_output_tokens,
             "system": request.system,
-            "messages": [{"role": "user", "content": request.user}],
+            "messages": [{"role": "user", "content": _content(request)}],
             "output_config": {"format": {"type": "json_schema", "schema": request.schema}},
         }
         if request.temperature is not None:

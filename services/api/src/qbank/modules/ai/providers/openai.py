@@ -26,6 +26,7 @@ from qbank.modules.ai.providers.base import (
     ProviderErrorKind,
     StructuredRequest,
     StructuredResult,
+    jpeg_base64,
 )
 from qbank.modules.ai.providers.http import (
     Http,
@@ -66,6 +67,18 @@ _NOT_TEXT = (
 )
 
 
+def _input(request: StructuredRequest) -> str | list[dict[str, Any]]:
+    """The user text, or, with pictures, one message holding the text and the pictures."""
+    if not request.images:
+        return request.user
+    content: list[dict[str, Any]] = [{"type": "input_text", "text": request.user}]
+    content += [
+        {"type": "input_image", "image_url": f"data:image/jpeg;base64,{jpeg_base64(data)}"}
+        for data in request.images
+    ]
+    return [{"role": "user", "content": content}]
+
+
 class OpenAIProvider:
     name = Provider.OPENAI
 
@@ -93,7 +106,7 @@ class OpenAIProvider:
         body: dict[str, Any] = {
             "model": request.model_id,
             "instructions": request.system,
-            "input": request.user,
+            "input": _input(request),
             "max_output_tokens": request.max_output_tokens,
             "text": {
                 "format": {

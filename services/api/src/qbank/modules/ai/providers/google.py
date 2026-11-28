@@ -25,6 +25,7 @@ from qbank.modules.ai.providers.base import (
     ProviderErrorKind,
     StructuredRequest,
     StructuredResult,
+    jpeg_base64,
 )
 from qbank.modules.ai.providers.http import Http, bad_output, count, json_object
 
@@ -54,6 +55,15 @@ _ENDED = {
     "CANCELLED": BatchState.CANCELLED,
     "EXPIRED": BatchState.EXPIRED,
 }
+
+
+def _parts(request: StructuredRequest) -> list[dict[str, Any]]:
+    """The pictures, then the user's text."""
+    pictures: list[dict[str, Any]] = [
+        {"inlineData": {"mimeType": "image/jpeg", "data": jpeg_base64(data)}}
+        for data in request.images
+    ]
+    return [*pictures, {"text": request.user}]
 
 
 class GoogleProvider:
@@ -110,7 +120,7 @@ class GoogleProvider:
             config["temperature"] = request.temperature
         return {
             "systemInstruction": {"parts": [{"text": request.system}]},
-            "contents": [{"role": "user", "parts": [{"text": request.user}]}],
+            "contents": [{"role": "user", "parts": _parts(request)}],
             "generationConfig": config,
         }
 

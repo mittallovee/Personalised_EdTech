@@ -6,7 +6,9 @@ from qbank.modules.questions.ai_access import (
     QuestionForAi,
     apply_changes,
     apply_labels,
+    create_question_from_content,
     create_translation,
+    duplicates_of_content,
     read_for_ai,
 )
 from qbank.modules.questions.bank_sync import reindex_bank
@@ -22,12 +24,14 @@ from qbank.modules.questions.queue import (
 from qbank.modules.questions.rules import DEFAULT_RULES, Rules
 from qbank.modules.questions.translation import structure_matches
 from qbank.modules.questions.validate import QUESTION_TYPES, validate_content
+from qbank.modules.search.public import DuplicateCandidate
 
 __all__ = [
     "DEFAULT_RULES",
     "QUESTION_TYPES",
     "Applied",
     "CreatedQuestion",
+    "DuplicateCandidate",
     "Finding",
     "Level",
     "QuestionForAi",
@@ -38,7 +42,9 @@ __all__ = [
     "State",
     "apply_changes",
     "apply_labels",
+    "create_question_from_content",
     "create_translation",
+    "duplicates_of_content",
     "list_queue",
     "queue_counts",
     "read_for_ai",

@@ -187,6 +187,7 @@ class DemoProvider:
             "question_answer": self._solve,
             "question_review": self._verify,
             "question_translation": self._translate,
+            "page_questions": self._page_questions,
             "smoke": self._smoke,
         }
         make = answers.get(request.schema_name)
@@ -194,6 +195,35 @@ class DemoProvider:
             raise ProviderError(ProviderErrorKind.BAD_REQUEST)
         tokens_in, tokens_out = _tokens(request)
         return StructuredResult(make(request), tokens_in, tokens_out)
+
+    def _page_questions(self, request: StructuredRequest) -> dict[str, Any]:
+        """A page of a document: one single-correct question built from the page's own text, so the
+        review screen has something real to show (a page with no text says it has no questions)."""
+        blocks = _blocks(request)
+        number = blocks.get("page_number", "1").strip()
+        text = blocks.get("page_text", "").strip()
+        if not text and not request.images:
+            return {"questions": [], "unreadable": [], "no_questions": True}
+        stem = text.splitlines()[0][:300] if text else f"Demo question read from page {number}"
+        question = {
+            "question_type": "SCQ",
+            "language": "en",
+            "stem": stem,
+            "options": ["4", "5", "6", "7"],
+            "statements": [],
+            "assertion": None,
+            "reason": None,
+            "left": [],
+            "right": [],
+            "matching_options": [],
+            "answer_text": "B",
+            "solution": None,
+            "region": {"x": 0.05, "y": 0.1, "w": 0.9, "h": 0.3},
+            "confidence": "HIGH",
+            "handwritten": False,
+            "notes": "Demo provider: a made-up reading, not a real one.",
+        }
+        return {"questions": [question], "unreadable": [], "no_questions": False}
 
     def _smoke(self, request: StructuredRequest) -> dict[str, Any]:
         del request

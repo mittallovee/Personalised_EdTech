@@ -2682,6 +2682,201 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The model documents are read with
+         * @description Owner and admins.
+         */
+        get: operations["read_settings_api_v1_ingest_settings_get"];
+        /**
+         * Choose the model documents are read with
+         * @description Owner and admins. The model must be enabled, able to answer in the structured form and known to read pictures (`AI_MODEL_NO_VISION` otherwise). Send the `revision` as the ETag (`"rev-0"` when none was saved yet). `null` clears the choice.
+         */
+        put: operations["write_settings_api_v1_ingest_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/files/{file_id}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a document's pages with AI (G-04)
+         * @description Same visibility as the file. The pages are read one at a time by the model chosen in the uploads settings, in the background; each page reserves its cost against the person's AI budget first. Questions found appear as candidates, never as questions. Refused when no model is chosen (`INGEST_NO_MODEL`) or the file is not ready or is already being read (`INGEST_NOT_READY`).
+         */
+        post: operations["extract_file_api_v1_ingest_files__file_id__extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/files/{file_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The readings of a document, newest first */
+        get: operations["read_runs_api_v1_ingest_files__file_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/files/{file_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The questions found in a document (G-06)
+         * @description Same visibility as the file, in page order.
+         */
+        get: operations["read_candidates_api_v1_ingest_files__file_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/candidates/{candidate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One candidate */
+        get: operations["read_candidate_api_v1_ingest_candidates__candidate_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/candidates/{candidate_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fix a candidate's question
+         * @description Replace the editable content (what the model read stays in `raw`). The question checks run again and their findings come back. Send the `revision` as the ETag.
+         */
+        put: operations["edit_candidate_api_v1_ingest_candidates__candidate_id__content_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/candidates/{candidate_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a question from a candidate
+         * @description Makes a new **draft** question of the person's own, with the candidate's content, and remembers which page it came from. Needs the right to create questions. It does not submit or publish anything.
+         */
+        post: operations["accept_candidate_api_v1_ingest_candidates__candidate_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/candidates/{candidate_id}/same-as": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * This is a question the bank already has
+         * @description Nothing new is made; the candidate points at the existing question you can open.
+         */
+        post: operations["same_as_candidate_api_v1_ingest_candidates__candidate_id__same_as_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/candidates/{candidate_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a candidate */
+        post: operations["reject_candidate_api_v1_ingest_candidates__candidate_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/candidates/{candidate_id}/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Questions the bank already has that read like this one (D-16)
+         * @description Exact copies first, then near ones, among the questions the person can see.
+         */
+        get: operations["candidate_duplicates_api_v1_ingest_candidates__candidate_id__duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3052,6 +3247,88 @@ export interface components {
             /** Data */
             data: components["schemas"]["BudgetOut"][];
         };
+        /** CandidateOut */
+        CandidateOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /** Page No */
+            page_no: number;
+            /** Ordinal */
+            ordinal: number;
+            /**
+             * Region
+             * @description The question's box on the page as fractions of its width and height.
+             */
+            region: {
+                [key: string]: number;
+            } | null;
+            /**
+             * Content
+             * @description What a person edits: the question as the editor stores it.
+             */
+            content: {
+                [key: string]: unknown;
+            };
+            /**
+             * Raw
+             * @description What the model read, exactly; never changed.
+             */
+            raw: {
+                [key: string]: unknown;
+            };
+            /**
+             * Findings
+             * @description What the question checks say is wrong or missing (path, code, level, message).
+             */
+            findings: {
+                [key: string]: string;
+            }[];
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "HIGH" | "MEDIUM" | "LOW";
+            /**
+             * Warnings
+             * @description `HANDWRITTEN`, `LOW_CONFIDENCE`, `ANSWER_NOT_READ`, `OVERPRECISE_ANSWER`.
+             */
+            warnings: string[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "NEW" | "ACCEPTED" | "REJECTED" | "DUPLICATE";
+            /**
+             * Question Id
+             * @description The question made, or the one it is the same as.
+             */
+            question_id: string | null;
+            /** Reject Reason */
+            reject_reason: string | null;
+            /**
+             * Revision
+             * @description Send as the ETag to change the content.
+             */
+            revision: number;
+        };
+        /** CandidatesOut */
+        CandidatesOut: {
+            /** Data */
+            data: components["schemas"]["CandidateOut"][];
+        };
         /** ChangeGlossaryEntry */
         ChangeGlossaryEntry: {
             /** Source Term */
@@ -3353,59 +3630,12 @@ export interface components {
             /** Meaning */
             meaning: string;
         };
-        /** DuplicateOut */
-        DuplicateOut: {
-            /**
-             * Question Id
-             * Format: uuid
-             */
-            question_id: string;
-            /** Code */
-            code: string;
-            /**
-             * State
-             * @description The workflow state of the version the bank shows.
-             */
-            state: string;
-            /**
-             * Match
-             * @description `EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text.
-             * @enum {string}
-             */
-            match: "EXACT" | "NEAR";
-            /**
-             * Similarity Percent
-             * @description How alike the two texts are.
-             */
-            similarity_percent: number;
-            /**
-             * Preview
-             * @description The beginning of the other question's stem (plain text).
-             */
-            preview: string;
-            /** @description The newest decision about this pair, for the text as it is now. */
-            decision: components["schemas"]["DecisionOut"] | null;
-        };
-        /** DuplicatesOut */
-        DuplicatesOut: {
-            /**
-             * Checked Revision Id
-             * Format: uuid
-             * @description The text that was checked: the one under review or published, else the working copy of a draft.
-             */
-            checked_revision_id: string;
-            /** Version Number */
-            version_number: number;
-            /**
-             * Data
-             * @description Exact matches first, then near ones, closest first.
-             */
-            data: components["schemas"]["DuplicateOut"][];
-            /**
-             * Qc Blocked By
-             * @description What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of.
-             */
-            qc_blocked_by: components["schemas"]["Blocker"][];
+        /** EditCandidate */
+        EditCandidate: {
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
         };
         /** ErrorField */
         ErrorField: {
@@ -3853,6 +4083,19 @@ export interface components {
         IngestPagesOut: {
             /** Data */
             data: components["schemas"]["IngestPageOut"][];
+        };
+        /** IngestSettingsOut */
+        IngestSettingsOut: {
+            /**
+             * Model Id
+             * @description The model pages are read with; null until chosen.
+             */
+            model_id: string | null;
+            /**
+             * Revision
+             * @description 0 until first saved. Send it as the ETag.
+             */
+            revision: number;
         };
         /** InviteMember */
         InviteMember: {
@@ -4990,6 +5233,11 @@ export interface components {
              */
             job_id: string;
         };
+        /** RejectCandidate */
+        RejectCandidate: {
+            /** Reason */
+            reason: string;
+        };
         /** RemoveMember */
         RemoveMember: {
             /**
@@ -5231,10 +5479,13 @@ export interface components {
             /** Attempts */
             attempts: components["schemas"]["RunAttemptOut"][];
         };
-        /** RunsOut */
-        RunsOut: {
-            /** Data */
-            data: components["schemas"]["RunOut"][];
+        /** SameAs */
+        SameAs: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
         };
         /** SaveAnswerRules */
         SaveAnswerRules: {
@@ -5262,6 +5513,11 @@ export interface components {
              * @description 0 means this person may not use AI.
              */
             monthly_inr: number | string;
+        };
+        /** SaveIngestSettings */
+        SaveIngestSettings: {
+            /** Model Id */
+            model_id: string | null;
         };
         /** SaveOperation */
         SaveOperation: {
@@ -5487,6 +5743,44 @@ export interface components {
              * @default false
              */
             test: boolean;
+        };
+        /** StartedRun */
+        StartedRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "RUNNING" | "DONE" | "PARTIAL" | "FAILED" | "CANCELLED";
+            /** Pages Total */
+            pages_total: number;
+            /** Pages Done */
+            pages_done: number;
+            /** Pages Failed */
+            pages_failed: number;
+            /**
+             * Prompt Version
+             * @description Which built-in wording read the pages.
+             */
+            prompt_version: string;
+            /** Error Code */
+            error_code: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
         };
         /** StarterSyllabusOut */
         StarterSyllabusOut: {
@@ -5784,6 +6078,91 @@ export interface components {
         VersionsOut: {
             /** Data */
             data: components["schemas"]["VersionSummary"][];
+        };
+        /** RunsOut */
+        qbank__modules__ai__schemas__RunsOut: {
+            /** Data */
+            data: components["schemas"]["RunOut"][];
+        };
+        /** DuplicateOut */
+        qbank__modules__ingestion__schemas__DuplicateOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /** Exact */
+            exact: boolean;
+            /** Similarity Percent */
+            similarity_percent: number;
+            /** Preview */
+            preview: string;
+        };
+        /** DuplicatesOut */
+        qbank__modules__ingestion__schemas__DuplicatesOut: {
+            /** Data */
+            data: components["schemas"]["qbank__modules__ingestion__schemas__DuplicateOut"][];
+        };
+        /** RunsOut */
+        qbank__modules__ingestion__schemas__RunsOut: {
+            /** Data */
+            data: components["schemas"]["StartedRun"][];
+        };
+        /** DuplicateOut */
+        qbank__modules__questions__duplicates_api__DuplicateOut: {
+            /**
+             * Question Id
+             * Format: uuid
+             */
+            question_id: string;
+            /** Code */
+            code: string;
+            /**
+             * State
+             * @description The workflow state of the version the bank shows.
+             */
+            state: string;
+            /**
+             * Match
+             * @description `EXACT`: the same format, stem, options and answer (case and spacing of the prose aside; equations as written). `NEAR`: very similar text.
+             * @enum {string}
+             */
+            match: "EXACT" | "NEAR";
+            /**
+             * Similarity Percent
+             * @description How alike the two texts are.
+             */
+            similarity_percent: number;
+            /**
+             * Preview
+             * @description The beginning of the other question's stem (plain text).
+             */
+            preview: string;
+            /** @description The newest decision about this pair, for the text as it is now. */
+            decision: components["schemas"]["DecisionOut"] | null;
+        };
+        /** DuplicatesOut */
+        qbank__modules__questions__duplicates_api__DuplicatesOut: {
+            /**
+             * Checked Revision Id
+             * Format: uuid
+             * @description The text that was checked: the one under review or published, else the working copy of a draft.
+             */
+            checked_revision_id: string;
+            /** Version Number */
+            version_number: number;
+            /**
+             * Data
+             * @description Exact matches first, then near ones, closest first.
+             */
+            data: components["schemas"]["qbank__modules__questions__duplicates_api__DuplicateOut"][];
+            /**
+             * Qc Blocked By
+             * @description What stops Pass QC now: exact matches in the shared bank with no `NOT_DUPLICATE` decision, and questions this one was marked a duplicate of.
+             */
+            qc_blocked_by: components["schemas"]["Blocker"][];
         };
     };
     responses: never;
@@ -12267,7 +12646,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DuplicatesOut"];
+                    "application/json": components["schemas"]["qbank__modules__questions__duplicates_api__DuplicatesOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
@@ -15875,7 +16254,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunsOut"];
+                    "application/json": components["schemas"]["qbank__modules__ai__schemas__RunsOut"];
                 };
             };
             /** @description The request is not valid (`MALFORMED_REQUEST`) */
@@ -16845,6 +17224,827 @@ export interface operations {
             };
             /** @description Not failed or cancelled */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_settings_api_v1_ingest_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestSettingsOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    write_settings_api_v1_ingest_settings_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveIngestSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestSettingsOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Out of date (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    extract_file_api_v1_ingest_files__file_id__extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartedRun"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not ready, or no model chosen */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_runs_api_v1_ingest_files__file_id__runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["qbank__modules__ingestion__schemas__RunsOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_candidates_api_v1_ingest_files__file_id__candidates_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                page_no?: number | null;
+            };
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_candidate_api_v1_ingest_candidates__candidate_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    edit_candidate_api_v1_ingest_candidates__candidate_id__content_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag from your last read, e.g. "rev-3". Required; a newer revision gives 412. */
+                "If-Match"?: string | null;
+            };
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditCandidate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Already decided (`INGEST_CANDIDATE_DECIDED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Out of date: reload and try again (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    accept_candidate_api_v1_ingest_candidates__candidate_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Already decided (`INGEST_CANDIDATE_DECIDED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Out of date: reload and try again (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    same_as_candidate_api_v1_ingest_candidates__candidate_id__same_as_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SameAs"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Already decided (`INGEST_CANDIDATE_DECIDED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Out of date: reload and try again (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reject_candidate_api_v1_ingest_candidates__candidate_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectCandidate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidateOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Already decided (`INGEST_CANDIDATE_DECIDED`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Out of date: reload and try again (`REVISION_STALE`) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    candidate_duplicates_api_v1_ingest_candidates__candidate_id__duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["qbank__modules__ingestion__schemas__DuplicatesOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document or candidate of yours (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
