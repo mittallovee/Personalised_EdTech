@@ -2541,6 +2541,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your uploaded documents, newest first
+         * @description A member sees their own uploads; the Owner and admins see everyone's.
+         */
+        get: operations["list_files_api_v1_ingest_files_get"];
+        put?: never;
+        /**
+         * Upload a document (G-01)
+         * @description Any member. Send the file itself as the request body and its name as `file_name`: PDF, Word (.docx), JPEG, PNG, WebP or HEIC, up to 50 MB (10 MB for a picture). The kind is decided from the file's first bytes, never from its name or `Content-Type`; anything else is refused (`INGEST_FILE_INVALID`). The server keeps the original exactly as sent and queues a job; it does not open the file. A person may send a limited number of files in a short time, and a coaching may have only so many waiting to be read (`INGEST_TOO_MANY_IN_FLIGHT`). `duplicate_of` names an earlier file with exactly the same bytes; the new one is kept anyway.
+         */
+        post: operations["upload_file_api_v1_ingest_files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One uploaded document */
+        get: operations["read_file_api_v1_ingest_files__file_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/files/{file_id}/original": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The original file, as it was sent (G-09)
+         * @description Same visibility as the file. It is always a **download** with a content type fixed by the server from the kind (never from the upload), `X-Content-Type-Options: nosniff` and a sandboxing policy, so a stored file can never run in the browser. The review screens show the server's own page pictures, not this file.
+         */
+        get: operations["read_original_api_v1_ingest_files__file_id__original_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3605,6 +3666,66 @@ export interface components {
         ImportRowPage: {
             /** Data */
             data: components["schemas"]["ImportRowOut"][];
+            page: components["schemas"]["PageInfo"];
+        };
+        /** IngestFileOut */
+        IngestFileOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * File Name
+             * @description A label only: what the file was called when it was sent.
+             */
+            file_name: string;
+            /**
+             * Kind
+             * @description Decided from the file's first bytes, never from its name.
+             * @enum {string}
+             */
+            kind: "PDF" | "DOCX" | "JPEG" | "PNG" | "WEBP" | "HEIC";
+            /** Byte Size */
+            byte_size: number;
+            /**
+             * State
+             * @description `UPLOADED` waiting to be read, `RENDERING` being turned into pages, `READY` pages made, `EXTRACTING` questions being read, then `DONE`, `PARTIAL` (some pages failed), `FAILED` or `CANCELLED`. A client must treat a state it does not know as in progress.
+             * @enum {string}
+             */
+            state: "UPLOADED" | "RENDERING" | "READY" | "EXTRACTING" | "DONE" | "PARTIAL" | "FAILED" | "CANCELLED";
+            /** Page Count */
+            page_count: number | null;
+            /**
+             * Error Code
+             * @description Why a file `FAILED`, as a code; null otherwise.
+             */
+            error_code: string | null;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
+            /**
+             * Duplicate Of
+             * @description Only on upload: an earlier file of this coaching with exactly the same bytes. The new upload is kept anyway.
+             */
+            duplicate_of?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** IngestFilePage */
+        IngestFilePage: {
+            /** Data */
+            data: components["schemas"]["IngestFileOut"][];
             page: components["schemas"]["PageInfo"];
         };
         /** InviteMember */
@@ -16021,6 +16142,293 @@ export interface operations {
             };
             /** @description The run is not in `SUBMISSION_UNKNOWN` */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_files_api_v1_ingest_files_get: {
+        parameters: {
+            query?: {
+                /** @description Only files in this state. */
+                state?: ("UPLOADED" | "RENDERING" | "READY" | "EXTRACTING" | "DONE" | "PARTIAL" | "FAILED" | "CANCELLED") | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestFilePage"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_file_api_v1_ingest_files_post: {
+        parameters: {
+            query: {
+                file_name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestFileOut"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many documents are waiting (`INGEST_TOO_MANY_IN_FLIGHT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too large (`INGEST_FILE_TOO_LARGE`) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a kind of file we read (`INGEST_FILE_INVALID`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too many uploads in a short time (`RATE_LIMITED`) */
+            429: {
+                headers: {
+                    /** @description Seconds to wait before trying again */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_file_api_v1_ingest_files__file_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestFileOut"];
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document of yours in this coaching (`NOT_FOUND`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error (`INTERNAL_ERROR`); quote the request_id */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_original_api_v1_ingest_files__file_id__original_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description The request is not valid (`MALFORMED_REQUEST`) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not signed in (`UNAUTHENTICATED`) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Your role may not do this (`PERMISSION_DENIED`) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such document of yours in this coaching (`NOT_FOUND`) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

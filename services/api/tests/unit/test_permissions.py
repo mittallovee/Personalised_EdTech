@@ -65,6 +65,8 @@ TABLE = {
     Action.USE_NOTIFICATIONS: (True, True, True, False, True),
     Action.MANAGE_AI_SETTINGS: (False, True, True, False, True),
     Action.USE_AI: (True, True, True, False, True),
+    Action.USE_INGEST: (True, True, True, False, True),
+    Action.MANAGE_INGEST: (False, True, True, False, True),
     Action.MANAGE_PLATFORM_PROMPTS: (False, False, False, True, True),
 }
 WHO = (FACULTY, ADMIN, OWNER, PLATFORM, PLATFORM_ACTING)

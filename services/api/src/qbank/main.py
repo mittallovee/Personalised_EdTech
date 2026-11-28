@@ -32,6 +32,7 @@ from qbank.modules.identity.api import router as identity_router
 from qbank.modules.identity.authenticator import SessionCookieAuthenticator
 from qbank.modules.identity.google import GoogleOidc
 from qbank.modules.identity.google_api import router as google_router
+from qbank.modules.ingestion.api import router as ingestion_router
 from qbank.modules.notifications.api import router as notifications_router
 from qbank.modules.organizations.api import router as organizations_router
 from qbank.modules.organizations.members_api import router as members_router
@@ -98,6 +99,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.asset_upload_limiter = SlidingWindowLimiter(
         settings.asset_uploads_per_user, settings.asset_upload_window_seconds
     )
+    app.state.ingest_upload_limiter = SlidingWindowLimiter(
+        settings.ingest_uploads_per_user, settings.ingest_upload_window_seconds
+    )
     app.state.image_decode_gate = ConcurrencyGate(settings.image_decodes_at_once)
     app.state.search_limiter = SlidingWindowLimiter(
         settings.searches_per_user, settings.search_window_seconds
@@ -145,5 +149,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ai_prompts_router)
     app.include_router(ai_glossary_router)
     app.include_router(ai_runs_router)
+    app.include_router(ingestion_router)
     install_openapi(app)
     return app

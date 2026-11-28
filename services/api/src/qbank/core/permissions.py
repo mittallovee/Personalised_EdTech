@@ -56,6 +56,10 @@ class Action(StrEnum):
     MANAGE_AI_SETTINGS = "MANAGE_AI_SETTINGS"
     # Run AI on questions, read the prompt library, keep personal prompts, see own usage (M5).
     USE_AI = "USE_AI"
+    # Upload documents and see one's own uploads (M6, G-01).
+    USE_INGEST = "USE_INGEST"
+    # See, cancel and retry everyone's uploads; choose the extraction model (M6).
+    MANAGE_INGEST = "MANAGE_INGEST"
     # Platform only: write the platform's default prompts (M5, H-13).
     MANAGE_PLATFORM_PROMPTS = "MANAGE_PLATFORM_PROMPTS"
 
@@ -80,6 +84,8 @@ _ROLES_ALLOWED: dict[Action, frozenset[Role]] = {
     Action.USE_NOTIFICATIONS: _EVERYONE,
     Action.MANAGE_AI_SETTINGS: _ADMINS,
     Action.USE_AI: _EVERYONE,
+    Action.USE_INGEST: _EVERYONE,
+    Action.MANAGE_INGEST: _ADMINS,
     Action.MANAGE_PLATFORM_PROMPTS: frozenset(),
 }
 

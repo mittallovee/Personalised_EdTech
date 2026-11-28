@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     import_upload_window_seconds: int = Field(default=600, ge=1)
     import_parses_at_once: int = Field(default=2, ge=1)
 
+    # Document uploads (M6 6b, G-01): per signed-in user, and how many files of one coaching may be
+    # waiting or being read at once. Documents are only stored here, never parsed (ADR-0024).
+    ingest_uploads_per_user: int = Field(default=10, ge=1)
+    ingest_upload_window_seconds: int = Field(default=600, ge=1)
+    ingest_files_in_flight: int = Field(default=20, ge=1)
+
     # Free-text search of the bank (F-03): per signed-in user, and how long the database may spend
     # on one search before it stops it (a very common word over a very large bank).
     searches_per_user: int = Field(default=60, ge=1)
